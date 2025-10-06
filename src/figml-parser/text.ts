@@ -1,0 +1,61 @@
+import { FigmlNode } from './types';
+import { BaseRenderer } from './base';
+
+export class TextRenderer extends BaseRenderer {
+  async render(node: FigmlNode, props: Record<string, any>): Promise<TextNode> {
+    const text = figma.createText();
+
+    await Promise.all([
+      BaseRenderer.applyCommonAttributes(text, node.attributes, props),
+      this.applyTextAttributes(text, node.attributes, props)
+    ]);
+
+    let content = node.content || node.attributes.text || '';
+    content = BaseRenderer.interpolateValue(content, props);
+    text.characters = content;
+
+    return text;
+  }
+
+  private async applyTextAttributes(text: TextNode, attributes: Record<string, string>, props: Record<string, any>): Promise<void> {
+    if (attributes.fontFamily || attributes.style) {
+      const fontFamily = BaseRenderer.interpolateValue(attributes.fontFamily || 'Inter', props);
+      const style = BaseRenderer.interpolateValue(attributes.style || 'Regular', props);
+
+      try {
+        await figma.loadFontAsync({ family: fontFamily, style: style });
+        text.fontName = { family: fontFamily, style: style };
+      } catch {
+        await figma.loadFontAsync({ family: 'Inter', style: 'Regular' });
+        text.fontName = { family: 'Inter', style: 'Regular' };
+      }
+    }
+
+    if (attributes.fontSize) {
+      const fontSize = BaseRenderer.interpolateValue(attributes.fontSize, props);
+      text.fontSize = Number(fontSize);
+    }
+
+    if (attributes.fill) {
+      const fill = BaseRenderer.interpolateValue(attributes.fill, props);
+      text.fills = [{ type: 'SOLID', color: BaseRenderer.hexToRgb(fill) }];
+    }
+
+    if (attributes.align) {
+      const align = BaseRenderer.interpolateValue(attributes.align, props);
+      const [h, v] = align.split(',');
+
+      switch (h) {
+        case 'left': text.textAlignHorizontal = 'LEFT'; break;
+        case 'center': text.textAlignHorizontal = 'CENTER'; break;
+        case 'right': text.textAlignHorizontal = 'RIGHT'; break;
+      }
+
+      switch (v) {
+        case 'top': text.textAlignVertical = 'TOP'; break;
+        case 'center': text.textAlignVertical = 'CENTER'; break;
+        case 'bottom': text.textAlignVertical = 'BOTTOM'; break;
+      }
+    }
+  }
+}

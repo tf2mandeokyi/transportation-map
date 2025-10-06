@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      margin: 16px;
+      font-size: 12px;
+    }
+    input, select {
+      width: 100%;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      row-gap: 8px;
+    }
+    .two-column {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .full-width {
+      grid-column: 1 / -1;
+    }
+    label {
+      display: block;
+      margin-bottom: 4px;
+      font-weight: 500;
+      user-select: none;
+    }
+    .input.error {
+      border-color: #F24822;
+    }
+    .button-container {
+        margin-top: 16px;
+    }
+    .checkbox-container {
+        margin-top: 8px;
+        display: flex;
+        align-items: center;
+    }
+    .checkbox-container label {
+        margin: 0 0 0 8px;
+    }
+    .section {
+      border-bottom: 1px solid #e5e5e5;
+      padding-bottom: 16px;
+      margin-bottom: 16px;
+    }
+    .line-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px;
+      border: 1px solid #e5e5e5;
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+    .line-color {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      margin-right: 8px;
+    }
+    .line-info {
+      flex: 1;
+      font-weight: 500;
+    }
+    .line-controls {
+      display: flex;
+      gap: 4px;
+    }
+    .small-btn {
+      padding: 4px 8px;
+      font-size: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="section">
+    <h3>Bus Stops</h3>
+    <div class="grid">
+      <div class="two-column">
+        <div>
+          <label for="stop-name">Stop Name</label>
+          <input class="input" id="stop-name" type="text" placeholder="Stop A">
+        </div>
+        <div>
+          <label for="stop-orientation">Facing</label>
+          <select class="input" id="stop-orientation">
+            <option value="RIGHT">Right</option>
+            <option value="LEFT">Left</option>
+            <option value="UP">Up</option>
+            <option value="DOWN">Down</option>
+          </select>
+        </div>
+      </div>
+      <div class="checkbox-container">
+        <input type="checkbox" id="stop-hidden">
+        <label for="stop-hidden">Hidden (shaping point)</label>
+      </div>
+      <button class="button button--primary" id="add-stop">Add Stop</button>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3>Bus Lines</h3>
+    <div class="grid">
+      <div class="two-column">
+        <div>
+          <label for="line-name">Line Name</label>
+          <input class="input" id="line-name" type="text" placeholder="Line A">
+        </div>
+        <div>
+          <label for="line-color">Color</label>
+          <input class="input" id="line-color" type="color" value="#ff0000">
+        </div>
+      </div>
+      <button class="button button--primary" id="add-line">Add Line</button>
+    </div>
+
+    <div id="lines-list">
+      <!-- Lines will be populated here -->
+    </div>
+  </div>
+
+  <div class="section">
+    <h3>Traffic Direction</h3>
+    <div class="checkbox-container">
+      <input type="checkbox" id="right-hand-traffic" checked>
+      <label for="right-hand-traffic">Right-hand traffic</label>
+    </div>
+  </div>
+
+  <div class="button-container">
+    <button class="button button--secondary full-width" id="render-map">Render Map</button>
+  </div>
+
+  <script>
+    const stopNameInput = document.getElementById('stop-name');
+    const stopOrientationSelect = document.getElementById('stop-orientation');
+    const stopHiddenInput = document.getElementById('stop-hidden');
+    const addStopButton = document.getElementById('add-stop');
+
+    const lineNameInput = document.getElementById('line-name');
+    const lineColorInput = document.getElementById('line-color');
+    const addLineButton = document.getElementById('add-line');
+    const linesListDiv = document.getElementById('lines-list');
+
+    const rightHandTrafficInput = document.getElementById('right-hand-traffic');
+    const renderMapButton = document.getElementById('render-map');
+
+    let lineCounter = 0;
+
+    addStopButton.onclick = () => {
+      const stopData = {
+        name: stopNameInput.value || `Stop_${Date.now()}`,
+        orientation: stopOrientationSelect.value,
+        hidden: stopHiddenInput.checked
+      };
+
+      parent.postMessage({
+        pluginMessage: {
+          type: 'add-stop',
+          stop: stopData
+        }
+      }, '*');
+
+      stopNameInput.value = '';
+      stopHiddenInput.checked = false;
+    };
+
+    addLineButton.onclick = () => {
+      const lineData = {
+        name: lineNameInput.value || `Line_${lineCounter++}`,
+        color: lineColorInput.value
+      };
+
+      parent.postMessage({
+        pluginMessage: {
+          type: 'add-line',
+          line: lineData
+        }
+      }, '*');
+
+      addLineToUI(lineData);
+      lineNameInput.value = '';
+    };
+
+    function addLineToUI(lineData) {
+      const lineDiv = document.createElement('div');
+      lineDiv.className = 'line-item';
+      lineDiv.innerHTML = `
+        <div style="display: flex; align-items: center;">
+          <div class="line-color" style="background-color: ${lineData.color}"></div>
+          <span class="line-info">${lineData.name}</span>
+        </div>
+        <div class="line-controls">
+          <button class="button button--secondary small-btn" onclick="editLine('${lineData.name}')">Edit</button>
+          <button class="button button--secondary small-btn" onclick="removeLine('${lineData.name}')">Remove</button>
+        </div>
+      `;
+      linesListDiv.appendChild(lineDiv);
+    }
+
+    function editLine(lineName) {
+      parent.postMessage({
+        pluginMessage: {
+          type: 'edit-line',
+          lineName: lineName
+        }
+      }, '*');
+    }
+
+    function removeLine(lineName) {
+      parent.postMessage({
+        pluginMessage: {
+          type: 'remove-line',
+          lineName: lineName
+        }
+      }, '*');
+
+      // Remove from UI
+      const lineItems = linesListDiv.children;
+      for (let item of lineItems) {
+        if (item.querySelector('.line-info').textContent === lineName) {
+          linesListDiv.removeChild(item);
+          break;
+        }
+      }
+    }
+
+    renderMapButton.onclick = () => {
+      parent.postMessage({
+        pluginMessage: {
+          type: 'render-map',
+          rightHandTraffic: rightHandTrafficInput.checked
+        }
+      }, '*');
+    };
+
+    window.onmessage = event => {
+      const msg = event.data.pluginMessage;
+      if (msg.type === 'line-added') {
+        // Line was successfully added to the model
+      } else if (msg.type === 'stop-added') {
+        // Stop was successfully added to the model
+      }
+    };
+  </script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+export interface FigmlNode {
+  tag: string;
+  attributes: Record<string, string>;
+  children: FigmlNode[];
+  content?: string;
+}
+
+export interface FigmlComponent {
+  props: Record<string, string>;
+  variants: Record<string, FigmlNode>;
+}

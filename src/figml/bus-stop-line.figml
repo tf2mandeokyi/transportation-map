@@ -1,0 +1,27 @@
+<component prop:text="1A" prop:color="#FF0000">
+  <variant prop:facing="left">
+    <frame align="left,center" width="7" height="6" flow="horizontal" clip="false">
+      <frame align="center,center" padding="h=2,v=0" gap="10" height="fill" flow="horizontal">
+        <ellipse fill="$$prop:color$$" width="3" height="3"/>
+      </frame>
+      <frame align="left,center" width="7" height="6" flow="horizontal" clip="false" gap="3" padding="h=2,v=0" fill="#FFFFFF">
+        <polygon points="3,0 0,1.5 3,3" fill="$$prop:color$$" />
+        <text align="left,center" fontSize="6" fontFamily="NanumSquare Neo" fill="$$prop:color$$" style="Heavy" width="hug" height="hug">
+          $$prop:text$$
+        </text>
+      </frame>
+    </frame>
+  </variant>
+  <variant prop:facing="right">
+    <frame align="right,center" width="7" height="6" flow="horizontal" clip="false">
+      <frame align="right,center" width="7" height="6" flow="horizontal" clip="false" gap="3" padding="h=2,v=0" fill="#FFFFFF">
+        <text align="right,center" fontSize="6" fontFamily="NanumSquare Neo" fill="$$prop:color$$" style="Heavy" width="hug" height="hug">
+          $$prop:text$$
+        </text>
+        <polygon points="0,0 3,1.5 0,3" fill="$$prop:color$$" />
+      </frame>
+      <frame align="center,center" padding="h=2,v=0" gap="10" height="fill" flow="horizontal">
+        <ellipse fill="$$prop:color$$" width="3" height="3"/>
+      </frame>
+    </frame>
+</component>
