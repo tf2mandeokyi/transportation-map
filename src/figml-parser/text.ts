@@ -1,20 +1,20 @@
-import { FigmlNode } from './types';
+import { FigmlNode, FigmlProps, RenderResult } from './types';
 import { BaseRenderer } from './base';
 
 export class TextRenderer extends BaseRenderer {
-  async render(node: FigmlNode, props: Record<string, any>): Promise<TextNode> {
+  render(node: FigmlNode, props: FigmlProps, stack: number): RenderResult {
     const text = figma.createText();
-    BaseRenderer.applyCommonAttributes(text, node.attributes, props);
-    await this.applyTextAttributes(text, node.attributes, props);
+    return { node: text, render: async () => {
+      BaseRenderer.applyCommonAttributes(text, node.attributes, props);
+      await this.applyTextAttributes(text, node.attributes, props);
 
-    let content = node.content || node.attributes.text || '';
-    content = BaseRenderer.interpolateValue(content, props);
-    text.characters = content;
-
-    return text;
+      let content = node.content || node.attributes.text || '';
+      content = BaseRenderer.interpolateValue(content, props);
+      text.characters = content;
+    }};
   }
 
-  private async applyTextAttributes(text: TextNode, attributes: Record<string, string>, props: Record<string, any>): Promise<void> {
+  private async applyTextAttributes(text: TextNode, attributes: Record<string, string>, props: FigmlProps): Promise<void> {
     if (attributes.fontFamily || attributes.style) {
       const fontFamily = BaseRenderer.interpolateValue(attributes.fontFamily || 'Inter', props);
       const style = BaseRenderer.interpolateValue(attributes.style || 'Regular', props);
