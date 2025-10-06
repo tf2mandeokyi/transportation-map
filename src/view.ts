@@ -8,18 +8,18 @@ import busStopContentFigml from "./figml/bus-stop-content.figml";
 import busLineDotFigml from "./figml/bus-line-dot.figml";
 import busLineTextFigml from "./figml/bus-line-text.figml";
 
+const FIGML_IMPORTS = {
+  'bus-stop-text.figml': busStopTextFigml,
+  'bus-stop-content.figml': busStopContentFigml,
+  'bus-line-dot.figml': busLineDotFigml,
+  'bus-line-text.figml': busLineTextFigml,
+} as const;
+
 export class View {
   private figmaLayerMap: Map<NodeId | LineId, SceneNode> = new Map();
   private model?: Model;
   private busStopTemplate: any;
   private busStopLineTemplate: any;
-
-  private static readonly FIGML_IMPORTS = {
-    'bus-stop-text.figml': busStopTextFigml,
-    'bus-stop-content.figml': busStopContentFigml,
-    'bus-line-dot.figml': busLineDotFigml,
-    'bus-line-text.figml': busLineTextFigml,
-  } as const;
 
   constructor() {
     this.setupImportResolver();
@@ -28,10 +28,8 @@ export class View {
 
   private setupImportResolver(): void {
     FigmlParser.setImportResolver((path: string) => {
-      const importContent = View.FIGML_IMPORTS[path as keyof typeof View.FIGML_IMPORTS];
-      if (!importContent) {
-        throw new Error(`Unknown import path: ${path}`);
-      }
+      const importContent = FIGML_IMPORTS[path as keyof typeof FIGML_IMPORTS];
+      if (!importContent) throw new Error(`Unknown import path: ${path}`);
       return importContent;
     });
   }
@@ -52,14 +50,9 @@ export class View {
 
   public async render(state: Readonly<MapState>): Promise<void> {
     // Render all nodes in parallel
-    await Promise.all(
-      Array.from(state.nodes.values()).map(node => this.renderNode(node, state))
-    );
-
+    await Promise.all([...state.nodes.values()].map(node => this.renderNode(node, state)));
     // Render all lines in parallel
-    await Promise.all(
-      Array.from(state.lines.values()).map(line => this.renderLine(line, state))
-    );
+    await Promise.all([...state.lines.values()].map(line => this.renderLine(line, state)));
   }
 
   private async renderNode(node: Node, state: Readonly<MapState>): Promise<void> {
