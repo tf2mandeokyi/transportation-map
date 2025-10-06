@@ -21,21 +21,13 @@ export class FrameRenderer extends BaseRenderer {
       }
     } else {
       // Render normal children in parallel
-      const childNodes = await Promise.all(
-        node.children.map(child => renderNode(child, props))
-      );
+      const childNodes = await Promise.all(node.children.map(child => renderNode(child, props)));
 
       // Add children sequentially to preserve order
       for (let i = 0; i < childNodes.length; i++) {
         frame.appendChild(childNodes[i]);
+        this.applyLayoutSizing(childNodes[i], node.children[i].attributes, props);
       }
-
-      // Apply layout sizing in parallel
-      await Promise.all(
-        childNodes.map((childNode, i) =>
-          this.applyLayoutSizing(childNode, node.children[i].attributes, props)
-        )
-      );
     }
 
     return frame;
@@ -76,10 +68,10 @@ export class FrameRenderer extends BaseRenderer {
       const padding = BaseRenderer.interpolateValue(attributes.padding, props);
       if (frame.layoutMode !== 'NONE') {
         const paddingValues = this.parsePadding(padding);
-        frame.paddingLeft = paddingValues.h;
-        frame.paddingRight = paddingValues.h;
-        frame.paddingTop = paddingValues.v;
-        frame.paddingBottom = paddingValues.v;
+        frame.paddingLeft = paddingValues.l;
+        frame.paddingRight = paddingValues.r;
+        frame.paddingTop = paddingValues.t;
+        frame.paddingBottom = paddingValues.b;
       }
     }
 
@@ -114,7 +106,7 @@ export class FrameRenderer extends BaseRenderer {
     }
   }
 
-  private async applyLayoutSizing(node: SceneNode, attributes: Record<string, string>, props: Record<string, any>): Promise<void> {
+  private applyLayoutSizing(node: SceneNode, attributes: Record<string, string>, props: Record<string, any>) {
     if (!node.parent || node.parent.type !== 'FRAME') return;
     const parentFrame = node.parent as FrameNode;
     if (parentFrame.layoutMode === 'NONE') return;
@@ -185,13 +177,19 @@ export class FrameRenderer extends BaseRenderer {
     }
   }
 
-  private parsePadding(padding: string): { h: number, v: number } {
-    const values = { h: 0, v: 0 };
+  private parsePadding(padding: string): { l: number, r: number, t: number, b: number } {
+    const values = { l: 0, r: 0, t: 0, b: 0 };
     const parts = padding.split(',');
     for (const part of parts) {
       const [key, value] = part.trim().split('=');
-      if (key === 'h') values.h = Number(value) || 0;
-      if (key === 'v') values.v = Number(value) || 0;
+      const parsed = Number(value) || 0;
+      if (isNaN(parsed)) continue;
+      if (key === 'h') values.l = values.r = parsed;
+      if (key === 'v') values.t = values.b = parsed;
+      if (key === 'l') values.l = parsed;
+      if (key === 'r') values.r = parsed;
+      if (key === 't') values.t = parsed;
+      if (key === 'b') values.b = parsed;
     }
     return values;
   }
