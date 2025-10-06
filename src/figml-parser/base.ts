@@ -11,15 +11,12 @@ export abstract class BaseRenderer {
     if (attributes.width) {
       const width = this.interpolateValue(attributes.width, props);
       try {
-        if (width === 'hug' || width === 'fill') {
-          // Only set layout sizing if node has an auto-layout parent
-          if (this.hasAutoLayoutParent(node) && 'layoutSizingHorizontal' in node) {
-            node.layoutSizingHorizontal = width === 'hug' ? 'HUG' : 'FILL';
-          }
+        if (width === 'hug') {
+          if ('layoutSizingHorizontal' in node) node.layoutSizingHorizontal = 'HUG';
+        } else if (width === 'fill') {
+          if ('layoutSizingHorizontal' in node) node.layoutSizingHorizontal = 'FILL';
         } else if (!isNaN(Number(width))) {
-          if (this.hasAutoLayoutParent(node) && 'layoutSizingHorizontal' in node) {
-            node.layoutSizingHorizontal = 'FIXED';
-          }
+          if ('layoutSizingHorizontal' in node) node.layoutSizingHorizontal = 'FIXED';
           (node as any).resize?.(Number(width), (node as any).height || 100);
         }
       } catch (error) {
@@ -30,15 +27,12 @@ export abstract class BaseRenderer {
     if (attributes.height) {
       const height = this.interpolateValue(attributes.height, props);
       try {
-        if (height === 'hug' || height === 'fill') {
-          // Only set layout sizing if node has an auto-layout parent
-          if (this.hasAutoLayoutParent(node) && 'layoutSizingVertical' in node) {
-            node.layoutSizingVertical = height === 'hug' ? 'HUG' : 'FILL';
-          }
+        if (height === 'hug') {
+          if ('layoutSizingVertical' in node) node.layoutSizingVertical = 'HUG';
+        } else if (height === 'fill') {
+          if ('layoutSizingVertical' in node) node.layoutSizingVertical = 'FILL';
         } else if (!isNaN(Number(height))) {
-          if (this.hasAutoLayoutParent(node) && 'layoutSizingVertical' in node) {
-            node.layoutSizingVertical = 'FIXED';
-          }
+          if ('layoutSizingVertical' in node) node.layoutSizingVertical = 'FIXED';
           (node as any).resize?.((node as any).width || 100, Number(height));
         }
       } catch (error) {
@@ -62,12 +56,6 @@ export abstract class BaseRenderer {
         (node as any).rotation = (Number(rotation) * Math.PI) / 180;
       }
     }
-  }
-
-  protected static hasAutoLayoutParent(node: SceneNode): boolean {
-    return node.parent != null &&
-           node.parent.type === 'FRAME' &&
-           (node.parent as FrameNode).layoutMode !== 'NONE';
   }
 
   protected static hexToRgb(hex: string): RGB {

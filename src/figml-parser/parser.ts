@@ -2,6 +2,12 @@ import { XMLParser } from 'fast-xml-parser';
 import { FigmlComponent, FigmlNode } from './types';
 
 export class FigmlParser {
+  private static importResolver?: (path: string) => string;
+
+  static setImportResolver(resolver: (path: string) => string): void {
+    this.importResolver = resolver;
+  }
+
   static parseComponent(figmlContent: string): FigmlComponent {
     const parser = new XMLParser({
       ignoreAttributes: false,
@@ -31,15 +37,27 @@ export class FigmlParser {
     }
 
     // Extract variants
-    const variants = Array.isArray(componentData.variant) ? componentData.variant : [componentData.variant];
+    if (componentData.variant) {
+      const variants = Array.isArray(componentData.variant) ? componentData.variant : [componentData.variant];
 
-    for (const variantData of variants) {
-      if (variantData) {
-        const variantKey = this.extractVariantKey(variantData);
-        if (variantData.frame) {
-          const frameContent = this.convertToFigmlNode(variantData.frame, 'frame');
-          component.variants[variantKey] = frameContent;
+      for (const variantData of variants) {
+        if (variantData) {
+          const variantKey = this.extractVariantKey(variantData);
+          if (variantData.frame) {
+            const frameContent = this.convertToFigmlNode(variantData.frame, 'frame');
+            component.variants[variantKey] = frameContent;
+          }
         }
+      }
+    } else {
+      // No explicit variants - treat direct content as default variant
+      const directContent = Object.keys(componentData).find(key =>
+        !key.startsWith('prop:') && key !== '@' && key !== '#text'
+      );
+
+      if (directContent && componentData[directContent]) {
+        const rootNode = this.convertToFigmlNode(componentData[directContent], directContent);
+        component.variants[''] = rootNode;
       }
     }
 
@@ -89,6 +107,11 @@ export class FigmlParser {
       tag = 'unknown';
     }
 
+    // Handle import tags after we've determined the tag name
+    if (tag === 'import') {
+      return this.resolveImport(xmlNode);
+    }
+
     const attributes: Record<string, string> = {};
     for (const [key, value] of Object.entries(xmlNode)) {
       if (typeof value === 'string' && key !== '#text') {
@@ -119,5 +142,61 @@ export class FigmlParser {
     }
 
     return result;
+  }
+
+  private static resolveImport(xmlNode: any): FigmlNode {
+    if (!this.importResolver) {
+      throw new Error('Import resolver not set. Use FigmlParser.setImportResolver() to configure imports.');
+    }
+
+    // Extract attributes - they should be direct properties on xmlNode for self-closing tags
+    const attributes: Record<string, string> = {};
+    for (const [key, value] of Object.entries(xmlNode)) {
+      if (typeof value === 'string' && key !== '#text') {
+        attributes[key] = value;
+      }
+    }
+
+    const fromPath = attributes.from;
+    if (!fromPath) {
+      console.error('Available attributes:', Object.keys(attributes));
+      throw new Error('Import tag must have a "from" attribute');
+    }
+
+    // Load the imported component
+    const importedContent = this.importResolver(fromPath);
+    const importedComponent = this.parseComponent(importedContent);
+
+    // Components without explicit variants use the root content as default
+    let rootNode: FigmlNode;
+    if (importedComponent.variants['']) {
+      // Component has implicit default variant (no variant key)
+      rootNode = importedComponent.variants[''];
+    } else if (importedComponent.variants['default']) {
+      rootNode = importedComponent.variants['default'];
+    } else {
+      // Take the first variant
+      const firstVariant = Object.keys(importedComponent.variants)[0];
+      if (!firstVariant) {
+        throw new Error('Imported component has no variants');
+      }
+      rootNode = importedComponent.variants[firstVariant];
+    }
+
+    // Merge props from import tag with the imported component
+    const mergedAttributes = { ...rootNode.attributes };
+
+    // Override with props from the import tag
+    for (const [key, value] of Object.entries(attributes)) {
+      if (key.startsWith('prop:')) {
+        const propName = key.substring(5);
+        mergedAttributes[propName] = value as string;
+      }
+    }
+
+    return {
+      ...rootNode,
+      attributes: mergedAttributes
+    };
   }
 }

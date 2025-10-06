@@ -3,6 +3,7 @@ import { Model } from "./model";
 import { FigmlParser, FigmlRenderer } from "./figml-parser";
 import busStopFigml from "./figml/bus-stop.figml";
 import busStopLineFigml from "./figml/bus-stop-line.figml";
+import busStopTextFigml from "./figml/bus-stop-text.figml";
 
 export class View {
   private figmaLayerMap: Map<NodeId | LineId, SceneNode> = new Map();
@@ -11,7 +12,19 @@ export class View {
   private busStopLineTemplate: any;
 
   constructor() {
+    this.setupImportResolver();
     this.loadTemplates();
+  }
+
+  private setupImportResolver(): void {
+    FigmlParser.setImportResolver((path: string) => {
+      switch (path) {
+        case 'bus-stop-text.figml':
+          return busStopTextFigml;
+        default:
+          throw new Error(`Unknown import path: ${path}`);
+      }
+    });
   }
 
   public setModel(model: Model): void {
