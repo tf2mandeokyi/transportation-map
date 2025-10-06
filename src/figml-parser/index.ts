@@ -1,36 +1,42 @@
-import { FigmlComponent, FigmlNode, RenderResult } from './types';
+import { FigmlComponent, FigmlNode, FigmlProps, RenderResult } from './types';
 import { FrameRenderer } from './frame';
 import { TextRenderer } from './text';
 import { EllipseRenderer, PolygonRenderer, RectangleRenderer } from './shapes';
+import { BaseRenderer } from './base';
 
 export { FigmlComponent, FigmlNode } from './types';
 export { FigmlParser } from './parser';
 
-export function renderNode(node: FigmlNode, props: Record<string, any>): RenderResult {
-  switch (node.tag) {
-    case 'frame':
-      return new FrameRenderer().render(node, props);
-    case 'text':
-      return new TextRenderer().render(node, props);
-    case 'rectangle':
-      return new RectangleRenderer().render(node, props);
-    case 'ellipse':
-      return new EllipseRenderer().render(node, props);
-    case 'polygon':
-      return new PolygonRenderer().render(node, props);
+const FRAME = new FrameRenderer();
+const TEXT = new TextRenderer();
+const RECTANGLE = new RectangleRenderer();
+const ELLIPSE = new EllipseRenderer();
+const POLYGON = new PolygonRenderer();
+
+function chooseRenderer(tag: string): BaseRenderer {
+  switch (tag) {
+    case 'frame':     return FRAME;
+    case 'text':      return TEXT;
+    case 'rectangle': return RECTANGLE;
+    case 'ellipse':   return ELLIPSE;
+    case 'polygon':   return POLYGON;
     default:
-      console.error(`Unknown tag: ${node.tag}, node:`, node);
-      throw new Error(`Unknown tag: ${node.tag}`);
+      throw new Error(`Unknown tag: ${tag}`);
   }
 }
 
+export function renderNode(node: FigmlNode, props: FigmlProps, stack: number): RenderResult {
+  const renderer = chooseRenderer(node.tag);
+  return renderer.render(node, props, stack);
+}
+
 export class FigmlRenderer {
-  static renderComponent(component: FigmlComponent, props: Record<string, any>, variant: string): RenderResult {
+  static renderComponent(component: FigmlComponent, props: FigmlProps, variant: string): RenderResult {
     const variantNode = component.variants[variant];
     if (!variantNode) {
       throw new Error(`Variant ${variant} not found`);
     }
 
-    return renderNode(variantNode, props);
+    return renderNode(variantNode, props, 0);
   }
 }

@@ -1,11 +1,9 @@
-import { FigmlNode, RenderResult } from './types';
+import { FigmlNode, FigmlProps, RenderResult } from './types';
 import { BaseRenderer } from './base';
 import { renderNode } from '.';
 
 export class FrameRenderer extends BaseRenderer {
-  static renderNodeCallback?: (node: FigmlNode, props: Record<string, any>) => Promise<SceneNode>;
-
-  render(node: FigmlNode, props: Record<string, any>): RenderResult {
+  render(node: FigmlNode, props: FigmlProps, stack: number): RenderResult {
     const frame = figma.createFrame();
     const children: Array<() => Promise<void>> = [];
 
@@ -21,7 +19,7 @@ export class FrameRenderer extends BaseRenderer {
     } else {
       // Render normal children but defer appendChild
       for (const child of node.children) {
-        const { node: childNode, render: childRender } = renderNode(child, props);
+        const { node: childNode, render: childRender } = renderNode(child, props, stack + 1);
         frame.appendChild(childNode);
         children.push(childRender);
       }
@@ -34,7 +32,7 @@ export class FrameRenderer extends BaseRenderer {
     }};
   }
 
-  private applyFrameAttributes(frame: FrameNode, attributes: Record<string, string>, props: Record<string, any>) {
+  private applyFrameAttributes(frame: FrameNode, attributes: Record<string, string>, props: FigmlProps) {
     if (attributes.fill) {
       const fill = BaseRenderer.interpolateValue(attributes.fill, props);
       frame.fills = [{ type: 'SOLID', color: BaseRenderer.hexToRgb(fill) }];

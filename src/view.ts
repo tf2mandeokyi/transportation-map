@@ -80,7 +80,7 @@ export class View {
 
     // Render individual bus lines using the bus-stop-line template in parallel
     const facing = this.getLineFacing(node.orientation);
-    const linePromises = busLines
+    const lineRenderResults = busLines
       .filter(busLine => busLine.stopsAt || !node.hidden) // Show line if it stops OR if node is visible
       .map(busLine =>
         FigmlRenderer.renderComponent(
@@ -93,7 +93,8 @@ export class View {
         )
       );
 
-    const lineElements = (await Promise.all(linePromises)).filter(Boolean);
+    await Promise.all(lineRenderResults.map(result => result.render()));
+    const lineElements = lineRenderResults.map(result => result.node);
 
     // Render the bus stop container using the bus-stop template
     const { node: busStopElement, render } = FigmlRenderer.renderComponent(

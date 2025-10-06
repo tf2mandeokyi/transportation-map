@@ -1,13 +1,13 @@
-import { FigmlNode, RenderResult } from './types';
+import { FigmlNode, FigmlProps, RenderResult } from './types';
 
 export abstract class BaseRenderer {
-  protected static interpolateValue(value: string, props: Record<string, any>): string {
+  protected static interpolateValue(value: string, props: FigmlProps): string {
     return value.replace(/\$\$prop:(\w+)\$\$/g, (match, propName) => {
       return props[propName] || match;
     });
   }
 
-  protected static applyCommonAttributes(node: SceneNode, attributes: Record<string, string>, props: Record<string, any>) {
+  protected static applyCommonAttributes(node: SceneNode, attributes: Record<string, string>, props: FigmlProps) {
     if (attributes.width) {
       const width = this.interpolateValue(attributes.width, props);
       try {
@@ -79,5 +79,5 @@ export abstract class BaseRenderer {
     } : { r: 0, g: 0, b: 0 };
   }
 
-  abstract render(node: FigmlNode, props: Record<string, any>): RenderResult;
+  abstract render(node: FigmlNode, props: FigmlProps, stack: number): RenderResult;
 }
