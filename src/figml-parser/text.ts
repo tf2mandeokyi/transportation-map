@@ -4,11 +4,8 @@ import { BaseRenderer } from './base';
 export class TextRenderer extends BaseRenderer {
   async render(node: FigmlNode, props: Record<string, any>): Promise<TextNode> {
     const text = figma.createText();
-
-    await Promise.all([
-      BaseRenderer.applyCommonAttributes(text, node.attributes, props),
-      this.applyTextAttributes(text, node.attributes, props)
-    ]);
+    BaseRenderer.applyCommonAttributes(text, node.attributes, props);
+    await this.applyTextAttributes(text, node.attributes, props);
 
     let content = node.content || node.attributes.text || '';
     content = BaseRenderer.interpolateValue(content, props);

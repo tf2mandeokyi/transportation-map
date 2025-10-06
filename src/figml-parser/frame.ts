@@ -7,11 +7,8 @@ export class FrameRenderer extends BaseRenderer {
 
   async render(node: FigmlNode, props: Record<string, any>): Promise<FrameNode> {
     const frame = figma.createFrame();
-
-    await Promise.all([
-      BaseRenderer.applyCommonAttributes(frame, node.attributes, props),
-      this.applyFrameAttributes(frame, node.attributes, props)
-    ]);
+    BaseRenderer.applyCommonAttributes(frame, node.attributes, props);
+    this.applyFrameAttributes(frame, node.attributes, props);
 
     // Handle special case for children prop
     if (node.content === '$$prop:children$$' && props.children) {
@@ -44,7 +41,7 @@ export class FrameRenderer extends BaseRenderer {
     return frame;
   }
 
-  private async applyFrameAttributes(frame: FrameNode, attributes: Record<string, string>, props: Record<string, any>): Promise<void> {
+  private applyFrameAttributes(frame: FrameNode, attributes: Record<string, string>, props: Record<string, any>) {
     if (attributes.fill) {
       const fill = BaseRenderer.interpolateValue(attributes.fill, props);
       frame.fills = [{ type: 'SOLID', color: BaseRenderer.hexToRgb(fill) }];

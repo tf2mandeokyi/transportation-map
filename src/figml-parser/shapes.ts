@@ -4,14 +4,12 @@ import { BaseRenderer } from './base';
 export class RectangleRenderer extends BaseRenderer {
   async render(node: FigmlNode, props: Record<string, any>): Promise<RectangleNode> {
     const rect = figma.createRectangle();
-    await Promise.all([
-      BaseRenderer.applyCommonAttributes(rect, node.attributes, props),
-      this.applyShapeAttributes(rect, node.attributes, props)
-    ]);
+    BaseRenderer.applyCommonAttributes(rect, node.attributes, props);
+    this.applyShapeAttributes(rect, node.attributes, props);
     return rect;
   }
 
-  private async applyShapeAttributes(shape: any, attributes: Record<string, string>, props: Record<string, any>): Promise<void> {
+  private applyShapeAttributes(shape: any, attributes: Record<string, string>, props: Record<string, any>) {
     if (attributes.fill) {
       const fill = BaseRenderer.interpolateValue(attributes.fill, props);
       shape.fills = [{ type: 'SOLID', color: BaseRenderer.hexToRgb(fill) }];
@@ -37,14 +35,12 @@ export class RectangleRenderer extends BaseRenderer {
 export class EllipseRenderer extends BaseRenderer {
   async render(node: FigmlNode, props: Record<string, any>): Promise<EllipseNode> {
     const ellipse = figma.createEllipse();
-    await Promise.all([
-      BaseRenderer.applyCommonAttributes(ellipse, node.attributes, props),
-      this.applyShapeAttributes(ellipse, node.attributes, props)
-    ]);
+    BaseRenderer.applyCommonAttributes(ellipse, node.attributes, props);
+    this.applyShapeAttributes(ellipse, node.attributes, props);
     return ellipse;
   }
 
-  private async applyShapeAttributes(shape: any, attributes: Record<string, string>, props: Record<string, any>): Promise<void> {
+  private applyShapeAttributes(shape: any, attributes: Record<string, string>, props: Record<string, any>) {
     if (attributes.fill) {
       const fill = BaseRenderer.interpolateValue(attributes.fill, props);
       shape.fills = [{ type: 'SOLID', color: BaseRenderer.hexToRgb(fill) }];
@@ -64,26 +60,23 @@ export class EllipseRenderer extends BaseRenderer {
 
 export class PolygonRenderer extends BaseRenderer {
   async render(node: FigmlNode, props: Record<string, any>): Promise<VectorNode | PolygonNode> {
+    const shape = this.createShape(node, props);
+    BaseRenderer.applyCommonAttributes(shape, node.attributes, props);
+    this.applyShapeAttributes(shape, node.attributes, props);
+    return shape;
+  }
+
+  private createShape(node: FigmlNode, props: Record<string, any>): VectorNode | PolygonNode {
     if (node.attributes.points) {
       const pointsStr = BaseRenderer.interpolateValue(node.attributes.points, props);
       const vectorNetwork = this.parsePolygonPoints(pointsStr);
       if (vectorNetwork) {
         const vector = figma.createVector();
-        await Promise.all([
-          vector.setVectorNetworkAsync(vectorNetwork),
-          BaseRenderer.applyCommonAttributes(vector, node.attributes, props),
-          this.applyShapeAttributes(vector, node.attributes, props)
-        ]);
+        vector.setVectorNetworkAsync(vectorNetwork);
         return vector;
       }
     }
-
-    const polygon = figma.createPolygon();
-    await Promise.all([
-      BaseRenderer.applyCommonAttributes(polygon, node.attributes, props),
-      this.applyShapeAttributes(polygon, node.attributes, props)
-    ]);
-    return polygon;
+    return figma.createPolygon();
   }
 
   private parsePolygonPoints(pointsStr: string): VectorNetwork | null {
@@ -116,7 +109,7 @@ export class PolygonRenderer extends BaseRenderer {
     }
   }
 
-  private async applyShapeAttributes(shape: any, attributes: Record<string, string>, props: Record<string, any>): Promise<void> {
+  private applyShapeAttributes(shape: any, attributes: Record<string, string>, props: Record<string, any>) {
     if (attributes.fill) {
       const fill = BaseRenderer.interpolateValue(attributes.fill, props);
       shape.fills = [{ type: 'SOLID', color: BaseRenderer.hexToRgb(fill) }];

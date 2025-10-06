@@ -7,7 +7,7 @@ export abstract class BaseRenderer {
     });
   }
 
-  protected static async applyCommonAttributes(node: SceneNode, attributes: Record<string, string>, props: Record<string, any>): Promise<void> {
+  protected static applyCommonAttributes(node: SceneNode, attributes: Record<string, string>, props: Record<string, any>) {
     if (attributes.width) {
       const width = this.interpolateValue(attributes.width, props);
       if (!isNaN(Number(width))) {
