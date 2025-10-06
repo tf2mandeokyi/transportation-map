@@ -4,6 +4,7 @@ import { FigmlParser, FigmlRenderer } from "./figml-parser";
 import busStopFigml from "./figml/bus-stop.figml";
 import busStopLineFigml from "./figml/bus-stop-line.figml";
 import busStopTextFigml from "./figml/bus-stop-text.figml";
+import busStopContentFigml from "./figml/bus-stop-content.figml";
 
 export class View {
   private figmaLayerMap: Map<NodeId | LineId, SceneNode> = new Map();
@@ -21,6 +22,8 @@ export class View {
       switch (path) {
         case 'bus-stop-text.figml':
           return busStopTextFigml;
+        case 'bus-stop-content.figml':
+          return busStopContentFigml;
         default:
           throw new Error(`Unknown import path: ${path}`);
       }

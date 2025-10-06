@@ -1,0 +1,8 @@
+<component prop:visible="true" prop:rotation="0" prop:children>
+  <frame name="Bus stop content" width="7" height="hug" flow="horizontal" gap="-7" clip="false" rotation=$$prop:rotation$$>
+    <rectangle width="7" height="fill" fill="#FFFFFF" cornerRadius="3.5" stroke="#000000" strokeWeight="1" visible=$$prop:visible$$ />
+    <frame width="7" height="hug" flow="vertical" clip="false" padding="h=0,v=3">
+      $$prop:children$$
+    </frame>
+  </frame>
+</component>
