@@ -18,6 +18,9 @@ export class RectangleRenderer extends BaseRenderer {
     if (attributes.stroke) {
       const stroke = BaseRenderer.interpolateValue(attributes.stroke, props);
       shape.strokes = [{ type: 'SOLID', color: BaseRenderer.hexToRgb(stroke) }];
+    } else {
+      // Explicitly remove strokes when none specified
+      shape.strokes = [];
     }
 
     if (attributes.strokeWeight) {
@@ -49,6 +52,9 @@ export class EllipseRenderer extends BaseRenderer {
     if (attributes.stroke) {
       const stroke = BaseRenderer.interpolateValue(attributes.stroke, props);
       shape.strokes = [{ type: 'SOLID', color: BaseRenderer.hexToRgb(stroke) }];
+    } else {
+      // Explicitly remove strokes when none specified
+      shape.strokes = [];
     }
 
     if (attributes.strokeWeight) {
@@ -118,6 +124,9 @@ export class PolygonRenderer extends BaseRenderer {
     if (attributes.stroke) {
       const stroke = BaseRenderer.interpolateValue(attributes.stroke, props);
       shape.strokes = [{ type: 'SOLID', color: BaseRenderer.hexToRgb(stroke) }];
+    } else {
+      // Explicitly remove strokes when none specified
+      shape.strokes = [];
     }
 
     if (attributes.strokeWeight) {
