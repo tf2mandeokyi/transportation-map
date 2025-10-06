@@ -1,14 +1,13 @@
-import { FigmlNode } from './types';
+import { FigmlNode, RenderResult } from './types';
 import { BaseRenderer } from './base';
 import { renderNode } from '.';
 
 export class FrameRenderer extends BaseRenderer {
   static renderNodeCallback?: (node: FigmlNode, props: Record<string, any>) => Promise<SceneNode>;
 
-  async render(node: FigmlNode, props: Record<string, any>): Promise<FrameNode> {
+  render(node: FigmlNode, props: Record<string, any>): RenderResult {
     const frame = figma.createFrame();
-    BaseRenderer.applyCommonAttributes(frame, node.attributes, props);
-    this.applyFrameAttributes(frame, node.attributes, props);
+    const children: Array<() => Promise<void>> = [];
 
     // Handle special case for children prop
     if (node.content === '$$prop:children$$' && props.children) {
@@ -20,17 +19,19 @@ export class FrameRenderer extends BaseRenderer {
         frame.appendChild(props.children);
       }
     } else {
-      // Render normal children in parallel
-      const childNodes = await Promise.all(node.children.map(child => renderNode(child, props)));
-
-      // Add children sequentially to preserve order
-      for (let i = 0; i < childNodes.length; i++) {
-        frame.appendChild(childNodes[i]);
-        this.applyLayoutSizing(childNodes[i], node.children[i].attributes, props);
+      // Render normal children but defer appendChild
+      for (const child of node.children) {
+        const { node: childNode, render: childRender } = renderNode(child, props);
+        frame.appendChild(childNode);
+        children.push(childRender);
       }
     }
 
-    return frame;
+    return { node: frame, render: async () => {
+      this.applyFrameAttributes(frame, node.attributes, props);
+      BaseRenderer.applyCommonAttributes(frame, node.attributes, props);
+      await Promise.all(children.map(c => c()));
+    }};
   }
 
   private applyFrameAttributes(frame: FrameNode, attributes: Record<string, string>, props: Record<string, any>) {
@@ -101,77 +102,6 @@ export class FrameRenderer extends BaseRenderer {
           case 'left': frame.counterAxisAlignItems = 'MIN'; break;
           case 'center': frame.counterAxisAlignItems = 'CENTER'; break;
           case 'right': frame.counterAxisAlignItems = 'MAX'; break;
-        }
-      }
-    }
-  }
-
-  private applyLayoutSizing(node: SceneNode, attributes: Record<string, string>, props: Record<string, any>) {
-    if (!node.parent || node.parent.type !== 'FRAME') return;
-    const parentFrame = node.parent as FrameNode;
-    if (parentFrame.layoutMode === 'NONE') return;
-
-    if (node.type === 'FRAME') {
-      const frame = node as FrameNode;
-
-      if (attributes.width) {
-        const width = BaseRenderer.interpolateValue(attributes.width, props);
-        try {
-          if (width === 'hug') {
-            frame.layoutSizingHorizontal = 'HUG';
-          } else if (width === 'fill') {
-            frame.layoutSizingHorizontal = 'FILL';
-          } else if (!isNaN(Number(width))) {
-            frame.layoutSizingHorizontal = 'FIXED';
-          }
-        } catch (error) {
-          console.error(`Error setting layoutSizingHorizontal to ${width}:`, error);
-        }
-      }
-
-      if (attributes.height) {
-        const height = BaseRenderer.interpolateValue(attributes.height, props);
-        try {
-          if (height === 'hug') {
-            frame.layoutSizingVertical = 'HUG';
-          } else if (height === 'fill') {
-            frame.layoutSizingVertical = 'FILL';
-          } else if (!isNaN(Number(height))) {
-            frame.layoutSizingVertical = 'FIXED';
-          }
-        } catch (error) {
-          console.error(`Error setting layoutSizingVertical to ${height}:`, error);
-        }
-      }
-    } else {
-      // For non-frame nodes (rectangles, ellipses, etc.)
-      if (attributes.height) {
-        const height = BaseRenderer.interpolateValue(attributes.height, props);
-        if (height === 'fill') {
-          try {
-            if (parentFrame.layoutMode === 'HORIZONTAL') {
-              (node as any).layoutAlign = 'STRETCH';
-            } else if (parentFrame.layoutMode === 'VERTICAL') {
-              (node as any).layoutGrow = 1;
-            }
-          } catch (error) {
-            console.error(`Error setting layout properties for ${node.type} with height fill:`, error);
-          }
-        }
-      }
-
-      if (attributes.width) {
-        const width = BaseRenderer.interpolateValue(attributes.width, props);
-        if (width === 'fill') {
-          try {
-            if (parentFrame.layoutMode === 'VERTICAL') {
-              (node as any).layoutAlign = 'STRETCH';
-            } else if (parentFrame.layoutMode === 'HORIZONTAL') {
-              (node as any).layoutGrow = 1;
-            }
-          } catch (error) {
-            console.error(`Error setting layout properties for ${node.type} with width fill:`, error);
-          }
         }
       }
     }

@@ -96,7 +96,7 @@ export class View {
     const lineElements = (await Promise.all(linePromises)).filter(Boolean);
 
     // Render the bus stop container using the bus-stop template
-    const busStopElement = await FigmlRenderer.renderComponent(
+    const { node: busStopElement, render } = FigmlRenderer.renderComponent(
       this.busStopTemplate,
       {
         text: node.id,
@@ -109,6 +109,7 @@ export class View {
 
     if (busStopElement) {
       parentFrame.appendChild(busStopElement);
+      await render();
     }
   }
 

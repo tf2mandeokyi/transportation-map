@@ -9,3 +9,8 @@ export interface FigmlComponent {
   props: Record<string, string>;
   variants: Record<string, FigmlNode>;
 }
+
+export interface RenderResult {
+  node: SceneNode;
+  render: () => Promise<void>;
+}
