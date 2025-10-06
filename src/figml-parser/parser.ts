@@ -167,9 +167,22 @@ export class FigmlParser {
     const importedContent = this.importResolver(fromPath);
     const importedComponent = this.parseComponent(importedContent);
 
-    // Components without explicit variants use the root content as default
+    // Calculate variant key based on import props
+    const variantProps: string[] = [];
+    for (const [key, value] of Object.entries(attributes)) {
+      if (key.startsWith('prop:') && key !== 'prop:from') {
+        const propName = key.substring(5);
+        variantProps.push(`${propName}:${value}`);
+      }
+    }
+    const variantKey = variantProps.length > 0 ? variantProps.join(',') : '';
+
+    // Select the appropriate variant
     let rootNode: FigmlNode;
-    if (importedComponent.variants['']) {
+    if (variantKey && importedComponent.variants[variantKey]) {
+      // Use the specific variant that matches our props
+      rootNode = importedComponent.variants[variantKey];
+    } else if (importedComponent.variants['']) {
       // Component has implicit default variant (no variant key)
       rootNode = importedComponent.variants[''];
     } else if (importedComponent.variants['default']) {

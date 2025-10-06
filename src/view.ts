@@ -5,12 +5,21 @@ import busStopFigml from "./figml/bus-stop.figml";
 import busStopLineFigml from "./figml/bus-stop-line.figml";
 import busStopTextFigml from "./figml/bus-stop-text.figml";
 import busStopContentFigml from "./figml/bus-stop-content.figml";
+import busLineDotFigml from "./figml/bus-line-dot.figml";
+import busLineTextFigml from "./figml/bus-line-text.figml";
 
 export class View {
   private figmaLayerMap: Map<NodeId | LineId, SceneNode> = new Map();
   private model?: Model;
   private busStopTemplate: any;
   private busStopLineTemplate: any;
+
+  private static readonly FIGML_IMPORTS = {
+    'bus-stop-text.figml': busStopTextFigml,
+    'bus-stop-content.figml': busStopContentFigml,
+    'bus-line-dot.figml': busLineDotFigml,
+    'bus-line-text.figml': busLineTextFigml,
+  } as const;
 
   constructor() {
     this.setupImportResolver();
@@ -19,14 +28,11 @@ export class View {
 
   private setupImportResolver(): void {
     FigmlParser.setImportResolver((path: string) => {
-      switch (path) {
-        case 'bus-stop-text.figml':
-          return busStopTextFigml;
-        case 'bus-stop-content.figml':
-          return busStopContentFigml;
-        default:
-          throw new Error(`Unknown import path: ${path}`);
+      const importContent = View.FIGML_IMPORTS[path as keyof typeof View.FIGML_IMPORTS];
+      if (!importContent) {
+        throw new Error(`Unknown import path: ${path}`);
       }
+      return importContent;
     });
   }
 
