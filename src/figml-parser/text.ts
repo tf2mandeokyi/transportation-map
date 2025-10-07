@@ -2,16 +2,16 @@ import { FigmlNode, FigmlProps, RenderResult } from './types';
 import { BaseRenderer } from './base';
 
 export class TextRenderer extends BaseRenderer {
-  render(node: FigmlNode, props: FigmlProps, stack: number): RenderResult {
+  render(node: FigmlNode, props: FigmlProps): RenderResult {
     const text = figma.createText();
-    return { node: text, render: async () => {
+    return RenderResult.newNode(text, async () => {
       BaseRenderer.applyCommonAttributes(text, node.attributes, props);
       await this.applyTextAttributes(text, node.attributes, props);
 
       let content = node.content || node.attributes.text || '';
       content = BaseRenderer.interpolateValue(content, props);
       text.characters = content;
-    }};
+    });
   }
 
   private async applyTextAttributes(text: TextNode, attributes: Record<string, string>, props: FigmlProps): Promise<void> {

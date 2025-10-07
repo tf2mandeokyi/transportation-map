@@ -67,5 +67,5 @@ export abstract class BaseRenderer {
     } : { r: 0, g: 0, b: 0 };
   }
 
-  abstract render(node: FigmlNode, props: FigmlProps, stack: number): RenderResult;
+  abstract render(node: FigmlNode, props: FigmlProps): RenderResult;
 }

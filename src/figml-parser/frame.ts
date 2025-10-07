@@ -3,9 +3,9 @@ import { BaseRenderer } from './base';
 import { renderNode } from '.';
 
 export class FrameRenderer extends BaseRenderer {
-  render(node: FigmlNode, props: FigmlProps, stack: number): RenderResult {
+  render(node: FigmlNode, props: FigmlProps): RenderResult {
     const frame = figma.createFrame();
-    const children: Array<() => Promise<void>> = [];
+    const children: RenderResult[] = [];
 
     // Handle special case for children prop
     if (node.content === '$$prop:children$$' && props.children) {
@@ -19,17 +19,15 @@ export class FrameRenderer extends BaseRenderer {
     } else {
       // Render normal children but defer appendChild
       for (const child of node.children) {
-        const { node: childNode, render: childRender } = renderNode(child, props, stack + 1);
-        frame.appendChild(childNode);
-        children.push(childRender);
+        const childResult = renderNode(child, props);
+        children.push(childResult);
       }
     }
 
-    return { node: frame, render: async () => {
+    return RenderResult.newFrameNode(frame, children, () => {
       this.applyFrameAttributes(frame, node.attributes, props);
       BaseRenderer.applyCommonAttributes(frame, node.attributes, props);
-      await Promise.all(children.map(c => c()));
-    }};
+    });
   }
 
   private applyFrameAttributes(frame: FrameNode, attributes: Record<string, string>, props: FigmlProps) {

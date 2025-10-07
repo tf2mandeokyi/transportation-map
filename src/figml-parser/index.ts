@@ -25,9 +25,9 @@ function chooseRenderer(tag: string): BaseRenderer {
   }
 }
 
-export function renderNode(node: FigmlNode, props: FigmlProps, stack: number): RenderResult {
+export function renderNode(node: FigmlNode, props: FigmlProps): RenderResult {
   const renderer = chooseRenderer(node.tag);
-  return renderer.render(node, props, stack);
+  return renderer.render(node, props);
 }
 
 export class FigmlRenderer {
@@ -37,6 +37,6 @@ export class FigmlRenderer {
       throw new Error(`Variant ${variant} not found`);
     }
 
-    return renderNode(variantNode, props, 0);
+    return renderNode(variantNode, props);
   }
 }

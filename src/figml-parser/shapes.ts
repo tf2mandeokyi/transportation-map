@@ -2,12 +2,12 @@ import { FigmlNode, FigmlProps, RenderResult } from './types';
 import { BaseRenderer } from './base';
 
 export class RectangleRenderer extends BaseRenderer {
-  render(node: FigmlNode, props: FigmlProps, stack: number): RenderResult {
+  render(node: FigmlNode, props: FigmlProps): RenderResult {
     const rect = figma.createRectangle();
-    return { node: rect, render: async () => {
+    return RenderResult.newNode(rect, () => {
       BaseRenderer.applyCommonAttributes(rect, node.attributes, props);
       this.applyShapeAttributes(rect, node.attributes, props);
-    }};
+    });
   }
 
   private applyShapeAttributes(shape: RectangleNode, attributes: Record<string, string>, props: FigmlProps) {
@@ -37,12 +37,12 @@ export class RectangleRenderer extends BaseRenderer {
 }
 
 export class EllipseRenderer extends BaseRenderer {
-  render(node: FigmlNode, props: FigmlProps, stack: number): RenderResult {
+  render(node: FigmlNode, props: FigmlProps): RenderResult {
     const ellipse = figma.createEllipse();
-    return { node: ellipse, render: async () => {
+    return RenderResult.newNode(ellipse, () => {
       BaseRenderer.applyCommonAttributes(ellipse, node.attributes, props);
       this.applyShapeAttributes(ellipse, node.attributes, props);
-    }};
+    });
   }
 
   private applyShapeAttributes(shape: EllipseNode, attributes: Record<string, string>, props: FigmlProps) {
@@ -67,12 +67,12 @@ export class EllipseRenderer extends BaseRenderer {
 }
 
 export class PolygonRenderer extends BaseRenderer {
-  render(node: FigmlNode, props: FigmlProps, stack: number): RenderResult {
+  render(node: FigmlNode, props: FigmlProps): RenderResult {
     const shape = this.createShape(node, props);
-    return { node: shape, render: async () => {
+    return RenderResult.newNode(shape, () => {
       BaseRenderer.applyCommonAttributes(shape, node.attributes, props);
       this.applyShapeAttributes(shape, node.attributes, props);
-    }};
+    });
   }
 
   private createShape(node: FigmlNode, props: FigmlProps): VectorNode | PolygonNode {
