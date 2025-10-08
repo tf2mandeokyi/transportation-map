@@ -1,5 +1,6 @@
-import { FigmlNode, FigmlProps, RenderResult } from './types';
+import { FigmlNode, FigmlProps } from './types';
 import { BaseRenderer } from './base';
+import { RenderResult } from './result';
 
 export class TextRenderer extends BaseRenderer {
   render(node: FigmlNode, props: FigmlProps): RenderResult {

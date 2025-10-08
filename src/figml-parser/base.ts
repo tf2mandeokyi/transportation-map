@@ -1,9 +1,29 @@
-import { FigmlNode, FigmlProps, RenderResult } from './types';
+import { RenderResult } from './result';
+import { FigmlNode, FigmlProps } from './types';
+
+function isRgbObject(value: any): value is RGB {
+  return value && typeof value.r === 'number' && typeof value.g === 'number' && typeof value.b === 'number';
+}
 
 export abstract class BaseRenderer {
   protected static interpolateValue(value: string, props: FigmlProps): string {
     return value.replace(/\$\$prop:(\w+)\$\$/g, (match, propName) => {
-      return props[propName] || match;
+      // return (propName in props) ? String(props[propName]) : match;
+      const propValue = props[propName];
+      if (propValue === undefined || propValue === null) {
+        return match;
+      }
+      if (typeof propValue === 'string' || typeof propValue === 'number' || typeof propValue === 'boolean') {
+        return String(propValue);
+      }
+      if (isRgbObject(propValue)) {
+        const rgb = propValue as RGB;
+        const r = Math.round(rgb.r * 255).toString(16).padStart(2, '0');
+        const g = Math.round(rgb.g * 255).toString(16).padStart(2, '0');
+        const b = Math.round(rgb.b * 255).toString(16).padStart(2, '0');
+        return `#${r}${g}${b}`;
+      }
+      return match;
     });
   }
 

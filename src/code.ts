@@ -1,6 +1,6 @@
 import { Controller } from "./controller";
 import { Model } from "./model";
-import { LineId, NodeId } from "./structures";
+import { LineId, StationId } from "./structures";
 import { View } from "./view";
 
 async function main() {
@@ -22,37 +22,34 @@ async function main() {
 }
 
 async function createDemoMap(controller: Controller, model: Model, view: View) {
-  // Create demo bus stops
-  controller.createNode('Central Station' as NodeId, { x: 200, y: 200 });
-  controller.createNode('Park Ave' as NodeId, { x: 400, y: 200 });
-  controller.createNode('Hidden Point' as NodeId, { x: 600, y: 200 }, true); // Hidden shaping point
-  controller.createNode('Mall' as NodeId, { x: 800, y: 200 });
+  // Create demo bus stops (positioned in a non-linear layout)
+  const s1 = controller.createStation('Central Station', { x: 200, y: 200 });
+  const s2 = controller.createStation('Park Ave', { x: 450, y: 350 });
+  const sHidden = controller.createStation('Hidden Point', { x: 700, y: 280 }, true); // Hidden shaping point
+  const s3 = controller.createStation('Mall', { x: 900, y: 450 });
 
   // Create demo bus lines
-  model.addLine({
-    id: 'Red Line' as LineId,
+  const redLine = model.addLine({
     name: 'Red Line',
-    color: '#ff0000',
+    color: { r: 1, g: 0, b: 0 },
     path: []
-  });
+  }); 
 
-  model.addLine({
-    id: 'Blue Line' as LineId,
+  const blueLine = model.addLine({
     name: 'Blue Line',
-    color: '#0000ff',
+    color: { r: 0, g: 0, b: 1 },
     path: []
   });
 
   // Connect lines to stops
-  await controller.connectNodesWithLine('Red Line' as LineId, 'Central Station' as NodeId, 'Park Ave' as NodeId);
-  await controller.connectNodesWithLine('Red Line' as LineId, 'Park Ave' as NodeId, 'Hidden Point' as NodeId, true, false); // Passes by hidden point
-  await controller.connectNodesWithLine('Red Line' as LineId, 'Hidden Point' as NodeId, 'Mall' as NodeId, false, true); // Passes by hidden point
-
-  await controller.connectNodesWithLine('Blue Line' as LineId, 'Central Station' as NodeId, 'Mall' as NodeId);
+  controller.connectStationsWithLine(redLine, s1, s2);
+  controller.connectStationsWithLine(redLine, s2, sHidden, true, false); // Passes by hidden point
+  controller.connectStationsWithLine(redLine, sHidden, s3, false, true); // Passes by hidden point
+  controller.connectStationsWithLine(blueLine, s1, s3);
 
   // Set line to pass by Park Ave without stopping
-  model.setLineStopsAtNode('Blue Line' as LineId, 'Park Ave' as NodeId, false);
-  model.addNodeToLine('Blue Line' as LineId, 'Park Ave' as NodeId, false);
+  model.setLineStopsAtStation(blueLine, s2, false);
+  model.addStationToLine(blueLine, s2, false);
 
   // Render the complete map
   await view.render(model.getState());

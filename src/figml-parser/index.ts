@@ -1,8 +1,9 @@
-import { FigmlComponent, FigmlNode, FigmlProps, RenderResult } from './types';
+import { FigmlComponent, FigmlNode, FigmlProps } from './types';
 import { FrameRenderer } from './frame';
 import { TextRenderer } from './text';
 import { EllipseRenderer, PolygonRenderer, RectangleRenderer } from './shapes';
 import { BaseRenderer } from './base';
+import { RenderResult } from './result';
 
 export { FigmlComponent, FigmlNode } from './types';
 export { FigmlParser } from './parser';

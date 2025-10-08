@@ -1,4 +1,22 @@
-import { Line, LineId, LineStopInfo, MapState, Node, NodeId, NodeOrientation, Vector } from "./structures";
+import { Line, LineId, MapState, Station, StationId, StationOrientation, Vector } from "./structures";
+
+function generateBase62(length: number): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+function generateUniqueId<T extends string>(map: Map<T, any>): T {
+  let length = 1;
+  while (true) {
+    const id = generateBase62(length) as T;
+    if (!map.has(id)) return id;
+    length++;
+  }
+}
 
 export class Model {
   private state: MapState;
@@ -6,7 +24,7 @@ export class Model {
 
   constructor(initialState?: Partial<MapState>) {
     this.state = {
-      nodes: initialState?.nodes ?? new Map(),
+      stations: initialState?.stations ?? new Map(),
       lines: initialState?.lines ?? new Map(),
       lineStackingOrder: initialState?.lineStackingOrder ?? [],
     };
@@ -24,50 +42,53 @@ export class Model {
     this.rightHandTraffic = rightHand;
   }
 
-  public addNode(node: Node): void {
-    this.state.nodes.set(node.id, node);
+  public addStation(station: Omit<Station, 'id' | 'figmaNodeId'>): StationId {
+    const id = generateUniqueId(this.state.stations);
+    this.state.stations.set(id, { ...station, figmaNodeId: null, id });
+    return id;
   }
 
-  public removeNode(id: NodeId): void {
-    const node = this.state.nodes.get(id);
-    if (node) {
-      // Remove this node from all lines that use it
+  public removeStation(id: StationId): void {
+    const station = this.state.stations.get(id);
+    if (station) {
+      // Remove this station from all lines that use it
       for (const line of this.state.lines.values()) {
         const index = line.path.indexOf(id);
         if (index !== -1) {
           line.path.splice(index, 1);
         }
       }
-      this.state.nodes.delete(id);
+      this.state.stations.delete(id);
     }
   }
 
-  public updateNodePosition(id: NodeId, newPosition: Vector): void {
-    const node = this.state.nodes.get(id);
-    if (node) {
-      node.position = newPosition;
-    }
+  public updateStationFigmaNodeId(id: StationId, figmaNodeId: string): void {
+    const station = this.state.stations.get(id);
+    if (station) station.figmaNodeId = figmaNodeId;
   }
 
-  public setNodeHidden(id: NodeId, hidden: boolean): void {
-    const node = this.state.nodes.get(id);
-    if (node) {
-      node.hidden = hidden;
-    }
+  public updateStationPosition(id: StationId, newPosition: Vector): void {
+    const station = this.state.stations.get(id);
+    if (station) station.position = newPosition;
   }
 
-  public setNodeOrientation(id: NodeId, orientation: NodeOrientation): void {
-    const node = this.state.nodes.get(id);
-    if (node) {
-      node.orientation = orientation;
-    }
+  public setStationHidden(id: StationId, hidden: boolean): void {
+    const station = this.state.stations.get(id);
+    if (station) station.hidden = hidden;
   }
 
-  public addLine(line: Line): void {
-    this.state.lines.set(line.id, line);
-    if (!this.state.lineStackingOrder.includes(line.id)) {
-      this.state.lineStackingOrder.push(line.id);
+  public setStationOrientation(id: StationId, orientation: StationOrientation): void {
+    const station = this.state.stations.get(id);
+    if (station) station.orientation = orientation;
+  }
+
+  public addLine(line: Omit<Line, 'id'>): LineId {
+    const id = generateUniqueId(this.state.lines);
+    this.state.lines.set(id, { ...line, id });
+    if (!this.state.lineStackingOrder.includes(id)) {
+      this.state.lineStackingOrder.push(id);
     }
+    return id;
   }
 
   public removeLine(id: LineId): void {
@@ -77,44 +98,44 @@ export class Model {
       this.state.lineStackingOrder.splice(index, 1);
     }
 
-    // Remove line references from all nodes
-    for (const node of this.state.nodes.values()) {
-      node.lines.delete(id);
+    // Remove line references from all stations
+    for (const station of this.state.stations.values()) {
+      station.lines.delete(id);
     }
   }
 
-  public addNodeToLine(lineId: LineId, nodeId: NodeId, stopsAt: boolean = true): void {
+  public addStationToLine(lineId: LineId, stationId: StationId, stopsAt: boolean = true): void {
     const line = this.state.lines.get(lineId);
-    const node = this.state.nodes.get(nodeId);
+    const station = this.state.stations.get(stationId);
 
-    if (line && node) {
-      // Add node to line path if not already there
-      if (!line.path.includes(nodeId)) {
-        line.path.push(nodeId);
+    if (line && station) {
+      // Add station to line path if not already there
+      if (!line.path.includes(stationId)) {
+        line.path.push(stationId);
       }
 
-      // Set line info for this node
-      node.lines.set(lineId, { stopsAt });
+      // Set line info for this station
+      station.lines.set(lineId, { stopsAt });
     }
   }
 
-  public removeNodeFromLine(lineId: LineId, nodeId: NodeId): void {
+  public removeStationFromLine(lineId: LineId, stationId: StationId): void {
     const line = this.state.lines.get(lineId);
-    const node = this.state.nodes.get(nodeId);
+    const station = this.state.stations.get(stationId);
 
-    if (line && node) {
-      const index = line.path.indexOf(nodeId);
+    if (line && station) {
+      const index = line.path.indexOf(stationId);
       if (index !== -1) {
         line.path.splice(index, 1);
       }
-      node.lines.delete(lineId);
+      station.lines.delete(lineId);
     }
   }
 
-  public setLineStopsAtNode(lineId: LineId, nodeId: NodeId, stopsAt: boolean): void {
-    const node = this.state.nodes.get(nodeId);
-    if (node && node.lines.has(lineId)) {
-      node.lines.set(lineId, { stopsAt });
+  public setLineStopsAtStation(lineId: LineId, stationId: StationId, stopsAt: boolean): void {
+    const station = this.state.stations.get(stationId);
+    if (station && station.lines.has(lineId)) {
+      station.lines.set(lineId, { stopsAt });
     }
   }
 
@@ -122,16 +143,16 @@ export class Model {
     this.state.lineStackingOrder = [...newOrder];
   }
 
-  public getLineStackingOrderForNode(nodeId: NodeId): LineId[] {
-    const node = this.state.nodes.get(nodeId);
-    if (!node) return [];
+  public getLineStackingOrderForStation(stationId: StationId): LineId[] {
+    const station = this.state.stations.get(stationId);
+    if (!station) return [];
 
-    // Filter global stacking order to only include lines that pass through this node
-    return this.state.lineStackingOrder.filter(lineId => node.lines.has(lineId));
+    // Filter global stacking order to only include lines that pass through this station
+    return this.state.lineStackingOrder.filter(lineId => station.lines.has(lineId));
   }
 
-  public getStackingPosition(nodeId: NodeId, lineId: LineId, orientation: NodeOrientation): { x: number, y: number } {
-    const stackOrder = this.getLineStackingOrderForNode(nodeId);
+  public getStackingPosition(stationId: StationId, lineId: LineId, orientation: StationOrientation): { x: number, y: number } {
+    const stackOrder = this.getLineStackingOrderForStation(stationId);
     const lineIndex = stackOrder.indexOf(lineId);
 
     if (lineIndex === -1) return { x: 0, y: 0 };
@@ -139,7 +160,7 @@ export class Model {
     const lineSpacing = 8; // Pixels between lines
     const offset = lineIndex * lineSpacing;
 
-    // Calculate position based on node orientation and traffic direction
+    // Calculate position based on station orientation and traffic direction
     switch (orientation) {
       case 'RIGHT':
         return this.rightHandTraffic

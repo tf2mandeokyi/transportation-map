@@ -1,5 +1,5 @@
 import { Model } from "./model";
-import { Line, LineId, NodeId, NodeOrientation, Vector } from "./structures";
+import { LineId, StationId, StationOrientation, Vector } from "./structures";
 import { View } from "./view";
 
 export class Controller {
@@ -57,8 +57,8 @@ export class Controller {
     }
   }
 
-  private async handleAddStop(stopData: {name: string, orientation: NodeOrientation, hidden: boolean}): Promise<void> {
-    const nodeId = stopData.name as NodeId;
+  private async handleAddStop(stopData: { name: string, orientation: StationOrientation, hidden: boolean }): Promise<void> {
+    const { name, orientation, hidden } = stopData;
 
     // Get current selection position or use default
     const selection = figma.currentPage.selection;
@@ -69,26 +69,18 @@ export class Controller {
       position = { x: node.x + 200, y: node.y };
     }
 
-    await this.createNode(nodeId, position, stopData.hidden, stopData.orientation);
+    this.createStation(name, position, hidden, orientation);
     await this.view.render(this.model.getState());
 
     figma.ui.postMessage({ type: 'stop-added' });
   }
 
-  private async handleAddLine(lineData: {name: string, color: string}): Promise<void> {
-    const lineId = lineData.name as LineId;
-
+  private async handleAddLine(lineData: { name: string, color: string }): Promise<void> {
+    const { name, color } = lineData;
     // Convert hex color to RGB
-    const rgb = this.hexToRgb(lineData.color);
+    const rgb = this.hexToRgb(color);
 
-    const line: Line = {
-      id: lineId,
-      name: lineData.name,
-      color: lineData.color,
-      path: []
-    };
-
-    this.model.addLine(line);
+    this.model.addLine({ name, color: rgb, path: [] });
     await this.view.render(this.model.getState());
 
     figma.ui.postMessage({ type: 'line-added' });
@@ -137,45 +129,33 @@ export class Controller {
   }
 
   private async handleDocumentChange(event: DocumentChangeEvent): Promise<void> {
-    // Handle node movements, deletions, etc.
+    // Handle station movements, deletions, etc.
     for (const change of event.documentChanges) {
       if (change.type === 'PROPERTY_CHANGE' && (change.properties.includes('x') || change.properties.includes('y'))) {
-        // A node was moved - update our model if it's a bus stop
+        // A station was moved - update our model if it's a bus stop
         try {
-          const node = await figma.getNodeByIdAsync(change.id);
-          if (node && 'x' in node && 'y' in node && node.name.startsWith('Stop:')) {
-            const nodeId = node.name.replace('Stop: ', '') as NodeId;
-            this.model.updateNodePosition(nodeId, { x: node.x, y: node.y });
+          const station = await figma.getNodeByIdAsync(change.id);
+          if (station && 'x' in station && 'y' in station && station.name.startsWith('Stop:')) {
+            const nodeId = station.name.replace('Stop: ', '') as StationId;
+            this.model.updateStationPosition(nodeId, { x: station.x, y: station.y });
           }
         } catch (error) {
-          console.warn('Failed to get node by id:', change.id, error);
+          console.warn('Failed to get station by id:', change.id, error);
         }
       }
     }
   }
 
-  public createNode(id: NodeId, position: Vector, hidden: boolean = false, orientation: NodeOrientation = 'RIGHT'): void {
-    const frame = figma.createFrame();
-    frame.name = `Stop: ${id}`;
-    frame.x = position.x;
-    frame.y = position.y;
-
-    this.model.addNode({
-      id: id,
-      figmaNodeId: frame.id,
-      position: position,
-      hidden: hidden,
-      orientation: orientation,
+  public createStation(name: string, position: Vector, hidden: boolean = false, orientation: StationOrientation = 'RIGHT'): StationId {
+    return this.model.addStation({
+      name, position, hidden, orientation,
       lines: new Map()
     });
   }
 
-  public async connectNodesWithLine(lineId: LineId, startNodeId: NodeId, endNodeId: NodeId, stopsAtStart: boolean = true, stopsAtEnd: boolean = true): Promise<void> {
-    // Add nodes to the line
-    this.model.addNodeToLine(lineId, startNodeId, stopsAtStart);
-    this.model.addNodeToLine(lineId, endNodeId, stopsAtEnd);
-
-    // Re-render to show the connection
-    await this.view.render(this.model.getState());
+  public connectStationsWithLine(lineId: LineId, startStationId: StationId, endStationId: StationId, stopsAtStart: boolean = true, stopsAtEnd: boolean = true): void {
+    // Add stations to the line
+    this.model.addStationToLine(lineId, startStationId, stopsAtStart);
+    this.model.addStationToLine(lineId, endStationId, stopsAtEnd);
   }
 }

@@ -1,5 +1,6 @@
-import { FigmlNode, FigmlProps, RenderResult } from './types';
+import { FigmlNode, FigmlProps } from './types';
 import { BaseRenderer } from './base';
+import { RenderResult } from './result';
 
 export class RectangleRenderer extends BaseRenderer {
   render(node: FigmlNode, props: FigmlProps): RenderResult {
@@ -68,24 +69,36 @@ export class EllipseRenderer extends BaseRenderer {
 
 export class PolygonRenderer extends BaseRenderer {
   render(node: FigmlNode, props: FigmlProps): RenderResult {
-    const shape = this.createShape(node, props);
-    return RenderResult.newNode(shape, () => {
-      BaseRenderer.applyCommonAttributes(shape, node.attributes, props);
-      this.applyShapeAttributes(shape, node.attributes, props);
-    });
+    const shapeResult = this.createShape(node, props);
+    if (shapeResult.type === 'vector') {
+      const { shape, vectorNetwork } = shapeResult;
+      return RenderResult.newNode(shape, async () => {
+        await shape.setVectorNetworkAsync(vectorNetwork);
+        BaseRenderer.applyCommonAttributes(shape, node.attributes, props);
+        this.applyShapeAttributes(shape, node.attributes, props);
+      });
+    } else {
+      const { shape } = shapeResult;
+      return RenderResult.newNode(shape, () => {
+        BaseRenderer.applyCommonAttributes(shape, node.attributes, props);
+        this.applyShapeAttributes(shape, node.attributes, props);
+      });
+    }
   }
 
-  private createShape(node: FigmlNode, props: FigmlProps): VectorNode | PolygonNode {
+  private createShape(node: FigmlNode, props: FigmlProps): {
+    type: 'vector', shape: VectorNode, vectorNetwork: VectorNetwork
+  } | {
+    type: 'polygon', shape: PolygonNode
+  } { 
     if (node.attributes.points) {
       const pointsStr = BaseRenderer.interpolateValue(node.attributes.points, props);
       const vectorNetwork = this.parsePolygonPoints(pointsStr);
       if (vectorNetwork) {
-        const vector = figma.createVector();
-        vector.setVectorNetworkAsync(vectorNetwork);
-        return vector;
+        return { type: 'vector', shape: figma.createVector(), vectorNetwork: vectorNetwork };
       }
     }
-    return figma.createPolygon();
+    return { type: 'polygon', shape: figma.createPolygon() };
   }
 
   private parsePolygonPoints(pointsStr: string): VectorNetwork | null {

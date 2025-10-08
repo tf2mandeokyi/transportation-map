@@ -54,7 +54,7 @@ export class ImportResolver {
       // Take the first variant
       const firstVariant = Object.keys(importedComponent.variants)[0];
       if (!firstVariant) {
-        throw new Error('Imported component has no variants');
+        throw new Error(`Imported component '${fromPath}' has no variants`);
       }
       rootNode = importedComponent.variants[firstVariant];
     }

@@ -1,6 +1,7 @@
-import { FigmlNode, FigmlProps, RenderResult } from './types';
+import { FigmlNode, FigmlProps } from './types';
 import { BaseRenderer } from './base';
 import { renderNode } from '.';
+import { RenderResult } from './result';
 
 export class FrameRenderer extends BaseRenderer {
   render(node: FigmlNode, props: FigmlProps): RenderResult {
@@ -19,8 +20,7 @@ export class FrameRenderer extends BaseRenderer {
     } else {
       // Render normal children but defer appendChild
       for (const child of node.children) {
-        const childResult = renderNode(child, props);
-        children.push(childResult);
+        children.push(renderNode(child, props));
       }
     }
 

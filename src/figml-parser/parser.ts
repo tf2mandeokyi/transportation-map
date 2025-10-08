@@ -23,28 +23,26 @@ export class FigmlParser {
       throw new Error('Root element must be a component');
     }
 
-    const component: FigmlComponent = {
-      props: {},
-      variants: {}
-    };
+    const props: Record<string, string> = {};
+    const variants: Record<string, FigmlNode> = {};
 
     // Extract component props
     for (const [key, value] of Object.entries(componentData)) {
       if (key.startsWith('prop:')) {
-        component.props[key.substring(5)] = value as string;
+        props[key.substring(5)] = value as string;
       }
     }
 
     // Extract variants
     if (componentData.variant) {
-      const variants = Array.isArray(componentData.variant) ? componentData.variant : [componentData.variant];
+      const variantDataArray = Array.isArray(componentData.variant) ? componentData.variant : [componentData.variant];
 
-      for (const variantData of variants) {
+      for (const variantData of variantDataArray) {
         if (variantData) {
           const variantKey = FigmlParser.extractVariantKey(variantData);
           if (variantData.frame) {
             const frameContent = FigmlParser.convertToFigmlNode(variantData.frame, 'frame');
-            component.variants[variantKey] = frameContent;
+            variants[variantKey] = frameContent;
           }
         }
       }
@@ -56,11 +54,11 @@ export class FigmlParser {
 
       if (directContent && componentData[directContent]) {
         const rootNode = FigmlParser.convertToFigmlNode(componentData[directContent], directContent);
-        component.variants[''] = rootNode;
+        variants[''] = rootNode;
       }
     }
 
-    return component;
+    return new FigmlComponent(props, variants);
   }
 
   private static extractVariantKey(attributes: Record<string, string>): string {
