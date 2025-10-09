@@ -1,35 +1,78 @@
 const path = require('path');
 const webpack = require('webpack');
+const HtmlWebpackPlugin = require('html-webpack-plugin');
+const HtmlInlineScriptPlugin = require('html-inline-script-webpack-plugin');
 
-module.exports = (env, argv) => ({
-mode: argv.mode === 'production' ? 'production' : 'development',
+module.exports = (env, argv) => {
+  const mode = argv.mode === 'production' ? 'production' : 'development';
 
-// This is necessary because Figma's 'eval' works differently than normal eval
-devtool: argv.mode === 'production' ? false : 'inline-source-map',
-  entry: {
-    code: './src/code.ts' // This is the entry point for our plugin code.
-  },
-  module: {
-    rules: [
-      // Converts TypeScript code to JavaScript
-      {
-        test: /\.tsx?$/,
-        use: 'ts-loader',
-        exclude: /node_modules/,
+  return [
+    // Plugin build configuration
+    {
+      name: 'plugin',
+      mode,
+      devtool: mode === 'production' ? false : 'inline-source-map',
+      entry: {
+        code: './src/plugin/code.ts',
       },
-      // Import .figml files as raw text
-      {
-        test: /\.figml$/,
-        type: 'asset/source',
+      module: {
+        rules: [
+          {
+            test: /\.tsx?$/,
+            use: 'ts-loader',
+            exclude: /node_modules/,
+          },
+          {
+            test: /\.figml$/,
+            type: 'asset/source',
+          },
+        ],
       },
-    ],
-  },
-  // Webpack tries these extensions for you if you omit the extension like "import './file'"
-  resolve: {
-    extensions: ['.ts', '.js'],
-  },
-  output: {
-    filename: '[name].js',
-    path: path.resolve(__dirname, 'dist'),
-  },
-});
+      resolve: {
+        extensions: ['.ts', '.tsx', '.js'],
+      },
+      output: {
+        filename: '[name].js',
+        path: path.resolve(__dirname, 'dist'),
+      },
+    },
+    // UI build configuration
+    {
+      name: 'ui',
+      mode,
+      devtool: mode === 'production' ? false : 'inline-source-map',
+      entry: {
+        ui: './src/ui/index.tsx',
+      },
+      module: {
+        rules: [
+          {
+            test: /\.tsx?$/,
+            use: 'ts-loader',
+            exclude: /node_modules/,
+          },
+          {
+            test: /\.css$/,
+            use: ['style-loader', 'css-loader'],
+          },
+        ],
+      },
+      resolve: {
+        extensions: ['.tsx', '.ts', '.js'],
+      },
+      output: {
+        filename: '[name].js',
+        path: path.resolve(__dirname, 'dist'),
+      },
+      plugins: [
+        new HtmlWebpackPlugin({
+          template: './src/ui/index.html',
+          filename: 'ui.html',
+          chunks: ['ui'],
+          inject: 'body',
+        }),
+        new HtmlInlineScriptPlugin(),
+      ],
+    },
+  ];
+};
