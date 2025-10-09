@@ -5,6 +5,7 @@ import { View } from "./view";
 export class Controller {
   private model: Model;
   private view: View;
+  private isAddingStationsMode: boolean = false;
 
   constructor(model: Model, view: View) {
     this.model = model;
@@ -43,6 +44,8 @@ export class Controller {
       case 'remove-line': return this.handleRemoveLine(msg.lineId);
       case 'render-map': return this.handleRenderMap(msg.rightHandTraffic);
       case 'connect-stations-to-line': return this.handleConnectStationsToLine(msg.lineId, msg.stationIds, msg.stopsAt);
+      case 'start-adding-stations-mode': return this.handleStartAddingStationsMode(msg.lineId);
+      case 'stop-adding-stations-mode': return this.handleStopAddingStationsMode();
       default: console.log("Unknown message type:", msg.type); return Promise.resolve();
     }
   }
@@ -110,31 +113,18 @@ export class Controller {
   private handleSelectionChange(): void {
     const selection = figma.currentPage.selection;
 
-    // Extract station IDs and names from selected bus stops
-    const stationIds: string[] = [];
-    const stationNames: string[] = [];
-    const processedStations = new Set<string>(); // Avoid duplicates
-
-    for (const node of selection) {
-      const station = this.findStationFromNode(node);
+    // If we're in adding-stations mode, handle clicks differently
+    if (this.isAddingStationsMode && selection.length === 1) {
+      const station = this.findStationFromNode(selection[0]);
       if (station) {
-        // Skip if we've already processed this station
-        if (processedStations.has(station.id)) {
-          continue;
-        }
-
-        stationIds.push(station.id);
-        stationNames.push(station.name);
-        processedStations.add(station.id);
+        // Send station click to UI
+        figma.ui.postMessage({
+          type: 'station-clicked',
+          stationId: station.id,
+          stationName: station.name
+        });
       }
     }
-
-    // Send selection to UI
-    figma.ui.postMessage({
-      type: 'selection-changed',
-      stationIds,
-      stationNames
-    });
   }
 
   private findStationFromNode(node: SceneNode): Station | null {
@@ -210,5 +200,15 @@ export class Controller {
 
     // Notify UI of success
     figma.ui.postMessage({ type: 'stations-connected' });
+  }
+
+  private async handleStartAddingStationsMode(lineId: string): Promise<void> {
+    this.isAddingStationsMode = true;
+    console.log("Entered station-adding mode for line:", lineId);
+  }
+
+  private async handleStopAddingStationsMode(): Promise<void> {
+    this.isAddingStationsMode = false;
+    console.log("Exited station-adding mode");
   }
 }

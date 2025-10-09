@@ -138,18 +138,23 @@
       <div>
         <p style="font-size: 11px; color: #666; margin: 0;">
           1. Select line above<br>
-          2. Select stations on canvas in order<br>
-          3. Click "Add to Line Path"
+          2. Click "Start Adding Stations"<br>
+          3. Click stations on canvas in order<br>
+          4. Click "Finish" when done
         </p>
       </div>
-      <div id="selected-stations-display" style="font-size: 11px; padding: 8px; background: #f5f5f5; border-radius: 4px; min-height: 40px;">
-        <strong>Selected:</strong> <span id="selected-stations-list">None</span>
+      <div id="path-building-display" style="font-size: 11px; padding: 8px; background: #f5f5f5; border-radius: 4px; min-height: 40px;">
+        <strong>Path:</strong> <span id="path-list">None</span>
       </div>
       <div class="checkbox-container">
         <input type="checkbox" id="stops-at-station" checked>
         <label for="stops-at-station">Line stops at these stations</label>
       </div>
-      <button class="button button--primary" id="connect-stations" disabled>Add to Line Path</button>
+      <div class="two-column">
+        <button class="button button--primary" id="start-adding-stations" disabled>Start Adding Stations</button>
+        <button class="button button--secondary" id="finish-adding-stations" disabled>Finish</button>
+      </div>
+      <button class="button button--secondary full-width" id="clear-path" disabled>Clear Path</button>
     </div>
   </div>
 
@@ -181,12 +186,15 @@
 
     const connectLineSelect = document.getElementById('connect-line-select');
     const stopsAtStationInput = document.getElementById('stops-at-station');
-    const connectStationsButton = document.getElementById('connect-stations');
-    const selectedStationsListSpan = document.getElementById('selected-stations-list');
+    const startAddingStationsButton = document.getElementById('start-adding-stations');
+    const finishAddingStationsButton = document.getElementById('finish-adding-stations');
+    const clearPathButton = document.getElementById('clear-path');
+    const pathListSpan = document.getElementById('path-list');
 
     let lineCounter = 0;
-    let selectedStations = [];
-    let selectedStationNames = [];
+    let isAddingStations = false;
+    let stationPath = [];
+    let stationPathNames = [];
 
     addStopButton.onclick = () => {
       const stopData = {
@@ -281,9 +289,24 @@
       }
     }
 
-    connectStationsButton.onclick = () => {
+    startAddingStationsButton.onclick = () => {
+      isAddingStations = true;
+      stationPath = [];
+      stationPathNames = [];
+      updateUI();
+
+      // Notify plugin to enter station-adding mode
+      parent.postMessage({
+        pluginMessage: {
+          type: 'start-adding-stations-mode',
+          lineId: connectLineSelect.value
+        }
+      }, '*');
+    };
+
+    finishAddingStationsButton.onclick = () => {
       const selectedLine = connectLineSelect.value;
-      if (!selectedLine || selectedStations.length === 0) {
+      if (!selectedLine || stationPath.length === 0) {
         return;
       }
 
@@ -291,31 +314,73 @@
         pluginMessage: {
           type: 'connect-stations-to-line',
           lineId: selectedLine,
-          stationIds: selectedStations,
+          stationIds: stationPath,
           stopsAt: stopsAtStationInput.checked
         }
       }, '*');
 
-      // Clear selection after connecting
-      selectedStations = [];
-      updateSelectedStationsDisplay();
+      // Exit mode and clear path
+      isAddingStations = false;
+      stationPath = [];
+      stationPathNames = [];
+      updateUI();
+
+      // Notify plugin to exit station-adding mode
+      parent.postMessage({
+        pluginMessage: {
+          type: 'stop-adding-stations-mode'
+        }
+      }, '*');
+    };
+
+    clearPathButton.onclick = () => {
+      stationPath = [];
+      stationPathNames = [];
+      updateUI();
     };
 
     connectLineSelect.onchange = () => {
-      updateConnectButtonState();
+      // If we change the line while in adding mode, exit the mode
+      if (isAddingStations) {
+        isAddingStations = false;
+        stationPath = [];
+        stationPathNames = [];
+        parent.postMessage({
+          pluginMessage: {
+            type: 'stop-adding-stations-mode'
+          }
+        }, '*');
+      }
+      updateUI();
     };
 
-    function updateSelectedStationsDisplay() {
-      if (selectedStations.length === 0) {
-        selectedStationsListSpan.textContent = 'None';
+    function updatePathDisplay() {
+      if (stationPath.length === 0) {
+        pathListSpan.textContent = 'None';
       } else {
-        selectedStationsListSpan.textContent = selectedStationNames.join(' → ');
+        pathListSpan.textContent = stationPathNames.map((name, idx) => `${idx + 1}. ${name}`).join(' → ');
       }
-      updateConnectButtonState();
     }
 
-    function updateConnectButtonState() {
-      connectStationsButton.disabled = !connectLineSelect.value || selectedStations.length === 0;
+    function updateUI() {
+      updatePathDisplay();
+
+      // Update button states
+      const hasLineSelected = !!connectLineSelect.value;
+      const hasPath = stationPath.length > 0;
+
+      startAddingStationsButton.disabled = !hasLineSelected || isAddingStations;
+      finishAddingStationsButton.disabled = !isAddingStations || !hasPath;
+      clearPathButton.disabled = !hasPath;
+
+      // Change button text based on mode
+      if (isAddingStations) {
+        startAddingStationsButton.textContent = 'Adding... (click stations)';
+        startAddingStationsButton.style.backgroundColor = '#18a0fb';
+      } else {
+        startAddingStationsButton.textContent = 'Start Adding Stations';
+        startAddingStationsButton.style.backgroundColor = '';
+      }
     }
 
     renderMapButton.onclick = () => {
@@ -334,16 +399,27 @@
         addLineToUI(msg.lineId, msg.name, msg.color);
       } else if (msg.type === 'stop-added') {
         // Stop was successfully added to the model
-      } else if (msg.type === 'selection-changed') {
-        // Update selected stations list
-        selectedStations = msg.stationIds || [];
-        selectedStationNames = msg.stationNames || [];
-        updateSelectedStationsDisplay();
+      } else if (msg.type === 'station-clicked') {
+        // Only process if we're in adding mode
+        if (isAddingStations) {
+          const stationId = msg.stationId;
+          const stationName = msg.stationName;
+
+          // Check if station is already in path
+          if (!stationPath.includes(stationId)) {
+            stationPath.push(stationId);
+            stationPathNames.push(stationName);
+            updateUI();
+          }
+        }
       } else if (msg.type === 'stations-connected') {
         // Stations were successfully connected
         console.log('Stations connected to line');
       }
     };
+
+    // Initialize UI state
+    updateUI();
   </script>
 </body>
 </html>
