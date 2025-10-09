@@ -76,13 +76,12 @@ export class StationRenderer {
     ));
 
     // Render the bus stop container using the bus-stop template
-    const align = this.getStopLineAlign(station.orientation);
+    const align = `${stopLineFacing},center` as const;
     const busStopElement = await renderBusStop({
       text: station.name,
       visible: !station.hidden,
       rotation, children,
-      align,
-      textLocation
+      align, textLocation
     }).intoNode();
 
     parentFrame.appendChild(busStopElement);
@@ -121,21 +120,6 @@ export class StationRenderer {
         return 'right';
       default:
         return 'right';
-    }
-  }
-
-  private getStopLineAlign(orientation: StationOrientation): FigmlAlignment {
-    switch (orientation) {
-      case 'LEFT':
-        return 'left,center';
-      case 'RIGHT':
-        return 'right,center';
-      case 'UP':
-        return 'center,top';
-      case 'DOWN':
-        return 'center,bottom';
-      default:
-        return 'center,center';
     }
   }
 
@@ -188,28 +172,59 @@ export class StationRenderer {
       const lineElement = lineElements[i] as FrameNode;
       const busLine = busLines[i];
 
-      // Get absolute position of the line element's center
-      const left = lineElement.absoluteTransform[0][2];
-      const top = lineElement.absoluteTransform[1][2];
+      // Use absoluteTransform to calculate transformed positions
+      // absoluteTransform is a 2x3 matrix: [[a, b, tx], [c, d, ty]]
+      // where (tx, ty) is the top-left corner position
+      const transform = lineElement.absoluteTransform;
+      const width = lineElement.width;
+      const height = lineElement.height;
+
+      // Calculate the four corners of the element in absolute coordinates
+      const topLeft = {
+        x: transform[0][2],
+        y: transform[1][2]
+      };
+      const topRight = {
+        x: transform[0][2] + transform[0][0] * width,
+        y: transform[1][2] + transform[1][0] * width
+      };
+      const bottomLeft = {
+        x: transform[0][2] + transform[0][1] * height,
+        y: transform[1][2] + transform[1][1] * height
+      };
+      const bottomRight = {
+        x: transform[0][2] + transform[0][0] * width + transform[0][1] * height,
+        y: transform[1][2] + transform[1][0] * width + transform[1][1] * height
+      };
+
+      // Calculate center of left, right, top, and bottom edges
+      const centerLeft = {
+        x: (topLeft.x + bottomLeft.x) / 2,
+        y: (topLeft.y + bottomLeft.y) / 2
+      };
+      const centerRight = {
+        x: (topRight.x + bottomRight.x) / 2,
+        y: (topRight.y + bottomRight.y) / 2
+      };
 
       let head: {x: number, y: number};
       let tail: {x: number, y: number};
       switch (station.orientation) {
         case 'LEFT':
-          head = { x: left, y: top + lineElement.height / 2 };
-          tail = { x: left + lineElement.width, y: top + lineElement.height / 2 };
+          head = centerLeft;
+          tail = centerRight;
           break;
         case 'RIGHT':
-          head = { x: left + lineElement.width, y: top + lineElement.height / 2 };
-          tail = { x: left, y: top + lineElement.height / 2 };
+          head = centerRight;
+          tail = centerLeft;
           break;
         case 'UP':
-          head = { x: left + lineElement.width / 2, y: top };
-          tail = { x: left + lineElement.width / 2, y: top + lineElement.height };
+          head = centerRight;
+          tail = centerLeft;
           break;
         case 'DOWN':
-          head = { x: left + lineElement.width / 2, y: top + lineElement.height };
-          tail = { x: left + lineElement.width / 2, y: top };
+          head = centerLeft;
+          tail = centerRight;
           break;
       }
 

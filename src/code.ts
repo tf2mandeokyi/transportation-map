@@ -60,6 +60,7 @@ async function createDemoMap(controller: Controller, model: Model, view: View) {
   // Connect green line through different orientations
   controller.connectStationsWithLine(greenLine, s4, s5);
   controller.connectStationsWithLine(greenLine, s5, s6);
+  controller.connectStationsWithLine(greenLine, s6, s3);
 
   // Set line to pass by Park Ave without stopping
   model.setLineStopsAtStation(blueLine, s2, false);
