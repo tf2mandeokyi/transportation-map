@@ -1,6 +1,6 @@
-import { RenderResult } from './result';
-import { StringTemplate } from './template';
-import { FigmlNode, FigmlProps } from './types';
+import { RenderResult } from '../result';
+import { StringTemplate } from '../template';
+import { FigmlNode, FigmlProps } from '../types';
 
 
 export abstract class BaseRenderer {
@@ -39,6 +39,9 @@ export abstract class BaseRenderer {
 
     if (attributes.visible) {
       const visible = attributes.visible.interpolate(props);
+      if (visible !== 'true' && visible !== 'false') {
+        throw Error(`Invalid value for visible attribute: ${visible}. Expected 'true' or 'false'.`);
+      }
       node.visible = visible === 'true';
     }
 
@@ -50,7 +53,7 @@ export abstract class BaseRenderer {
     if (attributes.rotation && 'rotation' in node) {
       const rotation = attributes.rotation.interpolate(props);
       if (!isNaN(Number(rotation))) {
-        (node as any).rotation = (Number(rotation) * Math.PI) / 180;
+        (node as any).rotation = Number(rotation);
       }
     }
   }

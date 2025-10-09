@@ -1,8 +1,8 @@
-import { FigmlNode, FigmlProps } from './types';
+import { FigmlNode, FigmlProps } from '../types';
 import { BaseRenderer } from './base';
-import { renderNode } from '.';
-import { RenderResult } from './result';
-import { isRgbObject, StringTemplate } from './template';
+import { renderNode } from '..';
+import { RenderResult } from '../result';
+import { isRgbObject, StringTemplate } from '../template';
 
 export class FrameRenderer extends BaseRenderer {
   render(node: FigmlNode, props: FigmlProps): RenderResult {

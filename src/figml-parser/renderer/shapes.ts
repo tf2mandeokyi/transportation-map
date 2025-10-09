@@ -1,7 +1,7 @@
-import { FigmlNode, FigmlProps } from './types';
+import { FigmlNode, FigmlProps } from '../types';
 import { BaseRenderer } from './base';
-import { RenderResult } from './result';
-import { StringTemplate } from './template';
+import { RenderResult } from '../result';
+import { StringTemplate } from '../template';
 
 export class RectangleRenderer extends BaseRenderer {
   render(node: FigmlNode, props: FigmlProps): RenderResult {
@@ -91,7 +91,7 @@ export class PolygonRenderer extends BaseRenderer {
     type: 'vector', shape: VectorNode, vectorNetwork: VectorNetwork
   } | {
     type: 'polygon', shape: PolygonNode
-  } { 
+  } {
     if (node.attributes.points) {
       const pointsStr = node.attributes.points.interpolate(props);
       const vectorNetwork = this.parsePolygonPoints(pointsStr);

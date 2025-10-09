@@ -2,7 +2,7 @@ import { Line, MapState, Station, StationId, StationOrientation } from "../struc
 import { Model } from "../model";
 import { renderBusStop, renderBusStopLine } from "../figml/resources";
 import { ErrorChain } from "../error";
-import { FigmlFrameAlignment } from "../figml-parser/types";
+import { FigmlAlignment } from "../figml-parser/types";
 
 export interface ConnectionPoints {
   head: {x: number, y: number},
@@ -105,7 +105,7 @@ export class StationRenderer {
     switch (orientation) {
       case 'UP':
       case 'DOWN':
-        return 270; // Rotate 270 degrees for vertical orientations
+        return 90; // Rotate 90 degrees for vertical orientations
       default:
         return 0;
     }
@@ -124,7 +124,7 @@ export class StationRenderer {
     }
   }
 
-  private getStopLineAlign(orientation: StationOrientation): FigmlFrameAlignment {
+  private getStopLineAlign(orientation: StationOrientation): FigmlAlignment {
     switch (orientation) {
       case 'LEFT':
         return 'left,center';

@@ -1,13 +1,8 @@
 import { XMLParser } from 'fast-xml-parser';
-import { FigmlComponent, FigmlNode } from './types';
-import { ImportResolver } from './import-resolver';
+import { FigmlComponent, FigmlNode, FigmlProps } from './types';
 import { StringTemplate } from './template';
 
 export class FigmlParser {
-  static setImportResolver(resolver: (path: string) => string): void {
-    ImportResolver.setImportResolver(resolver);
-  }
-
   static parseComponent(figmlContent: string): FigmlComponent {
     const parser = new XMLParser({
       ignoreAttributes: false,
@@ -24,13 +19,13 @@ export class FigmlParser {
       throw new Error('Root element must be a component');
     }
 
-    const props: Record<string, string> = {};
+    const defaultProps: FigmlProps = {};
     const variants: Record<string, FigmlNode> = {};
 
     // Extract component props
     for (const [key, value] of Object.entries(componentData)) {
       if (key.startsWith('prop:')) {
-        props[key.substring(5)] = value as string;
+        defaultProps[key.substring(5)] = value as string;
       }
     }
 
@@ -59,7 +54,7 @@ export class FigmlParser {
       }
     }
 
-    return new FigmlComponent(props, variants);
+    return new FigmlComponent(defaultProps, variants);
   }
 
   private static extractVariantKey(attributes: Record<string, string>): string {
@@ -105,11 +100,7 @@ export class FigmlParser {
       tag = 'unknown';
     }
 
-    // Handle import tags after we've determined the tag name
-    if (tag === 'import') {
-      return ImportResolver.resolveImport(xmlNode, FigmlParser.parseComponent);
-    }
-
+    // Parse attributes (including import tags which will be handled by ImportRenderer at render time)
     const attributes: Record<string, StringTemplate> = {};
     for (const [key, value] of Object.entries(xmlNode)) {
       if (typeof value !== 'string' || key === '#text') { continue }

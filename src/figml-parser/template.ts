@@ -5,7 +5,7 @@ export function isRgbObject(value: any): value is RGB {
 }
 
 export class StringTemplate {
-  
+
   static fromRaw(raw: string): StringTemplate {
     return new StringTemplate([raw], []);
   }
@@ -28,10 +28,10 @@ export class StringTemplate {
       propValueArray.filter((_, i) => i % 2 === 1)
     );
   }
-  
+
   private readonly raws: string[];
   private readonly templates: string[];
-  
+
   constructor(raws: string[], templates: string[]) {
     this.raws = raws;
     this.templates = templates;

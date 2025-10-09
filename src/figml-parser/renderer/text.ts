@@ -1,7 +1,7 @@
-import { FigmlNode, FigmlProps } from './types';
+import { FigmlNode, FigmlProps } from '../types';
 import { BaseRenderer } from './base';
-import { RenderResult } from './result';
-import { StringTemplate } from './template';
+import { RenderResult } from '../result';
+import { StringTemplate } from '../template';
 
 export class TextRenderer extends BaseRenderer {
   render(node: FigmlNode, props: FigmlProps): RenderResult {

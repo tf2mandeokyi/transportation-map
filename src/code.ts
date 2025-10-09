@@ -21,22 +21,33 @@ async function main() {
 }
 
 async function createDemoMap(controller: Controller, model: Model, view: View) {
-  // Create demo bus stops (positioned in a non-linear layout)
-  const s1 = controller.createStation('Central Station', { x: 200, y: 200 });
-  const s2 = controller.createStation('Park Ave', { x: 450, y: 350 });
-  const sHidden = controller.createStation('Hidden Point', { x: 700, y: 280 }, true); // Hidden shaping point
-  const s3 = controller.createStation('Mall', { x: 900, y: 450 });
+  // Create demo bus stops with different orientations
+  const s1 = controller.createStation('Central Station', { x: 200, y: 200 }, false, 'RIGHT'); // Facing right
+  const s2 = controller.createStation('Park Ave', { x: 450, y: 350 }, false, 'RIGHT'); // Facing right
+  const sHidden = controller.createStation('Hidden Point', { x: 700, y: 280 }, true, 'RIGHT'); // Hidden shaping point
+  const s3 = controller.createStation('Mall', { x: 900, y: 450 }, false, 'RIGHT'); // Facing right
+
+  // Add stations with different orientations for testing
+  const s4 = controller.createStation('North Station', { x: 200, y: 600 }, false, 'UP'); // Facing up
+  const s5 = controller.createStation('South Station', { x: 450, y: 600 }, false, 'DOWN'); // Facing down
+  const s6 = controller.createStation('West Station', { x: 700, y: 600 }, false, 'LEFT'); // Facing left
 
   // Create demo bus lines
   const redLine = model.addLine({
     name: 'Red Line',
     color: { r: 1, g: 0, b: 0 },
     path: []
-  }); 
+  });
 
   const blueLine = model.addLine({
     name: 'Blue Line',
     color: { r: 0, g: 0, b: 1 },
+    path: []
+  });
+
+  const greenLine = model.addLine({
+    name: 'Green Line',
+    color: { r: 0, g: 0.8, b: 0 },
     path: []
   });
 
@@ -45,6 +56,10 @@ async function createDemoMap(controller: Controller, model: Model, view: View) {
   controller.connectStationsWithLine(redLine, s2, sHidden, true, false); // Passes by hidden point
   controller.connectStationsWithLine(redLine, sHidden, s3, false, true); // Passes by hidden point
   controller.connectStationsWithLine(blueLine, s1, s3);
+
+  // Connect green line through different orientations
+  controller.connectStationsWithLine(greenLine, s4, s5);
+  controller.connectStationsWithLine(greenLine, s5, s6);
 
   // Set line to pass by Park Ave without stopping
   model.setLineStopsAtStation(blueLine, s2, false);

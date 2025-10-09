@@ -1,5 +1,5 @@
 <component prop:text="Bus stop" prop:visible="true" prop:align="center,bottom">
-  <frame name="Bus stop text" width="0" height="0" flow="vertical" clip="false" visible="$$prop:visible$$">
+  <frame align="$$prop:align$$" name="Bus stop text" width="0" height="0" flow="vertical" clip="false" visible="$$prop:visible$$">
     <text align="$$prop:align$$" fontSize="10" fontFamily="NanumSquare Neo" fill="#000000" style="Heavy" width="hug" height="hug">
       $$prop:text$$
     </text>
