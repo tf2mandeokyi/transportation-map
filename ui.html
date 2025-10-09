@@ -127,6 +127,33 @@
   </div>
 
   <div class="section">
+    <h3>Connect Stations to Line</h3>
+    <div class="grid">
+      <div>
+        <label for="connect-line-select">Select Line</label>
+        <select class="input" id="connect-line-select">
+          <option value="">Choose a line...</option>
+        </select>
+      </div>
+      <div>
+        <p style="font-size: 11px; color: #666; margin: 0;">
+          1. Select line above<br>
+          2. Select stations on canvas in order<br>
+          3. Click "Add to Line Path"
+        </p>
+      </div>
+      <div id="selected-stations-display" style="font-size: 11px; padding: 8px; background: #f5f5f5; border-radius: 4px; min-height: 40px;">
+        <strong>Selected:</strong> <span id="selected-stations-list">None</span>
+      </div>
+      <div class="checkbox-container">
+        <input type="checkbox" id="stops-at-station" checked>
+        <label for="stops-at-station">Line stops at these stations</label>
+      </div>
+      <button class="button button--primary" id="connect-stations" disabled>Add to Line Path</button>
+    </div>
+  </div>
+
+  <div class="section">
     <h3>Traffic Direction</h3>
     <div class="checkbox-container">
       <input type="checkbox" id="right-hand-traffic" checked>
@@ -152,7 +179,14 @@
     const rightHandTrafficInput = document.getElementById('right-hand-traffic');
     const renderMapButton = document.getElementById('render-map');
 
+    const connectLineSelect = document.getElementById('connect-line-select');
+    const stopsAtStationInput = document.getElementById('stops-at-station');
+    const connectStationsButton = document.getElementById('connect-stations');
+    const selectedStationsListSpan = document.getElementById('selected-stations-list');
+
     let lineCounter = 0;
+    let selectedStations = [];
+    let selectedStationNames = [];
 
     addStopButton.onclick = () => {
       const stopData = {
@@ -185,51 +219,103 @@
         }
       }, '*');
 
-      addLineToUI(lineData);
       lineNameInput.value = '';
     };
 
-    function addLineToUI(lineData) {
+    function addLineToUI(lineId, lineName, lineColor) {
       const lineDiv = document.createElement('div');
       lineDiv.className = 'line-item';
+      lineDiv.dataset.lineId = lineId;
       lineDiv.innerHTML = `
         <div style="display: flex; align-items: center;">
-          <div class="line-color" style="background-color: ${lineData.color}"></div>
-          <span class="line-info">${lineData.name}</span>
+          <div class="line-color" style="background-color: ${lineColor}"></div>
+          <span class="line-info">${lineName}</span>
         </div>
         <div class="line-controls">
-          <button class="button button--secondary small-btn" onclick="editLine('${lineData.name}')">Edit</button>
-          <button class="button button--secondary small-btn" onclick="removeLine('${lineData.name}')">Remove</button>
+          <button class="button button--secondary small-btn" onclick="editLine('${lineId}')">Edit</button>
+          <button class="button button--secondary small-btn" onclick="removeLine('${lineId}')">Remove</button>
         </div>
       `;
       linesListDiv.appendChild(lineDiv);
+
+      // Add to connect line dropdown
+      const option = document.createElement('option');
+      option.value = lineId;
+      option.textContent = lineName;
+      connectLineSelect.appendChild(option);
     }
 
-    function editLine(lineName) {
+    function editLine(lineId) {
       parent.postMessage({
         pluginMessage: {
           type: 'edit-line',
-          lineName: lineName
+          lineId: lineId
         }
       }, '*');
     }
 
-    function removeLine(lineName) {
+    function removeLine(lineId) {
       parent.postMessage({
         pluginMessage: {
           type: 'remove-line',
-          lineName: lineName
+          lineId: lineId
         }
       }, '*');
 
       // Remove from UI
       const lineItems = linesListDiv.children;
       for (let item of lineItems) {
-        if (item.querySelector('.line-info').textContent === lineName) {
+        if (item.dataset.lineId === lineId) {
           linesListDiv.removeChild(item);
           break;
         }
       }
+
+      // Remove from dropdown
+      const options = connectLineSelect.options;
+      for (let i = 0; i < options.length; i++) {
+        if (options[i].value === lineId) {
+          connectLineSelect.remove(i);
+          break;
+        }
+      }
+    }
+
+    connectStationsButton.onclick = () => {
+      const selectedLine = connectLineSelect.value;
+      if (!selectedLine || selectedStations.length === 0) {
+        return;
+      }
+
+      parent.postMessage({
+        pluginMessage: {
+          type: 'connect-stations-to-line',
+          lineId: selectedLine,
+          stationIds: selectedStations,
+          stopsAt: stopsAtStationInput.checked
+        }
+      }, '*');
+
+      // Clear selection after connecting
+      selectedStations = [];
+      updateSelectedStationsDisplay();
+    };
+
+    connectLineSelect.onchange = () => {
+      updateConnectButtonState();
+    };
+
+    function updateSelectedStationsDisplay() {
+      if (selectedStations.length === 0) {
+        selectedStationsListSpan.textContent = 'None';
+      } else {
+        selectedStationsListSpan.textContent = selectedStationNames.join(' → ');
+      }
+      updateConnectButtonState();
+    }
+
+    function updateConnectButtonState() {
+      connectStationsButton.disabled = !connectLineSelect.value || selectedStations.length === 0;
     }
 
     renderMapButton.onclick = () => {
@@ -244,9 +330,18 @@
     window.onmessage = event => {
       const msg = event.data.pluginMessage;
       if (msg.type === 'line-added') {
-        // Line was successfully added to the model
+        // Line was successfully added to the model, add it to UI
+        addLineToUI(msg.lineId, msg.name, msg.color);
       } else if (msg.type === 'stop-added') {
         // Stop was successfully added to the model
+      } else if (msg.type === 'selection-changed') {
+        // Update selected stations list
+        selectedStations = msg.stationIds || [];
+        selectedStationNames = msg.stationNames || [];
+        updateSelectedStationsDisplay();
+      } else if (msg.type === 'stations-connected') {
+        // Stations were successfully connected
+        console.log('Stations connected to line');
       }
     };
   </script>

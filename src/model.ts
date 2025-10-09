@@ -143,6 +143,15 @@ export class Model {
     this.state.lineStackingOrder = [...newOrder];
   }
 
+  public findStationByFigmaId(figmaNodeId: string): Station | null {
+    for (const station of this.state.stations.values()) {
+      if (station.figmaNodeId === figmaNodeId) {
+        return station;
+      }
+    }
+    return null;
+  }
+
   public getLineStackingOrderForStation(stationId: StationId): LineId[] {
     const station = this.state.stations.get(stationId);
     if (!station) return [];

@@ -1,5 +1,5 @@
 import { Model } from "./model";
-import { LineId, StationId, StationOrientation, Vector } from "./structures";
+import { LineId, Station, StationId, StationOrientation, Vector } from "./structures";
 import { View } from "./view";
 
 export class Controller {
@@ -39,9 +39,10 @@ export class Controller {
     switch (msg.type) {
       case 'add-stop': return this.handleAddStop(msg.stop);
       case 'add-line': return this.handleAddLine(msg.line);
-      case 'edit-line': return this.handleEditLine(msg.lineName);
-      case 'remove-line': return this.handleRemoveLine(msg.lineName);
+      case 'edit-line': return this.handleEditLine(msg.lineId);
+      case 'remove-line': return this.handleRemoveLine(msg.lineId);
       case 'render-map': return this.handleRenderMap(msg.rightHandTraffic);
+      case 'connect-stations-to-line': return this.handleConnectStationsToLine(msg.lineId, msg.stationIds, msg.stopsAt);
       default: console.log("Unknown message type:", msg.type); return Promise.resolve();
     }
   }
@@ -69,15 +70,17 @@ export class Controller {
     // Convert hex color to RGB
     const rgb = this.hexToRgb(color);
 
-    this.model.addLine({ name, color: rgb, path: [] });
+    const lineId = this.model.addLine({ name, color: rgb, path: [] });
     await this.view.render(this.model.getState());
 
-    figma.ui.postMessage({ type: 'line-added' });
+    // Send the line ID back to the UI so it can store it
+    figma.ui.postMessage({
+      type: 'line-added', lineId, name, color
+    });
   }
 
-  private async handleEditLine(lineName: string): Promise<void> {
-    const lineId = lineName as LineId;
-    const line = this.model.getState().lines.get(lineId);
+  private async handleEditLine(lineId: string): Promise<void> {
+    const line = this.model.getState().lines.get(lineId as LineId);
 
     if (line) {
       // For now, just log - in a full implementation you'd open an edit dialog
@@ -85,9 +88,8 @@ export class Controller {
     }
   }
 
-  private async handleRemoveLine(lineName: string): Promise<void> {
-    const lineId = lineName as LineId;
-    this.model.removeLine(lineId);
+  private async handleRemoveLine(lineId: string): Promise<void> {
+    this.model.removeLine(lineId as LineId);
     await this.view.render(this.model.getState());
   }
 
@@ -108,13 +110,47 @@ export class Controller {
   private handleSelectionChange(): void {
     const selection = figma.currentPage.selection;
 
-    // Enable interaction with selected nodes that represent bus stops
+    // Extract station IDs and names from selected bus stops
+    const stationIds: string[] = [];
+    const stationNames: string[] = [];
+    const processedStations = new Set<string>(); // Avoid duplicates
+
     for (const node of selection) {
-      if (node.name.startsWith('Stop:')) {
-        // This node represents a bus stop - we could enable editing here
-        console.log("Selected bus stop:", node.name);
+      const station = this.findStationFromNode(node);
+      if (station) {
+        // Skip if we've already processed this station
+        if (processedStations.has(station.id)) {
+          continue;
+        }
+
+        stationIds.push(station.id);
+        stationNames.push(station.name);
+        processedStations.add(station.id);
       }
     }
+
+    // Send selection to UI
+    figma.ui.postMessage({
+      type: 'selection-changed',
+      stationIds,
+      stationNames
+    });
+  }
+
+  private findStationFromNode(node: SceneNode): Station | null {
+    // Recursively traverse up the parent chain to find a station node
+    // by checking if the node ID matches any station's figmaNodeId
+    let currentNode: BaseNode | null = node;
+
+    while (currentNode && 'id' in currentNode) {
+      const station = this.model.findStationByFigmaId(currentNode.id);
+      if (station) {
+        return station;
+      }
+      currentNode = currentNode.parent;
+    }
+
+    return null;
   }
 
   private async handleDocumentChange(event: DocumentChangeEvent): Promise<void> {
@@ -123,13 +159,16 @@ export class Controller {
       if (change.type === 'PROPERTY_CHANGE' && (change.properties.includes('x') || change.properties.includes('y'))) {
         // A station was moved - update our model if it's a bus stop
         try {
-          const station = await figma.getNodeByIdAsync(change.id);
-          if (station && 'x' in station && 'y' in station && station.name.startsWith('Stop:')) {
-            const nodeId = station.name.replace('Stop: ', '') as StationId;
-            this.model.updateStationPosition(nodeId, { x: station.x, y: station.y });
+          const figmaNode = await figma.getNodeByIdAsync(change.id);
+          if (figmaNode && 'x' in figmaNode && 'y' in figmaNode) {
+            // Find the station using the figma node ID
+            const station = this.model.findStationByFigmaId(change.id);
+            if (station) {
+              this.model.updateStationPosition(station.id, { x: figmaNode.x, y: figmaNode.y });
+            }
           }
         } catch (error) {
-          console.warn('Failed to get station by id:', change.id, error);
+          console.warn('Failed to get node by id:', change.id, error);
         }
       }
     }
@@ -146,5 +185,30 @@ export class Controller {
     // Add stations to the line
     this.model.addStationToLine(lineId, startStationId, stopsAtStart);
     this.model.addStationToLine(lineId, endStationId, stopsAtEnd);
+  }
+
+  private async handleConnectStationsToLine(lineId: string, stationIds: string[], stopsAt: boolean): Promise<void> {
+    const line = this.model.getState().lines.get(lineId as LineId);
+
+    if (!line) {
+      console.error("Line not found:", lineId);
+      return;
+    }
+
+    // Add each station to the line's path in order
+    for (const stationId of stationIds) {
+      const station = this.model.getState().stations.get(stationId as StationId);
+      if (station) {
+        this.model.addStationToLine(lineId as LineId, stationId as StationId, stopsAt);
+      } else {
+        console.warn("Station not found:", stationId);
+      }
+    }
+
+    // Re-render the map with updated connections
+    await this.view.render(this.model.getState());
+
+    // Notify UI of success
+    figma.ui.postMessage({ type: 'stations-connected' });
   }
 }
