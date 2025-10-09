@@ -1,5 +1,5 @@
-import { StationOrientation } from "../../common/messages";
-import { Line, LineSegmentId, Station } from "../structures";
+import { createLineSegmentId, LineSegmentId, StationId, StationOrientation } from "../../common/types";
+import { Line, Station } from "../structures";
 import { StationRenderer } from "./station-renderer";
 
 export class LineSegmentRenderer {
@@ -19,7 +19,7 @@ export class LineSegmentRenderer {
     }
   }
 
-  public async renderLine(line: Line, stations: Map<string, Station>): Promise<void> {
+  public async renderLine(line: Line, stations: Map<StationId, Station>): Promise<void> {
     // Draw bezier curve segments between consecutive nodes in the line's path
     for (let i = 0; i < line.path.length - 1; i++) {
       const startStationId = line.path[i];
@@ -36,7 +36,7 @@ export class LineSegmentRenderer {
 
   private renderLineSegment(line: Line, startStation: Station, endStation: Station): void {
     // Create unique ID for the segment group
-    const segmentId = `${line.id}:${startStation.id}-${endStation.id}` as LineSegmentId;
+    const segmentId = createLineSegmentId(line.id, startStation.id, endStation.id);
 
     // Get the stored connection points for this line at both nodes
     const startStationPoints = this.stationRenderer.getConnectionPoint(startStation.id, line.id);
@@ -130,7 +130,7 @@ export class LineSegmentRenderer {
     return `M ${start.x} ${start.y} C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${end.x} ${end.y}`;
   }
 
-  private getOrientationOffset(orientation: StationOrientation, distance: number): {x: number, y: number} {
+  private getOrientationOffset(orientation: StationOrientation, distance: number): Vector {
     switch (orientation) {
       case 'RIGHT': return { x: distance, y: 0 };
       case 'LEFT': return { x: -distance, y: 0 };

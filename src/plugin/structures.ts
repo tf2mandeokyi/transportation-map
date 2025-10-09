@@ -1,14 +1,4 @@
-import { StationOrientation } from "../common/messages";
-
-// Using branded types to prevent mixing up different kinds of IDs
-export type StationId = string & { readonly __brand: 'NodeId' };
-export type LineId = string & { readonly __brand: 'LineId' };
-export type LineSegmentId = string & { readonly __brand: 'LineSegmentId' };
-
-export interface Vector {
-  x: number;
-  y: number;
-}
+import { LineId, StationId, StationOrientation } from "../common/types";
 
 // Information about a specific line at a specific node
 export interface LineStopInfo {

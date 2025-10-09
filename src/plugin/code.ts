@@ -28,10 +28,8 @@ async function main() {
   if (!hasExistingData) {
     console.log("Creating demo map");
     await createDemoMap(controller, model);
-  } else {
-    // Render existing map
-    await controller.render();
   }
+  controller.refresh();
 
   figma.viewport.scrollAndZoomIntoView(figma.currentPage.children);
 }
@@ -81,9 +79,6 @@ async function createDemoMap(controller: Controller, model: Model) {
   // Set line to pass by Park Ave without stopping
   model.setLineStopsAtStation(blueLine, s2, false);
   model.addStationToLine(blueLine, s2, false);
-
-  // Render the complete map
-  controller.refresh();
 }
 
 // Start the plugin

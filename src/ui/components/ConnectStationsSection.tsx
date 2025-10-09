@@ -1,17 +1,13 @@
 import React, { useState } from 'react';
-
-interface LineData {
-  id: string;
-  name: string;
-  color: string;
-}
+import { LineId, StationId } from '../../common/types';
+import { LineData } from '../types';
 
 interface Props {
   lines: LineData[];
   isAddingStations: boolean;
   setIsAddingStations: (value: boolean) => void;
-  stationPath: string[];
-  setStationPath: (value: string[]) => void;
+  stationPath: StationId[];
+  setStationPath: (value: StationId[]) => void;
   stationPathNames: string[];
   setStationPathNames: (value: string[]) => void;
 }
@@ -25,7 +21,7 @@ const ConnectStationsSection: React.FC<Props> = ({
   stationPathNames,
   setStationPathNames
 }) => {
-  const [selectedLineId, setSelectedLineId] = useState('');
+  const [selectedLineId, setSelectedLineId] = useState('' as LineId);
   const [stopsAt, setStopsAt] = useState(true);
 
   const handleStartAdding = () => {
@@ -71,7 +67,7 @@ const ConnectStationsSection: React.FC<Props> = ({
     setStationPathNames([]);
   };
 
-  const handleLineChange = (newLineId: string) => {
+  const handleLineChange = (newLineId: LineId) => {
     if (isAddingStations) {
       setIsAddingStations(false);
       setStationPath([]);
@@ -101,8 +97,8 @@ const ConnectStationsSection: React.FC<Props> = ({
           <select
             className="input"
             id="connect-line-select"
-            value={selectedLineId}
-            onChange={(e) => handleLineChange(e.target.value)}
+            value={selectedLineId ?? ''}
+            onChange={(e) => handleLineChange(e.target.value as LineId)}
           >
             <option value="">Choose a line...</option>
             {lines.map(line => (

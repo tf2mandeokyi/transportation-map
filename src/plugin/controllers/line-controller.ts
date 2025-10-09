@@ -1,5 +1,6 @@
+
+import { LineId } from "../../common/types";
 import { FigmaApi } from "../figma";
-import { LineId } from "../structures";
 import { BaseController } from "./base-controller";
 
 export class LineController extends BaseController {
@@ -17,8 +18,8 @@ export class LineController extends BaseController {
     });
   }
 
-  public async handleEditLine(lineId: string): Promise<void> {
-    const line = this.model.getState().lines.get(lineId as LineId);
+  public async handleEditLine(lineId: LineId): Promise<void> {
+    const line = this.model.getState().lines.get(lineId);
 
     if (line) {
       // For now, just log - in a full implementation you'd open an edit dialog
@@ -26,8 +27,8 @@ export class LineController extends BaseController {
     }
   }
 
-  public async handleRemoveLine(lineId: string): Promise<void> {
-    this.model.removeLine(lineId as LineId);
+  public async handleRemoveLine(lineId: LineId): Promise<void> {
+    this.model.removeLine(lineId);
     await this.refresh();
   }
 

@@ -5,25 +5,22 @@ import ConnectStationsSection from './components/ConnectStationsSection';
 import EditLinePathSection from './components/EditLinePathSection';
 import SettingsSection from './components/SettingsSection';
 import { PluginToUIMessage } from '../common/messages';
-
-interface LineData {
-  id: string;
-  name: string;
-  color: string;
-}
+import { LineId, StationId } from '../common/types';
+import { LineData } from './types';
 
 const App: React.FC = () => {
   const [lines, setLines] = useState<LineData[]>([]);
   const [isAddingStations, setIsAddingStations] = useState(false);
-  const [stationPath, setStationPath] = useState<string[]>([]);
+  const [stationPath, setStationPath] = useState<StationId[]>([]);
   const [stationPathNames, setStationPathNames] = useState<string[]>([]);
-  const [currentEditingLineId, setCurrentEditingLineId] = useState<string | null>(null);
-  const [linePathData, setLinePathData] = useState<{ lineId: string; stationIds: string[]; stationNames: string[]; stopsAt: boolean[] } | null>(null);
+  const [currentEditingLineId, setCurrentEditingLineId] = useState<LineId | null>(null);
+  const [linePathData, setLinePathData] = useState<{ lineId: LineId; stationIds: StationId[]; stationNames: string[]; stopsAt: boolean[] } | null>(null);
 
   useEffect(() => {
     // Listen for messages from the plugin
     window.onmessage = (event) => {
       const msg: PluginToUIMessage = event.data.pluginMessage;
+      console.log('Received message from plugin:', msg);
 
       switch (msg.type) {
         case 'line-added':
@@ -66,7 +63,7 @@ const App: React.FC = () => {
     };
   }, [isAddingStations, stationPath, currentEditingLineId]);
 
-  const handleRemoveLine = (lineId: string) => {
+  const handleRemoveLine = (lineId: LineId) => {
     setLines(prev => prev.filter(line => line.id !== lineId));
   };
 

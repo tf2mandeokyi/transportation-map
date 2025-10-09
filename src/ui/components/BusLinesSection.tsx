@@ -1,14 +1,10 @@
 import React, { useState } from 'react';
-
-interface LineData {
-  id: string;
-  name: string;
-  color: string;
-}
+import { LineId } from '../../common/types';
+import { LineData } from '../types';
 
 interface Props {
   lines: LineData[];
-  onRemoveLine: (lineId: string) => void;
+  onRemoveLine: (lineId: LineId) => void;
 }
 
 const BusLinesSection: React.FC<Props> = ({ lines, onRemoveLine }) => {
@@ -33,7 +29,7 @@ const BusLinesSection: React.FC<Props> = ({ lines, onRemoveLine }) => {
     setLineCounter(prev => prev + 1);
   };
 
-  const handleEditLine = (lineId: string) => {
+  const handleEditLine = (lineId: LineId) => {
     parent.postMessage({
       pluginMessage: {
         type: 'edit-line',
@@ -42,7 +38,7 @@ const BusLinesSection: React.FC<Props> = ({ lines, onRemoveLine }) => {
     }, '*');
   };
 
-  const handleRemoveLine = (lineId: string) => {
+  const handleRemoveLine = (lineId: LineId) => {
     parent.postMessage({
       pluginMessage: {
         type: 'remove-line',

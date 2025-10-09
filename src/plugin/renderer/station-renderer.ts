@@ -1,12 +1,12 @@
-import { Line, MapState, Station, StationId } from "../structures";
+import { Line, MapState, Station } from "../structures";
 import { Model } from "../model";
 import { renderBusStop, renderBusStopLine } from "../figmls";
 import { ErrorChain } from "../error";
-import { StationOrientation } from "../../common/messages";
+import { LineId, StationId, StationOrientation } from "../../common/types";
 
 export interface ConnectionPoints {
-  head: {x: number, y: number},
-  tail: {x: number, y: number}
+  head: Vector,
+  tail: Vector
 }
 
 export class StationRenderer {
@@ -199,8 +199,8 @@ export class StationRenderer {
         y: (topRight.y + bottomRight.y) / 2
       };
 
-      let head: {x: number, y: number};
-      let tail: {x: number, y: number};
+      let head: Vector;
+      let tail: Vector;
       switch (station.orientation) {
         case 'LEFT':
           head = centerLeft;
@@ -226,7 +226,7 @@ export class StationRenderer {
     }
   }
 
-  public getConnectionPoint(stationId: StationId, lineId: string): ConnectionPoints | undefined {
+  public getConnectionPoint(stationId: StationId, lineId: LineId): ConnectionPoints | undefined {
     const key = `${stationId}-${lineId}`;
     return this.lineConnectionPoints.get(key);
   }

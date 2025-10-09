@@ -1,6 +1,6 @@
-import { StationOrientation } from "../../common/messages";
+
+import { StationId, StationOrientation } from "../../common/types";
 import { FigmaApi } from "../figma";
-import { StationId, Vector } from "../structures";
 import { BaseController } from "./base-controller";
 
 export class StationController extends BaseController {

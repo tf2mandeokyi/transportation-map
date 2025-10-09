@@ -1,12 +1,13 @@
+import { LineId, StationId } from "../../common/types";
 import { FigmaApi } from "../figma";
-import { LineId, Station, StationId } from "../structures";
+import { Station } from "../structures";
 import { BaseController } from "./base-controller";
 
 export class ConnectionController extends BaseController {
   private isAddingStationsMode: boolean = false;
 
-  public async handleConnectStationsToLine(lineId: string, stationIds: string[], stopsAt: boolean): Promise<void> {
-    const line = this.model.getState().lines.get(lineId as LineId);
+  public async handleConnectStationsToLine(lineId: LineId, stationIds: StationId[], stopsAt: boolean): Promise<void> {
+    const line = this.model.getState().lines.get(lineId);
 
     if (!line) {
       console.error("Line not found:", lineId);
@@ -15,9 +16,9 @@ export class ConnectionController extends BaseController {
 
     // Add each station to the line's path in order
     for (const stationId of stationIds) {
-      const station = this.model.getState().stations.get(stationId as StationId);
+      const station = this.model.getState().stations.get(stationId);
       if (station) {
-        this.model.addStationToLine(lineId as LineId, stationId as StationId, stopsAt);
+        this.model.addStationToLine(lineId, stationId, stopsAt);
       } else {
         console.warn("Station not found:", stationId);
       }
@@ -30,7 +31,7 @@ export class ConnectionController extends BaseController {
     FigmaApi.postMessage({ type: 'stations-connected' });
   }
 
-  public async handleStartAddingStationsMode(lineId: string): Promise<void> {
+  public async handleStartAddingStationsMode(lineId: LineId): Promise<void> {
     this.isAddingStationsMode = true;
     console.log("Entered station-adding mode for line:", lineId);
   }
@@ -40,8 +41,8 @@ export class ConnectionController extends BaseController {
     console.log("Exited station-adding mode");
   }
 
-  public async handleGetLinePath(lineId: string): Promise<void> {
-    const line = this.model.getState().lines.get(lineId as LineId);
+  public async handleGetLinePath(lineId: LineId): Promise<void> {
+    const line = this.model.getState().lines.get(lineId);
 
     if (!line) {
       console.error("Line not found:", lineId);
@@ -49,7 +50,7 @@ export class ConnectionController extends BaseController {
     }
 
     // Get station names and stopsAt status for the path
-    const stationIds: string[] = [];
+    const stationIds: StationId[] = [];
     const stationNames: string[] = [];
     const stopsAt: boolean[] = [];
 
@@ -58,7 +59,7 @@ export class ConnectionController extends BaseController {
       if (station) {
         stationIds.push(stationId);
         stationNames.push(station.name);
-        const lineInfo = station.lines.get(lineId as LineId);
+        const lineInfo = station.lines.get(lineId);
         stopsAt.push(lineInfo?.stopsAt ?? true);
       }
     }
@@ -73,8 +74,8 @@ export class ConnectionController extends BaseController {
     });
   }
 
-  public async handleRemoveStationFromLine(lineId: string, stationId: string): Promise<void> {
-    this.model.removeStationFromLine(lineId as LineId, stationId as StationId);
+  public async handleRemoveStationFromLine(lineId: LineId, stationId: StationId): Promise<void> {
+    this.model.removeStationFromLine(lineId, stationId);
 
     // Re-render the map
     await this.refresh();
@@ -85,8 +86,8 @@ export class ConnectionController extends BaseController {
     });
   }
 
-  public async handleSetLineStopsAtStation(lineId: string, stationId: string, stopsAt: boolean): Promise<void> {
-    this.model.setLineStopsAtStation(lineId as LineId, stationId as StationId, stopsAt);
+  public async handleSetLineStopsAtStation(lineId: LineId, stationId: StationId, stopsAt: boolean): Promise<void> {
+    this.model.setLineStopsAtStation(lineId, stationId, stopsAt);
 
     // Re-render the map
     await this.refresh();

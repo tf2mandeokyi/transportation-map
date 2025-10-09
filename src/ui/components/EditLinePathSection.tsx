@@ -1,16 +1,12 @@
 import React from 'react';
-
-interface LineData {
-  id: string;
-  name: string;
-  color: string;
-}
+import { LineId, StationId } from '../../common/types';
+import { LineData } from '../types';
 
 interface Props {
   lines: LineData[];
-  currentEditingLineId: string | null;
-  setCurrentEditingLineId: (value: string | null) => void;
-  linePathData: { lineId: string; stationIds: string[]; stationNames: string[]; stopsAt: boolean[] } | null;
+  currentEditingLineId: LineId | null;
+  setCurrentEditingLineId: (value: LineId | null) => void;
+  linePathData: { lineId: LineId; stationIds: StationId[]; stationNames: string[]; stopsAt: boolean[] } | null;
 }
 
 const EditLinePathSection: React.FC<Props> = ({
@@ -19,7 +15,7 @@ const EditLinePathSection: React.FC<Props> = ({
   setCurrentEditingLineId,
   linePathData
 }) => {
-  const handleLineChange = (lineId: string) => {
+  const handleLineChange = (lineId: LineId) => {
     if (lineId) {
       setCurrentEditingLineId(lineId);
       parent.postMessage({
@@ -33,7 +29,7 @@ const EditLinePathSection: React.FC<Props> = ({
     }
   };
 
-  const handleRemoveStation = (lineId: string, stationId: string) => {
+  const handleRemoveStation = (lineId: LineId, stationId: StationId) => {
     parent.postMessage({
       pluginMessage: {
         type: 'remove-station-from-line',
@@ -43,7 +39,7 @@ const EditLinePathSection: React.FC<Props> = ({
     }, '*');
   };
 
-  const handleToggleStopsAt = (lineId: string, stationId: string, currentStopsAt: boolean) => {
+  const handleToggleStopsAt = (lineId: LineId, stationId: StationId, currentStopsAt: boolean) => {
     parent.postMessage({
       pluginMessage: {
         type: 'set-line-stops-at-station',
@@ -65,8 +61,8 @@ const EditLinePathSection: React.FC<Props> = ({
           <select
             className="input"
             id="edit-line-select"
-            value={currentEditingLineId || ''}
-            onChange={(e) => handleLineChange(e.target.value)}
+            value={currentEditingLineId ?? ''}
+            onChange={(e) => handleLineChange(e.target.value as LineId)}
           >
             <option value="">Choose a line...</option>
             {lines.map(line => (

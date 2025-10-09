@@ -1,5 +1,5 @@
-import { StationOrientation } from "../common/messages";
-import { Line, LineId, LineStopInfo, MapState, Station, StationId } from "./structures";
+import { LineId, StationId, StationOrientation } from "../common/types";
+import { Line, LineStopInfo, MapState, Station } from "./structures";
 
 // Serialized format with abbreviated keys to save space (100KB limit)
 interface SerializedStation {

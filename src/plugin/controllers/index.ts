@@ -1,7 +1,7 @@
 import { UIToPluginMessage } from "../../common/messages";
+import { LineId, StationId } from "../../common/types";
 import { FigmaApi } from "../figma";
 import { Model } from "../model";
-import { LineId, StationId } from "../structures";
 import { View } from "../view";
 import { ConnectionController } from "./connection-controller";
 import { LineController } from "./line-controller";
