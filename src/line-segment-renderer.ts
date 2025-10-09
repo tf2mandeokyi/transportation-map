@@ -34,18 +34,8 @@ export class LineSegmentRenderer {
   }
 
   private renderLineSegment(line: Line, startStation: Station, endStation: Station): void {
-    // Create a unique ID for this line segment
+    // Create unique ID for the segment group
     const segmentId = `${line.id}:${startStation.id}-${endStation.id}` as LineSegmentId;
-
-    // Check if line already exists, otherwise create new one
-    let lineNode = this.figmaLineSegmentMap.get(segmentId) as VectorNode | undefined;
-
-    if (!lineNode) {
-      lineNode = figma.createVector();
-      lineNode.name = `Line: ${line.name} (${startStation.id} → ${endStation.id})`;
-      this.figmaLineSegmentMap.set(segmentId, lineNode);
-      figma.currentPage.appendChild(lineNode);
-    }
 
     // Get the stored connection points for this line at both nodes
     const startPoint = this.stationRenderer.getConnectionPoint(startStation.id, line.id);
@@ -61,20 +51,53 @@ export class LineSegmentRenderer {
     // Calculate bezier curve control points for smooth curves based on station orientations
     const pathData = this.createBezierPath(startPoint, endPoint, startStation, endStation);
 
-    // Build vector path with bezier curve
-    lineNode.vectorPaths = [{
+    // Create white outline (rendered first, so it's behind)
+    const outlineNode = figma.createVector();
+    outlineNode.name = 'Outline';
+    outlineNode.vectorPaths = [{
       windingRule: 'NONZERO',
       data: pathData
     }];
+    outlineNode.strokes = [{
+      type: 'SOLID',
+      color: { r: 1, g: 1, b: 1 }
+    }];
+    outlineNode.strokeWeight = 4;
+    outlineNode.strokeCap = 'ROUND';
+    outlineNode.strokeJoin = 'ROUND';
 
-    // Apply line styling
-    lineNode.strokes = [{
+    // Create colored main line (rendered second, so it's on top)
+    const mainNode = figma.createVector();
+    mainNode.name = 'Main';
+    mainNode.vectorPaths = [{
+      windingRule: 'NONZERO',
+      data: pathData
+    }];
+    mainNode.strokes = [{
       type: 'SOLID',
       color: line.color
     }];
-    lineNode.strokeWeight = 3;
-    lineNode.strokeCap = 'ROUND';
-    lineNode.strokeJoin = 'ROUND';
+    mainNode.strokeWeight = 2;
+    mainNode.strokeCap = 'ROUND';
+    mainNode.strokeJoin = 'ROUND';
+
+    // Create or update group for this segment
+    let segmentGroup = this.figmaLineSegmentMap.get(segmentId) as GroupNode | undefined;
+    if (!segmentGroup) {
+      // Add nodes to page first
+      figma.currentPage.appendChild(outlineNode);
+      figma.currentPage.appendChild(mainNode);
+
+      // Group them together
+      segmentGroup = figma.group([outlineNode, mainNode], figma.currentPage);
+      segmentGroup.name = `Line: ${line.name} (${startStation.id} → ${endStation.id})`;
+      this.figmaLineSegmentMap.set(segmentId, segmentGroup);
+    } else {
+      // Clear existing children and add new ones
+      segmentGroup.children.forEach(child => child.remove());
+      segmentGroup.appendChild(outlineNode);
+      segmentGroup.appendChild(mainNode);
+    }
   }
 
   private createBezierPath(
