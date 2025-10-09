@@ -9,7 +9,7 @@ export interface Vector {
 }
 
 // Defines the direction a node is "facing" for line stacking
-export type StationOrientation = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT' | 'DIAGONAL';
+export type StationOrientation = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
 
 // Information about a specific line at a specific node
 export interface LineStopInfo {

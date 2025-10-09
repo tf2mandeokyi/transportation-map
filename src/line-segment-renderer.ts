@@ -1,4 +1,4 @@
-import { Line, LineSegmentId, Station } from "./structures";
+import { Line, LineSegmentId, Station, StationOrientation } from "./structures";
 import { StationRenderer } from "./station-renderer";
 
 export class LineSegmentRenderer {
@@ -58,8 +58,8 @@ export class LineSegmentRenderer {
       return;
     }
 
-    // Calculate bezier curve control points for smooth curves
-    const pathData = this.createBezierPath(startPoint, endPoint);
+    // Calculate bezier curve control points for smooth curves based on station orientations
+    const pathData = this.createBezierPath(startPoint, endPoint, startStation, endStation);
 
     // Build vector path with bezier curve
     lineNode.vectorPaths = [{
@@ -77,8 +77,13 @@ export class LineSegmentRenderer {
     lineNode.strokeJoin = 'ROUND';
   }
 
-  private createBezierPath(start: {x: number, y: number}, end: {x: number, y: number}): string {
-    // Calculate the distance and direction between points
+  private createBezierPath(
+    start: {x: number, y: number},
+    end: {x: number, y: number},
+    startStation: Station,
+    endStation: Station
+  ): string {
+    // Calculate the distance between points
     const dx = end.x - start.x;
     const dy = end.y - start.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
@@ -87,27 +92,27 @@ export class LineSegmentRenderer {
     // Adjust this factor (0.3) to control how "curvy" the lines are
     const controlDistance = distance * 0.3;
 
-    // Determine the primary direction (horizontal vs vertical)
-    const isHorizontal = Math.abs(dx) > Math.abs(dy);
+    // Get control point offsets based on station orientations
+    const startOffset = this.getOrientationOffset(startStation.orientation, controlDistance);
+    const endOffset = this.getOrientationOffset(endStation.orientation, controlDistance);
 
-    let cp1x: number, cp1y: number, cp2x: number, cp2y: number;
+    // Calculate control points based on station orientations
+    const cp1x = start.x + startOffset.x;
+    const cp1y = start.y + startOffset.y;
+    const cp2x = end.x - endOffset.x;
+    const cp2y = end.y - endOffset.y;
 
-    if (isHorizontal) {
-      // For horizontal segments, control points extend horizontally
-      cp1x = start.x + controlDistance * Math.sign(dx);
-      cp1y = start.y;
-      cp2x = end.x - controlDistance * Math.sign(dx);
-      cp2y = end.y;
-    } else {
-      // For vertical segments, control points extend vertically
-      cp1x = start.x;
-      cp1y = start.y + controlDistance * Math.sign(dy);
-      cp2x = end.x;
-      cp2y = end.y - controlDistance * Math.sign(dy);
-    }
-
-    // Create cubic bezier curve path - round coordinates to avoid Figma parsing errors
+    // Create cubic bezier curve path
     return `M ${start.x} ${start.y} C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${end.x} ${end.y}`;
+  }
+
+  private getOrientationOffset(orientation: StationOrientation, distance: number): {x: number, y: number} {
+    switch (orientation) {
+      case 'RIGHT': return { x: distance, y: 0 };
+      case 'LEFT': return { x: -distance, y: 0 };
+      case 'DOWN': return { x: 0, y: distance };
+      case 'UP': return { x: 0, y: -distance };
+    }
   }
 
   public moveSegmentsToBack(): void {
