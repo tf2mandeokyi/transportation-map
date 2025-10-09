@@ -1,13 +1,18 @@
-import { Line, MapState, Station, StationId } from "./structures";
-import { Model } from "./model";
-import { FigmlComponent, FigmlParser } from "./figml-parser";
-import { figmlImportResolver } from "./figml/resources";
-import busStopFigml from "./figml/bus-stop.figml";
-import busStopLineFigml from "./figml/bus-stop-line.figml";
+import { Line, MapState, Station, StationId } from "../structures";
+import { Model } from "../model";
+import { FigmlComponent, FigmlParser } from "../figml-parser";
+import { figmlImportResolver } from "../figml/resources";
+import busStopFigml from "../figml/bus-stop.figml";
+import busStopLineFigml from "../figml/bus-stop-line.figml";
+
+export interface ConnectionPoints {
+  head: {x: number, y: number},
+  tail: {x: number, y: number}
+}
 
 export class StationRenderer {
   private figmaStationMap: Map<StationId, SceneNode> = new Map();
-  private lineConnectionPoints: Map<string, {x: number, y: number}> = new Map();
+  private lineConnectionPoints: Map<string, ConnectionPoints> = new Map();
   private model?: Model;
   private busStopTemplate: FigmlComponent | null = null;
   private busStopLineTemplate: FigmlComponent | null = null;
@@ -81,18 +86,21 @@ export class StationRenderer {
     // Render individual bus lines using the bus-stop-line template in parallel
     const facing = this.getLineFacing(station.orientation);
     const lineRenderResults = busLines
-      .map(busLine => this.busStopLineTemplate!.render(
-        { text: busLine.line.name, color: busLine.line.color, visible: busLine.stopsAt },
-        `facing:${facing}`
-      ));
+      .map(busLine => this.busStopLineTemplate!.render({
+        text: busLine.line.name,
+        color: busLine.line.color,
+        visible: busLine.stopsAt
+      }, `facing:${facing}`));
 
     const children = await Promise.all(lineRenderResults.map(result => result.intoNode()));
 
     // Render the bus stop container using the bus-stop template
-    const busStopElement = await this.busStopTemplate.render(
-      { text: station.name, visible: !station.hidden, rotation, children },
-      `textLocation:${textLocation}`
-    ).intoNode();
+    const busStopElement = await this.busStopTemplate.render({
+      text: station.name,
+      visible: !station.hidden,
+      rotation, children,
+      align: 'center,center'
+    }, `textLocation:${textLocation}`).intoNode();
 
     parentFrame.appendChild(busStopElement);
 
@@ -183,16 +191,37 @@ export class StationRenderer {
       const busLine = busLines[i];
 
       // Get absolute position of the line element's center
-      const absoluteX = lineElement.absoluteTransform[0][2] + lineElement.width / 2;
-      const absoluteY = lineElement.absoluteTransform[1][2] + lineElement.height / 2;
+      const left = lineElement.absoluteTransform[0][2];
+      const top = lineElement.absoluteTransform[1][2];
+
+      let head: {x: number, y: number};
+      let tail: {x: number, y: number};
+      switch (station.orientation) {
+        case 'LEFT':
+          head = { x: left, y: top + lineElement.height / 2 };
+          tail = { x: left + lineElement.width, y: top + lineElement.height / 2 };
+          break;
+        case 'RIGHT':
+          head = { x: left + lineElement.width, y: top + lineElement.height / 2 };
+          tail = { x: left, y: top + lineElement.height / 2 };
+          break;
+        case 'UP':
+          head = { x: left + lineElement.width / 2, y: top };
+          tail = { x: left + lineElement.width / 2, y: top + lineElement.height };
+          break;
+        case 'DOWN':
+          head = { x: left + lineElement.width / 2, y: top + lineElement.height };
+          tail = { x: left + lineElement.width / 2, y: top };
+          break;
+      }
 
       // Store the connection point
       const key = `${station.id}-${busLine.line.id}`;
-      this.lineConnectionPoints.set(key, { x: absoluteX, y: absoluteY });
+      this.lineConnectionPoints.set(key, { head, tail });
     }
   }
 
-  public getConnectionPoint(stationId: StationId, lineId: string): {x: number, y: number} | undefined {
+  public getConnectionPoint(stationId: StationId, lineId: string): ConnectionPoints | undefined {
     const key = `${stationId}-${lineId}`;
     return this.lineConnectionPoints.get(key);
   }

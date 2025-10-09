@@ -1,4 +1,4 @@
-import { Line, LineSegmentId, Station, StationOrientation } from "./structures";
+import { Line, LineSegmentId, Station, StationOrientation } from "../structures";
 import { StationRenderer } from "./station-renderer";
 
 export class LineSegmentRenderer {
@@ -38,10 +38,10 @@ export class LineSegmentRenderer {
     const segmentId = `${line.id}:${startStation.id}-${endStation.id}` as LineSegmentId;
 
     // Get the stored connection points for this line at both nodes
-    const startPoint = this.stationRenderer.getConnectionPoint(startStation.id, line.id);
-    const endPoint = this.stationRenderer.getConnectionPoint(endStation.id, line.id);
+    const startStationPoints = this.stationRenderer.getConnectionPoint(startStation.id, line.id);
+    const endStationPoints = this.stationRenderer.getConnectionPoint(endStation.id, line.id);
 
-    if (!startPoint || !endPoint) {
+    if (!startStationPoints || !endStationPoints) {
       console.warn(`Missing connection points for line ${line.id} (${line.name})`
         + ` between ${startStation.id} (${startStation.name})`
         + ` and ${endStation.id} (${endStation.name})`);
@@ -49,7 +49,7 @@ export class LineSegmentRenderer {
     }
 
     // Calculate bezier curve control points for smooth curves based on station orientations
-    const pathData = this.createBezierPath(startPoint, endPoint, startStation, endStation);
+    const pathData = this.createBezierPath(startStationPoints.head, endStationPoints.tail, startStation, endStation);
 
     // Create white outline (rendered first, so it's behind)
     const outlineNode = figma.createVector();

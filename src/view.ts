@@ -1,7 +1,7 @@
 import { MapState } from "./structures";
 import { Model } from "./model";
-import { StationRenderer } from "./station-renderer";
-import { LineSegmentRenderer } from "./line-segment-renderer";
+import { StationRenderer } from "./renderer/station-renderer";
+import { LineSegmentRenderer } from "./renderer/line-segment-renderer";
 
 export class View {
   private model?: Model;

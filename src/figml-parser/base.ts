@@ -1,35 +1,12 @@
 import { RenderResult } from './result';
+import { StringTemplate } from './template';
 import { FigmlNode, FigmlProps } from './types';
 
-function isRgbObject(value: any): value is RGB {
-  return value && typeof value.r === 'number' && typeof value.g === 'number' && typeof value.b === 'number';
-}
 
 export abstract class BaseRenderer {
-  protected static interpolateValue(value: string, props: FigmlProps): string {
-    return value.replace(/\$\$prop:(\w+)\$\$/g, (match, propName) => {
-      // return (propName in props) ? String(props[propName]) : match;
-      const propValue = props[propName];
-      if (propValue === undefined || propValue === null) {
-        return match;
-      }
-      if (typeof propValue === 'string' || typeof propValue === 'number' || typeof propValue === 'boolean') {
-        return String(propValue);
-      }
-      if (isRgbObject(propValue)) {
-        const rgb = propValue as RGB;
-        const r = Math.round(rgb.r * 255).toString(16).padStart(2, '0');
-        const g = Math.round(rgb.g * 255).toString(16).padStart(2, '0');
-        const b = Math.round(rgb.b * 255).toString(16).padStart(2, '0');
-        return `#${r}${g}${b}`;
-      }
-      return match;
-    });
-  }
-
-  protected static applyCommonAttributes(node: SceneNode, attributes: Record<string, string>, props: FigmlProps) {
+  protected static applyCommonAttributes(node: SceneNode, attributes: Record<string, StringTemplate | undefined>, props: FigmlProps) {
     if (attributes.width) {
-      const width = this.interpolateValue(attributes.width, props);
+      const width = attributes.width.interpolate(props);
       try {
         if (width === 'hug') {
           if ('layoutSizingHorizontal' in node) node.layoutSizingHorizontal = 'HUG';
@@ -45,7 +22,7 @@ export abstract class BaseRenderer {
     }
 
     if (attributes.height) {
-      const height = this.interpolateValue(attributes.height, props);
+      const height = attributes.height.interpolate(props);
       try {
         if (height === 'hug') {
           if ('layoutSizingVertical' in node) node.layoutSizingVertical = 'HUG';
@@ -61,17 +38,17 @@ export abstract class BaseRenderer {
     }
 
     if (attributes.visible) {
-      const visible = this.interpolateValue(attributes.visible, props);
+      const visible = attributes.visible.interpolate(props);
       node.visible = visible === 'true';
     }
 
     if (attributes.name) {
-      const name = this.interpolateValue(attributes.name, props);
+      const name = attributes.name.interpolate(props);
       node.name = name;
     }
 
     if (attributes.rotation && 'rotation' in node) {
-      const rotation = this.interpolateValue(attributes.rotation, props);
+      const rotation = attributes.rotation.interpolate(props);
       if (!isNaN(Number(rotation))) {
         (node as any).rotation = (Number(rotation) * Math.PI) / 180;
       }

@@ -1,13 +1,14 @@
 import { FigmlRenderer } from ".";
 import { RenderResult } from "./result";
+import { StringTemplate } from "./template";
 
 export type FigmlProps = Record<Exclude<string, 'children'>, any> & { children?: SceneNode | SceneNode[] };
 
 export interface FigmlNode {
   tag: string;
-  attributes: Record<string, string>;
+  attributes: Record<string, StringTemplate | undefined>;
   children: FigmlNode[];
-  content?: string;
+  content?: StringTemplate;
 }
 
 export class FigmlComponent {

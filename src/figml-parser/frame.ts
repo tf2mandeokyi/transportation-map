@@ -2,6 +2,7 @@ import { FigmlNode, FigmlProps } from './types';
 import { BaseRenderer } from './base';
 import { renderNode } from '.';
 import { RenderResult } from './result';
+import { StringTemplate } from './template';
 
 export class FrameRenderer extends BaseRenderer {
   render(node: FigmlNode, props: FigmlProps): RenderResult {
@@ -9,7 +10,7 @@ export class FrameRenderer extends BaseRenderer {
     const children: RenderResult[] = [];
 
     // Handle special case for children prop
-    if (node.content === '$$prop:children$$' && props.children) {
+    if (node.content?.onlyHasChildren() && props.children) {
       if (Array.isArray(props.children)) {
         for (const child of props.children) {
           frame.appendChild(child);
@@ -30,21 +31,25 @@ export class FrameRenderer extends BaseRenderer {
     });
   }
 
-  private applyFrameAttributes(frame: FrameNode, attributes: Record<string, string>, props: FigmlProps) {
+  private applyFrameAttributes(frame: FrameNode, attributes: Record<string, StringTemplate | undefined>, props: FigmlProps) {
     if (attributes.fill) {
-      const fill = BaseRenderer.interpolateValue(attributes.fill, props);
+      const fill = attributes.fill.interpolate(props);
       frame.fills = [{ type: 'SOLID', color: BaseRenderer.hexToRgb(fill) }];
     } else {
       frame.fills = [];
     }
 
-    if (attributes.clip === 'false') {
-      frame.clipsContent = false;
+    if (attributes.clip) {
+      const clip = attributes.clip.interpolate(props);
+      if (clip !== 'true' && clip !== 'false') {
+        throw Error(`Invalid value for clip attribute: ${clip}. Expected 'true' or 'false'.`);
+      }
+      frame.clipsContent = (clip === 'true');
     }
 
     // Handle layout flow
     if (attributes.flow) {
-      const flow = BaseRenderer.interpolateValue(attributes.flow, props);
+      const flow = attributes.flow.interpolate(props);
       if (flow === 'horizontal') {
         frame.layoutMode = 'HORIZONTAL';
       } else if (flow === 'vertical') {
@@ -54,7 +59,7 @@ export class FrameRenderer extends BaseRenderer {
 
     // Handle layout gap
     if (attributes.gap) {
-      const gap = Number(BaseRenderer.interpolateValue(attributes.gap, props));
+      const gap = Number(attributes.gap.interpolate(props));
       if (!isNaN(gap) && frame.layoutMode !== 'NONE') {
         frame.itemSpacing = gap;
       }
@@ -62,7 +67,7 @@ export class FrameRenderer extends BaseRenderer {
 
     // Handle padding
     if (attributes.padding) {
-      const padding = BaseRenderer.interpolateValue(attributes.padding, props);
+      const padding = attributes.padding.interpolate(props);
       if (frame.layoutMode !== 'NONE') {
         const paddingValues = this.parsePadding(padding);
         frame.paddingLeft = paddingValues.l;
@@ -74,7 +79,7 @@ export class FrameRenderer extends BaseRenderer {
 
     // Handle align (for auto layout)
     if (attributes.align && frame.layoutMode !== 'NONE') {
-      const align = BaseRenderer.interpolateValue(attributes.align, props);
+      const align = attributes.align.interpolate(props);
       const [h, v] = align.split(',');
 
       if (frame.layoutMode === 'HORIZONTAL') {

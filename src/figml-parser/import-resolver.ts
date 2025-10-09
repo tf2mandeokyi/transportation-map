@@ -1,3 +1,4 @@
+import { StringTemplate } from './template';
 import { FigmlComponent, FigmlNode } from './types';
 
 export class ImportResolver {
@@ -66,7 +67,7 @@ export class ImportResolver {
     for (const [key, value] of Object.entries(attributes)) {
       if (key.startsWith('prop:')) {
         const propName = key.substring(5);
-        mergedAttributes[propName] = value as string;
+        mergedAttributes[propName] = StringTemplate.parseDollarTemplates(value as string);
       }
     }
 

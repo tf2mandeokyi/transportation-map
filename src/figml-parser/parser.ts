@@ -1,6 +1,7 @@
 import { XMLParser } from 'fast-xml-parser';
 import { FigmlComponent, FigmlNode } from './types';
 import { ImportResolver } from './import-resolver';
+import { StringTemplate } from './template';
 
 export class FigmlParser {
   static setImportResolver(resolver: (path: string) => string): void {
@@ -77,7 +78,7 @@ export class FigmlParser {
         tag: tagName || 'text',
         attributes: {},
         children: [],
-        content: String(xmlNode)
+        content: StringTemplate.fromRaw(String(xmlNode))
       };
     }
 
@@ -109,11 +110,10 @@ export class FigmlParser {
       return ImportResolver.resolveImport(xmlNode, FigmlParser.parseComponent);
     }
 
-    const attributes: Record<string, string> = {};
+    const attributes: Record<string, StringTemplate> = {};
     for (const [key, value] of Object.entries(xmlNode)) {
-      if (typeof value === 'string' && key !== '#text') {
-        attributes[key] = value;
-      }
+      if (typeof value !== 'string' || key === '#text') { continue }
+      attributes[key] = StringTemplate.parseDollarTemplates(value as string);
     }
 
     const result: FigmlNode = {

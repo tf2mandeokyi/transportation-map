@@ -1,6 +1,7 @@
 import { FigmlNode, FigmlProps } from './types';
 import { BaseRenderer } from './base';
 import { RenderResult } from './result';
+import { StringTemplate } from './template';
 
 export class RectangleRenderer extends BaseRenderer {
   render(node: FigmlNode, props: FigmlProps): RenderResult {
@@ -11,14 +12,14 @@ export class RectangleRenderer extends BaseRenderer {
     });
   }
 
-  private applyShapeAttributes(shape: RectangleNode, attributes: Record<string, string>, props: FigmlProps) {
+  private applyShapeAttributes(shape: RectangleNode, attributes: Record<string, StringTemplate | undefined>, props: FigmlProps) {
     if (attributes.fill) {
-      const fill = BaseRenderer.interpolateValue(attributes.fill, props);
+      const fill = attributes.fill.interpolate(props);
       shape.fills = [{ type: 'SOLID', color: BaseRenderer.hexToRgb(fill) }];
     }
 
     if (attributes.stroke) {
-      const stroke = BaseRenderer.interpolateValue(attributes.stroke, props);
+      const stroke = attributes.stroke.interpolate(props);
       shape.strokes = [{ type: 'SOLID', color: BaseRenderer.hexToRgb(stroke) }];
     } else {
       // Explicitly remove strokes when none specified
@@ -26,12 +27,12 @@ export class RectangleRenderer extends BaseRenderer {
     }
 
     if (attributes.strokeWeight) {
-      const strokeWeight = BaseRenderer.interpolateValue(attributes.strokeWeight, props);
+      const strokeWeight = attributes.strokeWeight.interpolate(props);
       shape.strokeWeight = Number(strokeWeight);
     }
 
     if (attributes.cornerRadius && shape.cornerRadius !== undefined) {
-      const cornerRadius = BaseRenderer.interpolateValue(attributes.cornerRadius, props);
+      const cornerRadius = attributes.cornerRadius.interpolate(props);
       shape.cornerRadius = Number(cornerRadius);
     }
   }
@@ -46,14 +47,14 @@ export class EllipseRenderer extends BaseRenderer {
     });
   }
 
-  private applyShapeAttributes(shape: EllipseNode, attributes: Record<string, string>, props: FigmlProps) {
+  private applyShapeAttributes(shape: EllipseNode, attributes: Record<string, StringTemplate | undefined>, props: FigmlProps) {
     if (attributes.fill) {
-      const fill = BaseRenderer.interpolateValue(attributes.fill, props);
+      const fill = attributes.fill.interpolate(props);
       shape.fills = [{ type: 'SOLID', color: BaseRenderer.hexToRgb(fill) }];
     }
 
     if (attributes.stroke) {
-      const stroke = BaseRenderer.interpolateValue(attributes.stroke, props);
+      const stroke = attributes.stroke.interpolate(props);
       shape.strokes = [{ type: 'SOLID', color: BaseRenderer.hexToRgb(stroke) }];
     } else {
       // Explicitly remove strokes when none specified
@@ -61,7 +62,7 @@ export class EllipseRenderer extends BaseRenderer {
     }
 
     if (attributes.strokeWeight) {
-      const strokeWeight = BaseRenderer.interpolateValue(attributes.strokeWeight, props);
+      const strokeWeight = attributes.strokeWeight.interpolate(props);
       shape.strokeWeight = Number(strokeWeight);
     }
   }
@@ -92,7 +93,7 @@ export class PolygonRenderer extends BaseRenderer {
     type: 'polygon', shape: PolygonNode
   } { 
     if (node.attributes.points) {
-      const pointsStr = BaseRenderer.interpolateValue(node.attributes.points, props);
+      const pointsStr = node.attributes.points.interpolate(props);
       const vectorNetwork = this.parsePolygonPoints(pointsStr);
       if (vectorNetwork) {
         return { type: 'vector', shape: figma.createVector(), vectorNetwork: vectorNetwork };
@@ -131,14 +132,14 @@ export class PolygonRenderer extends BaseRenderer {
     }
   }
 
-  private applyShapeAttributes(shape: VectorNode | PolygonNode, attributes: Record<string, string>, props: FigmlProps) {
+  private applyShapeAttributes(shape: VectorNode | PolygonNode, attributes: Record<string, StringTemplate | undefined>, props: FigmlProps) {
     if (attributes.fill) {
-      const fill = BaseRenderer.interpolateValue(attributes.fill, props);
+      const fill = attributes.fill.interpolate(props);
       shape.fills = [{ type: 'SOLID', color: BaseRenderer.hexToRgb(fill) }];
     }
 
     if (attributes.stroke) {
-      const stroke = BaseRenderer.interpolateValue(attributes.stroke, props);
+      const stroke = attributes.stroke.interpolate(props);
       shape.strokes = [{ type: 'SOLID', color: BaseRenderer.hexToRgb(stroke) }];
     } else {
       // Explicitly remove strokes when none specified
@@ -146,7 +147,7 @@ export class PolygonRenderer extends BaseRenderer {
     }
 
     if (attributes.strokeWeight) {
-      const strokeWeight = BaseRenderer.interpolateValue(attributes.strokeWeight, props);
+      const strokeWeight = attributes.strokeWeight.interpolate(props);
       shape.strokeWeight = Number(strokeWeight);
     }
   }
