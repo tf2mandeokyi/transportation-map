@@ -11,7 +11,8 @@ export type UIToPluginMessage =
   | { type: 'start-adding-stations-mode'; lineId: string }
   | { type: 'stop-adding-stations-mode' }
   | { type: 'get-line-path'; lineId: string }
-  | { type: 'remove-station-from-line'; lineId: string; stationId: string };
+  | { type: 'remove-station-from-line'; lineId: string; stationId: string }
+  | { type: 'set-line-stops-at-station'; lineId: string; stationId: string; stopsAt: boolean };
 
 // Messages from Plugin to UI
 export type PluginToUIMessage =
@@ -19,5 +20,6 @@ export type PluginToUIMessage =
   | { type: 'stop-added' }
   | { type: 'station-clicked'; stationId: string; stationName: string }
   | { type: 'stations-connected' }
-  | { type: 'line-path-data'; lineId: string; stationIds: string[]; stationNames: string[] }
+  | { type: 'line-path-data'; lineId: string; stationIds: string[]; stationNames: string[]; stopsAt: boolean[] }
+  | { type: 'toggle-stops-at'; lineId: string; stationId: string; stopsAt: boolean }
   | { type: 'station-removed-from-line' };

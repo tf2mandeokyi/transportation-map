@@ -1,3 +1,5 @@
+import { UIToPluginMessage } from "../common/messages";
+import { FigmaApi } from "./figma";
 import { Model } from "./model";
 import { LineId, Station, StationId, StationOrientation, Vector } from "./structures";
 import { View } from "./view";
@@ -16,13 +18,13 @@ export class Controller {
     console.log("Controller initialized. Listening for user actions.");
 
     // Listen for UI messages
-    figma.ui.onmessage = async (msg) => {
+    FigmaApi.setMessageHandler(async (msg) => {
       try {
         await this.handleUIMessage(msg);
       } catch (error) {
         console.error("Error handling UI message:", error);
       }
-    };
+    });
 
     // Load all pages before setting up document change handler
     try {
@@ -36,7 +38,7 @@ export class Controller {
     figma.on('selectionchange', () => this.handleSelectionChange());
   }
 
-  private handleUIMessage(msg: any): Promise<void> {
+  private handleUIMessage(msg: UIToPluginMessage): Promise<void> {
     switch (msg.type) {
       case 'add-stop': return this.handleAddStop(msg.stop);
       case 'add-line': return this.handleAddLine(msg.line);
@@ -48,7 +50,7 @@ export class Controller {
       case 'stop-adding-stations-mode': return this.handleStopAddingStationsMode();
       case 'get-line-path': return this.handleGetLinePath(msg.lineId);
       case 'remove-station-from-line': return this.handleRemoveStationFromLine(msg.lineId, msg.stationId);
-      default: console.log("Unknown message type:", msg.type); return Promise.resolve();
+      case 'set-line-stops-at-station': return this.handleSetLineStopsAtStation(msg.lineId, msg.stationId, msg.stopsAt);
     }
   }
 
@@ -67,7 +69,7 @@ export class Controller {
     this.createStation(name, position, hidden, orientation);
     await this.view.render(this.model.getState());
 
-    figma.ui.postMessage({ type: 'stop-added' });
+    FigmaApi.postMessage({ type: 'stop-added' });
   }
 
   private async handleAddLine(lineData: { name: string, color: string }): Promise<void> {
@@ -79,7 +81,7 @@ export class Controller {
     await this.view.render(this.model.getState());
 
     // Send the line ID back to the UI so it can store it
-    figma.ui.postMessage({
+    FigmaApi.postMessage({
       type: 'line-added', lineId, name, color
     });
   }
@@ -120,7 +122,7 @@ export class Controller {
       const station = this.findStationFromNode(selection[0]);
       if (station) {
         // Send station click to UI
-        figma.ui.postMessage({
+        FigmaApi.postMessage({
           type: 'station-clicked',
           stationId: station.id,
           stationName: station.name
@@ -201,7 +203,7 @@ export class Controller {
     await this.view.render(this.model.getState());
 
     // Notify UI of success
-    figma.ui.postMessage({ type: 'stations-connected' });
+    FigmaApi.postMessage({ type: 'stations-connected' });
   }
 
   private async handleStartAddingStationsMode(lineId: string): Promise<void> {
@@ -222,24 +224,28 @@ export class Controller {
       return;
     }
 
-    // Get station names for the path
+    // Get station names and stopsAt status for the path
     const stationIds: string[] = [];
     const stationNames: string[] = [];
+    const stopsAt: boolean[] = [];
 
     for (const stationId of line.path) {
       const station = this.model.getState().stations.get(stationId);
       if (station) {
         stationIds.push(stationId);
         stationNames.push(station.name);
+        const lineInfo = station.lines.get(lineId as LineId);
+        stopsAt.push(lineInfo?.stopsAt ?? true);
       }
     }
 
     // Send path data to UI
-    figma.ui.postMessage({
+    FigmaApi.postMessage({
       type: 'line-path-data',
       lineId,
       stationIds,
-      stationNames
+      stationNames,
+      stopsAt
     });
   }
 
@@ -250,8 +256,18 @@ export class Controller {
     await this.view.render(this.model.getState());
 
     // Notify UI
-    figma.ui.postMessage({
+    FigmaApi.postMessage({
       type: 'station-removed-from-line'
     });
+  }
+
+  private async handleSetLineStopsAtStation(lineId: string, stationId: string, stopsAt: boolean): Promise<void> {
+    this.model.setLineStopsAtStation(lineId as LineId, stationId as StationId, stopsAt);
+
+    // Re-render the map
+    await this.view.render(this.model.getState());
+
+    // Send updated line path data
+    await this.handleGetLinePath(lineId);
   }
 }

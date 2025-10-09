@@ -18,7 +18,7 @@ const App: React.FC = () => {
   const [stationPath, setStationPath] = useState<string[]>([]);
   const [stationPathNames, setStationPathNames] = useState<string[]>([]);
   const [currentEditingLineId, setCurrentEditingLineId] = useState<string | null>(null);
-  const [linePathData, setLinePathData] = useState<{ lineId: string; stationIds: string[]; stationNames: string[] } | null>(null);
+  const [linePathData, setLinePathData] = useState<{ lineId: string; stationIds: string[]; stationNames: string[]; stopsAt: boolean[] } | null>(null);
 
   useEffect(() => {
     // Listen for messages from the plugin

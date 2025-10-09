@@ -10,7 +10,7 @@ interface Props {
   lines: LineData[];
   currentEditingLineId: string | null;
   setCurrentEditingLineId: (value: string | null) => void;
-  linePathData: { lineId: string; stationIds: string[]; stationNames: string[] } | null;
+  linePathData: { lineId: string; stationIds: string[]; stationNames: string[]; stopsAt: boolean[] } | null;
 }
 
 const EditLinePathSection: React.FC<Props> = ({
@@ -43,6 +43,17 @@ const EditLinePathSection: React.FC<Props> = ({
     }, '*');
   };
 
+  const handleToggleStopsAt = (lineId: string, stationId: string, currentStopsAt: boolean) => {
+    parent.postMessage({
+      pluginMessage: {
+        type: 'set-line-stops-at-station',
+        lineId,
+        stationId,
+        stopsAt: !currentStopsAt
+      }
+    }, '*');
+  };
+
   const showPath = currentEditingLineId && linePathData && linePathData.lineId === currentEditingLineId;
 
   return (
@@ -65,27 +76,38 @@ const EditLinePathSection: React.FC<Props> = ({
         </div>
         {showPath && (
           <div>
-            <label>Current Path (click X to remove)</label>
+            <label>Current Path (☑ = stops, ☐ = passes by)</label>
             <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
               {linePathData.stationIds.length === 0 ? (
                 <p style={{ color: '#666', fontSize: '11px', padding: '8px' }}>
                   No stations in path
                 </p>
               ) : (
-                linePathData.stationIds.map((stationId, index) => (
-                  <div key={stationId} className="station-path-item">
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <span className="station-number">{index + 1}</span>
-                      <span>{linePathData.stationNames[index]}</span>
+                linePathData.stationIds.map((stationId, index) => {
+                  const stopsAt = linePathData.stopsAt[index];
+                  return (
+                    <div key={stationId} className="station-path-item">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span className="station-number">{index + 1}</span>
+                        <input
+                          type="checkbox"
+                          checked={stopsAt}
+                          onChange={() => handleToggleStopsAt(linePathData.lineId, stationId, stopsAt)}
+                          title={stopsAt ? "Line stops at this station" : "Line passes by this station"}
+                        />
+                        <span style={{ opacity: stopsAt ? 1 : 0.6 }}>
+                          {linePathData.stationNames[index]}
+                        </span>
+                      </div>
+                      <button
+                        className="button button--secondary small-btn"
+                        onClick={() => handleRemoveStation(linePathData.lineId, stationId)}
+                      >
+                        X
+                      </button>
                     </div>
-                    <button
-                      className="button button--secondary small-btn"
-                      onClick={() => handleRemoveStation(linePathData.lineId, stationId)}
-                    >
-                      X
-                    </button>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
