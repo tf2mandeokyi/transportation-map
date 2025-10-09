@@ -76,6 +76,32 @@
       padding: 4px 8px;
       font-size: 10px;
     }
+    .station-path-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 8px;
+      border: 1px solid #e5e5e5;
+      border-radius: 4px;
+      margin-bottom: 4px;
+      background: white;
+    }
+    .station-path-item:hover {
+      background: #f5f5f5;
+    }
+    .station-number {
+      background: #18a0fb;
+      color: white;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: bold;
+      margin-right: 8px;
+    }
   </style>
 </head>
 <body>
@@ -159,6 +185,24 @@
   </div>
 
   <div class="section">
+    <h3>Edit Line Path</h3>
+    <div class="grid">
+      <div>
+        <label for="edit-line-select">Select Line to Edit</label>
+        <select class="input" id="edit-line-select">
+          <option value="">Choose a line...</option>
+        </select>
+      </div>
+      <div id="line-path-container" style="display: none;">
+        <label>Current Path (click X to remove)</label>
+        <div id="line-path-list" style="max-height: 200px; overflow-y: auto;">
+          <!-- Station path items will appear here -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
     <h3>Traffic Direction</h3>
     <div class="checkbox-container">
       <input type="checkbox" id="right-hand-traffic" checked>
@@ -191,10 +235,15 @@
     const clearPathButton = document.getElementById('clear-path');
     const pathListSpan = document.getElementById('path-list');
 
+    const editLineSelect = document.getElementById('edit-line-select');
+    const linePathContainer = document.getElementById('line-path-container');
+    const linePathListDiv = document.getElementById('line-path-list');
+
     let lineCounter = 0;
     let isAddingStations = false;
     let stationPath = [];
     let stationPathNames = [];
+    let currentEditingLineId = null;
 
     addStopButton.onclick = () => {
       const stopData = {
@@ -251,6 +300,12 @@
       option.value = lineId;
       option.textContent = lineName;
       connectLineSelect.appendChild(option);
+
+      // Add to edit line dropdown
+      const editOption = document.createElement('option');
+      editOption.value = lineId;
+      editOption.textContent = lineName;
+      editLineSelect.appendChild(editOption);
     }
 
     function editLine(lineId) {
@@ -279,11 +334,19 @@
         }
       }
 
-      // Remove from dropdown
+      // Remove from dropdowns
       const options = connectLineSelect.options;
       for (let i = 0; i < options.length; i++) {
         if (options[i].value === lineId) {
           connectLineSelect.remove(i);
+          break;
+        }
+      }
+
+      const editOptions = editLineSelect.options;
+      for (let i = 0; i < editOptions.length; i++) {
+        if (editOptions[i].value === lineId) {
+          editLineSelect.remove(i);
           break;
         }
       }
@@ -383,6 +446,56 @@
       }
     }
 
+    editLineSelect.onchange = () => {
+      const selectedLineId = editLineSelect.value;
+      if (selectedLineId) {
+        currentEditingLineId = selectedLineId;
+        // Request line path from plugin
+        parent.postMessage({
+          pluginMessage: {
+            type: 'get-line-path',
+            lineId: selectedLineId
+          }
+        }, '*');
+      } else {
+        currentEditingLineId = null;
+        linePathContainer.style.display = 'none';
+      }
+    };
+
+    function displayLinePath(lineId, stationIds, stationNames) {
+      linePathListDiv.innerHTML = '';
+
+      if (stationIds.length === 0) {
+        linePathListDiv.innerHTML = '<p style="color: #666; font-size: 11px; padding: 8px;">No stations in path</p>';
+      } else {
+        stationIds.forEach((stationId, index) => {
+          const item = document.createElement('div');
+          item.className = 'station-path-item';
+          item.innerHTML = `
+            <div style="display: flex; align-items: center;">
+              <span class="station-number">${index + 1}</span>
+              <span>${stationNames[index]}</span>
+            </div>
+            <button class="button button--secondary small-btn" onclick="removeStationFromLine('${lineId}', '${stationId}', ${index})">X</button>
+          `;
+          linePathListDiv.appendChild(item);
+        });
+      }
+
+      linePathContainer.style.display = 'block';
+    }
+
+    function removeStationFromLine(lineId, stationId, index) {
+      parent.postMessage({
+        pluginMessage: {
+          type: 'remove-station-from-line',
+          lineId: lineId,
+          stationId: stationId
+        }
+      }, '*');
+    }
+
     renderMapButton.onclick = () => {
       parent.postMessage({
         pluginMessage: {
@@ -415,6 +528,21 @@
       } else if (msg.type === 'stations-connected') {
         // Stations were successfully connected
         console.log('Stations connected to line');
+      } else if (msg.type === 'line-path-data') {
+        // Received line path data
+        if (msg.lineId === currentEditingLineId) {
+          displayLinePath(msg.lineId, msg.stationIds, msg.stationNames);
+        }
+      } else if (msg.type === 'station-removed-from-line') {
+        // Station was removed, refresh the path display
+        if (currentEditingLineId) {
+          parent.postMessage({
+            pluginMessage: {
+              type: 'get-line-path',
+              lineId: currentEditingLineId
+            }
+          }, '*');
+        }
       }
     };
 

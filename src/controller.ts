@@ -46,6 +46,8 @@ export class Controller {
       case 'connect-stations-to-line': return this.handleConnectStationsToLine(msg.lineId, msg.stationIds, msg.stopsAt);
       case 'start-adding-stations-mode': return this.handleStartAddingStationsMode(msg.lineId);
       case 'stop-adding-stations-mode': return this.handleStopAddingStationsMode();
+      case 'get-line-path': return this.handleGetLinePath(msg.lineId);
+      case 'remove-station-from-line': return this.handleRemoveStationFromLine(msg.lineId, msg.stationId);
       default: console.log("Unknown message type:", msg.type); return Promise.resolve();
     }
   }
@@ -210,5 +212,46 @@ export class Controller {
   private async handleStopAddingStationsMode(): Promise<void> {
     this.isAddingStationsMode = false;
     console.log("Exited station-adding mode");
+  }
+
+  private async handleGetLinePath(lineId: string): Promise<void> {
+    const line = this.model.getState().lines.get(lineId as LineId);
+
+    if (!line) {
+      console.error("Line not found:", lineId);
+      return;
+    }
+
+    // Get station names for the path
+    const stationIds: string[] = [];
+    const stationNames: string[] = [];
+
+    for (const stationId of line.path) {
+      const station = this.model.getState().stations.get(stationId);
+      if (station) {
+        stationIds.push(stationId);
+        stationNames.push(station.name);
+      }
+    }
+
+    // Send path data to UI
+    figma.ui.postMessage({
+      type: 'line-path-data',
+      lineId,
+      stationIds,
+      stationNames
+    });
+  }
+
+  private async handleRemoveStationFromLine(lineId: string, stationId: string): Promise<void> {
+    this.model.removeStationFromLine(lineId as LineId, stationId as StationId);
+
+    // Re-render the map
+    await this.view.render(this.model.getState());
+
+    // Notify UI
+    figma.ui.postMessage({
+      type: 'station-removed-from-line'
+    });
   }
 }
