@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StationOrientation } from '../../plugin/structures';
+import { StationOrientation } from '../../common/messages';
 
 const BusStopsSection: React.FC = () => {
   const [stopName, setStopName] = useState('');

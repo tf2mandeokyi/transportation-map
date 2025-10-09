@@ -1,7 +1,7 @@
-import { UIToPluginMessage } from "../common/messages";
+import { StationOrientation, UIToPluginMessage } from "../common/messages";
 import { FigmaApi } from "./figma";
 import { Model } from "./model";
-import { LineId, Station, StationId, StationOrientation, Vector } from "./structures";
+import { LineId, Station, StationId, Vector } from "./structures";
 import { View } from "./view";
 
 export class Controller {

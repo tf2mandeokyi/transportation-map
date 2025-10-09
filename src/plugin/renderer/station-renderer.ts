@@ -1,7 +1,8 @@
-import { Line, MapState, Station, StationId, StationOrientation } from "../structures";
+import { Line, MapState, Station, StationId } from "../structures";
 import { Model } from "../model";
 import { renderBusStop, renderBusStopLine } from "../figmls";
 import { ErrorChain } from "../error";
+import { StationOrientation } from "../../common/messages";
 
 export interface ConnectionPoints {
   head: {x: number, y: number},

@@ -1,3 +1,5 @@
+import { StationOrientation } from "../common/messages";
+
 // Using branded types to prevent mixing up different kinds of IDs
 export type StationId = string & { readonly __brand: 'NodeId' };
 export type LineId = string & { readonly __brand: 'LineId' };
@@ -7,9 +9,6 @@ export interface Vector {
   x: number;
   y: number;
 }
-
-// Defines the direction a node is "facing" for line stacking
-export type StationOrientation = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
 
 // Information about a specific line at a specific node
 export interface LineStopInfo {

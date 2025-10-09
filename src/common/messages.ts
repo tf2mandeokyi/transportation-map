@@ -1,4 +1,5 @@
-import { StationOrientation } from "../plugin/structures";
+// Defines the direction a node is "facing" for line stacking
+export type StationOrientation = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
 
 // Messages from UI to Plugin
 export type UIToPluginMessage =

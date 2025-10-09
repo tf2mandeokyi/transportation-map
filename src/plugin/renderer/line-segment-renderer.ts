@@ -1,4 +1,5 @@
-import { Line, LineSegmentId, Station, StationOrientation } from "../structures";
+import { StationOrientation } from "../../common/messages";
+import { Line, LineSegmentId, Station } from "../structures";
 import { StationRenderer } from "./station-renderer";
 
 export class LineSegmentRenderer {

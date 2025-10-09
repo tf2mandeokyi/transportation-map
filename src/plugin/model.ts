@@ -1,4 +1,5 @@
-import { Line, LineId, MapState, Station, StationId, StationOrientation, Vector } from "./structures";
+import { StationOrientation } from "../common/messages";
+import { Line, LineId, MapState, Station, StationId, Vector } from "./structures";
 
 function generateBase62(length: number): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';

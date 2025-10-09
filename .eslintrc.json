@@ -1,0 +1,42 @@
+{
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "ecmaVersion": 2020,
+    "sourceType": "module",
+    "project": "./tsconfig.json",
+    "ecmaFeatures": {
+      "jsx": true
+    }
+  },
+  "plugins": ["@typescript-eslint", "import"],
+  "extends": ["plugin:import/typescript"],
+  "rules": {
+    "import/no-restricted-paths": [
+      "error",
+      {
+        "zones": [
+          {
+            "target": "./src/ui/**/*",
+            "from": "./src/plugin/**/*",
+            "message": "UI code cannot import from plugin/ directory. Use common/ for shared code."
+          },
+          {
+            "target": "./src/plugin/**/*",
+            "from": "./src/ui/**/*",
+            "message": "Plugin code cannot import from ui/ directory. Use common/ for shared code."
+          },
+          {
+            "target": "./src/common/**/*",
+            "from": "./src/plugin/**/*",
+            "message": "Common code cannot import from plugin/ directory. Keep common/ independent."
+          },
+          {
+            "target": "./src/common/**/*",
+            "from": "./src/ui/**/*",
+            "message": "Common code cannot import from ui/ directory. Keep common/ independent."
+          }
+        ]
+      }
+    ]
+  }
+}
