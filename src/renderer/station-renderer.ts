@@ -72,7 +72,7 @@ export class StationRenderer {
         facing: stopLineFacing
       })
       .intoNode()
-      .catch(e => { throw new ErrorChain(`Error rendering line ${busLine.line.name} at station ${station.name}`, e) })
+      .catch(ErrorChain.thrower<SceneNode>(`Error rendering line ${busLine.line.name} at station ${station.name}`))
     ));
 
     // Render the bus stop container using the bus-stop template
@@ -92,8 +92,8 @@ export class StationRenderer {
 
   private getTextLocation(orientation: StationOrientation, isRightHandTraffic: boolean): 'left' | 'right' | 'top' | 'bottom' {
     switch (orientation) {
-      case 'LEFT': return isRightHandTraffic ? 'bottom' : 'top';
-      case 'RIGHT': return isRightHandTraffic ? 'top' : 'bottom';
+      case 'LEFT': return isRightHandTraffic ? 'top' : 'bottom';
+      case 'RIGHT': return isRightHandTraffic ? 'bottom' : 'top';
       case 'UP': return isRightHandTraffic ? 'right' : 'left';
       case 'DOWN': return isRightHandTraffic ? 'left' : 'right';
       default: return 'top';
@@ -102,24 +102,15 @@ export class StationRenderer {
 
   private getRotation(orientation: StationOrientation): number {
     switch (orientation) {
-      case 'UP':
-      case 'DOWN':
-        return 90; // Rotate 90 degrees for vertical orientations
-      default:
-        return 0;
+      case 'UP': case 'DOWN': return 90; // Rotate 90 degrees for vertical orientations
+      case 'LEFT': case 'RIGHT': return 0; // No rotation for horizontal orientations
     }
   }
 
   private getStopLineFacing(orientation: StationOrientation): 'left' | 'right' {
     switch (orientation) {
-      case 'LEFT':
-      case 'DOWN':
-        return 'left';
-      case 'RIGHT':
-      case 'UP':
-        return 'right';
-      default:
-        return 'right';
+      case 'LEFT': case 'DOWN': return 'left';
+      case 'RIGHT': case 'UP': return 'right';
     }
   }
 

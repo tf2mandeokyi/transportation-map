@@ -20,7 +20,7 @@ export class RenderResult {
     return new RenderResult(node, async () => {
       await render();
       await Promise.all(children.map(c =>
-        c.render().catch(e => { throw new ErrorChain(`Error rendering child node ${c.node.type} of frame ${node.name}`, e) })
+        c.render().catch(ErrorChain.thrower(`Error rendering child node ${c.node.type} of frame ${node.name}`))
       ));
     });
   }

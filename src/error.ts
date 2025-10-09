@@ -1,4 +1,10 @@
 export class ErrorChain extends Error {
+  static thrower<T>(message: string): (cause: Error) => T {
+    return (cause: Error) => {
+      throw new ErrorChain(message, cause);
+    };
+  }
+
   constructor(message: string, cause?: Error) {
     super(message);
     this.name = 'ErrorChain';

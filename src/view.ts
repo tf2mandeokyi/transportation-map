@@ -25,13 +25,13 @@ export class View {
     // First render all stations to calculate and store connection points
     await Promise.all([...state.stations.values()].map(station =>
       this.stationRenderer.renderStation(station, state)
-        .catch(e => { throw new ErrorChain(`Error rendering station ${station.name}`, e) })
+        .catch(ErrorChain.thrower(`Error rendering station ${station.name}`))
     ));
 
     // Then render ALL lines using the stored connection points (with bezier curves)
     await Promise.all([...state.lines.values()].map(line =>
       this.lineSegmentRenderer.renderLine(line, state.stations)
-        .catch(e => { throw new ErrorChain(`Error rendering line ${line.name}`, e) })
+        .catch(ErrorChain.thrower(`Error rendering line ${line.name}`))
     ));
 
     // Finally, move all line segments to the back so they appear behind stations
