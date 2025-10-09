@@ -92,22 +92,26 @@ export class FrameRenderer extends BaseRenderer {
           case 'left': frame.primaryAxisAlignItems = 'MIN'; break;
           case 'center': frame.primaryAxisAlignItems = 'CENTER'; break;
           case 'right': frame.primaryAxisAlignItems = 'MAX'; break;
+          default: throw new Error(`Invalid horizontal align value: ${h}`);
         }
         switch (v) {
           case 'top': frame.counterAxisAlignItems = 'MIN'; break;
           case 'center': frame.counterAxisAlignItems = 'CENTER'; break;
           case 'bottom': frame.counterAxisAlignItems = 'MAX'; break;
+          default: throw new Error(`Invalid vertical align value: ${v}`);
         }
       } else if (frame.layoutMode === 'VERTICAL') {
         switch (v) {
           case 'top': frame.primaryAxisAlignItems = 'MIN'; break;
           case 'center': frame.primaryAxisAlignItems = 'CENTER'; break;
           case 'bottom': frame.primaryAxisAlignItems = 'MAX'; break;
+          default: throw new Error(`Invalid vertical align value: ${v}`);
         }
         switch (h) {
           case 'left': frame.counterAxisAlignItems = 'MIN'; break;
           case 'center': frame.counterAxisAlignItems = 'CENTER'; break;
           case 'right': frame.counterAxisAlignItems = 'MAX'; break;
+          default: throw new Error(`Invalid horizontal align value: ${h}`);
         }
       }
     }

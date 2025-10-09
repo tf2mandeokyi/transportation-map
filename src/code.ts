@@ -1,6 +1,5 @@
 import { Controller } from "./controller";
 import { Model } from "./model";
-import { LineId, StationId } from "./structures";
 import { View } from "./view";
 
 async function main() {

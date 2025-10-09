@@ -1,10 +1,8 @@
-import { Line, MapState, Station, StationId } from "../structures";
+import { Line, MapState, Station, StationId, StationOrientation } from "../structures";
 import { Model } from "../model";
-import { FigmlComponent, FigmlParser } from "../figml-parser";
-import { figmlImportResolver } from "../figml/resources";
-import busStopFigml from "../figml/bus-stop.figml";
-import busStopLineFigml from "../figml/bus-stop-line.figml";
+import { renderBusStop, renderBusStopLine } from "../figml/resources";
 import { ErrorChain } from "../error";
+import { FigmlFrameAlignment } from "../figml-parser/types";
 
 export interface ConnectionPoints {
   head: {x: number, y: number},
@@ -15,26 +13,11 @@ export class StationRenderer {
   private figmaStationMap: Map<StationId, SceneNode> = new Map();
   private lineConnectionPoints: Map<string, ConnectionPoints> = new Map();
   private model?: Model;
-  private busStopTemplate: FigmlComponent | null = null;
-  private busStopLineTemplate: FigmlComponent | null = null;
 
-  constructor() {
-    FigmlParser.setImportResolver(figmlImportResolver);
-    this.loadTemplates();
-  }
+  constructor() {}
 
   public setModel(model: Model): void {
     this.model = model;
-  }
-
-  private loadTemplates(): void {
-    try {
-      this.busStopTemplate = FigmlParser.parseComponent(busStopFigml);
-      this.busStopLineTemplate = FigmlParser.parseComponent(busStopLineFigml);
-      console.log('Figml templates loaded successfully');
-    } catch (error) {
-      console.error('Failed to load figml templates:', error);
-    }
   }
 
   public async renderStation(station: Station, state: Readonly<MapState>): Promise<void> {
@@ -70,11 +53,6 @@ export class StationRenderer {
   }
 
   private async renderBusStopWithTemplate(parentFrame: FrameNode, station: Station, state: Readonly<MapState>): Promise<void> {
-    if (!this.busStopTemplate || !this.busStopLineTemplate) {
-      console.warn('Templates not loaded, falling back to basic rendering');
-      return;
-    }
-
     const isRightHandTraffic = this.model?.isRightHandTraffic() || true;
 
     // Determine text location based on orientation and traffic direction
@@ -85,24 +63,27 @@ export class StationRenderer {
     const busLines = this.getBusLinesForStation(station, state);
 
     // Render individual bus lines using the bus-stop-line template in parallel
-    const facing = this.getLineFacing(station.orientation);
+    const stopLineFacing = this.getStopLineFacing(station.orientation);
     const children = await Promise.all(busLines.map(busLine =>
-      this.busStopLineTemplate!.render({
+      renderBusStopLine({
         text: busLine.line.name,
         color: busLine.line.color,
-        visible: busLine.stopsAt
-      }, `facing:${facing}`)
+        visible: busLine.stopsAt,
+        facing: stopLineFacing
+      })
       .intoNode()
       .catch(e => { throw new ErrorChain(`Error rendering line ${busLine.line.name} at station ${station.name}`, e) })
     ));
 
     // Render the bus stop container using the bus-stop template
-    const busStopElement = await this.busStopTemplate.render({
+    const align = this.getStopLineAlign(station.orientation);
+    const busStopElement = await renderBusStop({
       text: station.name,
       visible: !station.hidden,
       rotation, children,
-      align: 'center,center'
-    }, `textLocation:${textLocation}`).intoNode();
+      align,
+      textLocation
+    }).intoNode();
 
     parentFrame.appendChild(busStopElement);
 
@@ -110,36 +91,51 @@ export class StationRenderer {
     this.storeLineConnectionPoints(parentFrame, station, busLines);
   }
 
-  private getTextLocation(orientation: string, isRightHandTraffic: boolean): string {
+  private getTextLocation(orientation: StationOrientation, isRightHandTraffic: boolean): 'left' | 'right' | 'top' | 'bottom' {
     switch (orientation) {
-      case 'left': return isRightHandTraffic ? 'bottom' : 'top';
-      case 'right': return isRightHandTraffic ? 'top' : 'bottom';
-      case 'up': return isRightHandTraffic ? 'right' : 'left';
-      case 'down': return isRightHandTraffic ? 'left' : 'right';
+      case 'LEFT': return isRightHandTraffic ? 'bottom' : 'top';
+      case 'RIGHT': return isRightHandTraffic ? 'top' : 'bottom';
+      case 'UP': return isRightHandTraffic ? 'right' : 'left';
+      case 'DOWN': return isRightHandTraffic ? 'left' : 'right';
       default: return 'top';
     }
   }
 
-  private getRotation(orientation: string): number {
+  private getRotation(orientation: StationOrientation): number {
     switch (orientation) {
-      case 'up':
-      case 'down':
+      case 'UP':
+      case 'DOWN':
         return 270; // Rotate 270 degrees for vertical orientations
       default:
         return 0;
     }
   }
 
-  private getLineFacing(orientation: string): string {
+  private getStopLineFacing(orientation: StationOrientation): 'left' | 'right' {
     switch (orientation) {
-      case 'left':
-      case 'down':
+      case 'LEFT':
+      case 'DOWN':
         return 'left';
-      case 'right':
-      case 'up':
+      case 'RIGHT':
+      case 'UP':
         return 'right';
       default:
         return 'right';
+    }
+  }
+
+  private getStopLineAlign(orientation: StationOrientation): FigmlFrameAlignment {
+    switch (orientation) {
+      case 'LEFT':
+        return 'left,center';
+      case 'RIGHT':
+        return 'right,center';
+      case 'UP':
+        return 'center,top';
+      case 'DOWN':
+        return 'center,bottom';
+      default:
+        return 'center,center';
     }
   }
 

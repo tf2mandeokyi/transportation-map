@@ -4,6 +4,10 @@ import busStopTextFigml from "./bus-stop-text.figml";
 import busStopContentFigml from "./bus-stop-content.figml";
 import busLineDotFigml from "./bus-line-dot.figml";
 import busLineTextFigml from "./bus-line-text.figml";
+import { RenderResult } from "../figml-parser/result";
+import { FigmlParser } from "../figml-parser";
+import { FigmlFrameAlignment } from "../figml-parser/types";
+import { ImportResolver } from "../figml-parser/import-resolver";
 
 const FIGML_IMPORTS = {
   'bus-stop.figml': busStopFigml,
@@ -14,8 +18,32 @@ const FIGML_IMPORTS = {
   'bus-line-text.figml': busLineTextFigml,
 } as const;
 
-export function figmlImportResolver(filename: string): string {
+ImportResolver.setImportResolver((filename: string): string => {
   const importContent = FIGML_IMPORTS[filename as keyof typeof FIGML_IMPORTS];
   if (!importContent) throw new Error(`Unknown import path: ${filename}`);
   return importContent;
+});
+
+const BUS_STOP_LINE_TEMPLATE = FigmlParser.parseComponent(busStopLineFigml);
+interface BusStopLineProps {
+  text: string,
+  color: RGB,
+  visible: boolean,
+  facing: 'left' | 'right'
+}
+export function renderBusStopLine({ text, color, visible, facing }: BusStopLineProps): RenderResult {
+  return BUS_STOP_LINE_TEMPLATE.render({ text, color, visible }, { facing });
+}
+
+const BUS_STOP_TEMPLATE = FigmlParser.parseComponent(busStopFigml);
+interface BusStopProps {
+  text: string,
+  visible: boolean,
+  rotation: number,
+  textLocation: 'left' | 'right' | 'top' | 'bottom',
+  align: FigmlFrameAlignment,
+  children: SceneNode[]
+}
+export function renderBusStop({ text, visible, rotation, textLocation, align, children }: BusStopProps): RenderResult {
+  return BUS_STOP_TEMPLATE.render({ text, visible, rotation, align, children }, { textLocation });
 }

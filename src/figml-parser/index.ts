@@ -32,10 +32,16 @@ export function renderNode(node: FigmlNode, props: FigmlProps): RenderResult {
 }
 
 export class FigmlRenderer {
-  static renderComponent(component: FigmlComponent, props: FigmlProps, variant: string): RenderResult {
-    const variantNode = component.variants[variant];
+  static renderComponent(component: FigmlComponent, props: FigmlProps, variantProps: Record<string, string>): RenderResult {
+    // Build variant key from variant props
+    const variantKey = Object.entries(variantProps)
+      .map(([key, value]) => `${key}:${value}`)
+      .join(',');
+
+    console.log("Rendering variant:", variantKey, "out of ", component.variants);
+    const variantNode = component.variants[variantKey];
     if (!variantNode) {
-      throw new Error(`Variant ${variant} not found`);
+      throw new Error(`Variant ${variantKey} not found`);
     }
 
     return renderNode(variantNode, props);

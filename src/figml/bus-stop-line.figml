@@ -1,13 +1,13 @@
 <component prop:text="1A" prop:color="#FF0000" prop:visible="true">
   <variant prop:facing="left">
     <frame name="Left bus stop line" align="left,center" width="hug" height="6" flow="horizontal" clip="false">
-      <import from="bus-line-dot.figml" prop:color=$$prop:color$$ prop:visible=$$prop:visible$$ />
-      <import from="bus-line-text.figml" prop:text=$$prop:text$$ prop:color=$$prop:color$$ prop:facing="left" />
+      <import from="bus-line-dot.figml" prop:color="$$prop:color$$" prop:visible="$$prop:visible$$" />
+      <import from="bus-line-text.figml" prop:text="$$prop:text$$" prop:color="$$prop:color$$" prop:facing="left" />
     </frame>
   </variant>
   <variant prop:facing="right">
     <frame name="Right bus stop line" align="right,center" width="hug" height="6" flow="horizontal" clip="false">
-      <import from="bus-line-text.figml" prop:text=$$prop:text$$ prop:color=$$prop:color$$ prop:facing="right" />
-      <import from="bus-line-dot.figml" prop:color=$$prop:color$$ prop:visible=$$prop:visible$$ />
+      <import from="bus-line-text.figml" prop:text="$$prop:text$$" prop:color="$$prop:color$$" prop:facing="right" />
+      <import from="bus-line-dot.figml" prop:color="$$prop:color$$" prop:visible="$$prop:visible$$" />
     </frame>
 </component>

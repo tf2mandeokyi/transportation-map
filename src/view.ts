@@ -5,7 +5,6 @@ import { LineSegmentRenderer } from "./renderer/line-segment-renderer";
 import { ErrorChain } from "./error";
 
 export class View {
-  private model?: Model;
   private stationRenderer: StationRenderer;
   private lineSegmentRenderer: LineSegmentRenderer;
 
@@ -15,7 +14,6 @@ export class View {
   }
 
   public setModel(model: Model): void {
-    this.model = model;
     this.stationRenderer.setModel(model);
   }
 
