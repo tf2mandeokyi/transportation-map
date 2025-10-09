@@ -35,25 +35,14 @@ export class Controller {
     figma.on('selectionchange', () => this.handleSelectionChange());
   }
 
-  private async handleUIMessage(msg: any): Promise<void> {
+  private handleUIMessage(msg: any): Promise<void> {
     switch (msg.type) {
-      case 'add-stop':
-        await this.handleAddStop(msg.stop);
-        break;
-      case 'add-line':
-        await this.handleAddLine(msg.line);
-        break;
-      case 'edit-line':
-        await this.handleEditLine(msg.lineName);
-        break;
-      case 'remove-line':
-        await this.handleRemoveLine(msg.lineName);
-        break;
-      case 'render-map':
-        await this.handleRenderMap(msg.rightHandTraffic);
-        break;
-      default:
-        console.log("Unknown message type:", msg.type);
+      case 'add-stop': return this.handleAddStop(msg.stop);
+      case 'add-line': return this.handleAddLine(msg.line);
+      case 'edit-line': return this.handleEditLine(msg.lineName);
+      case 'remove-line': return this.handleRemoveLine(msg.lineName);
+      case 'render-map': return this.handleRenderMap(msg.rightHandTraffic);
+      default: console.log("Unknown message type:", msg.type); return Promise.resolve();
     }
   }
 

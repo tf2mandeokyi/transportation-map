@@ -1,278 +1,39 @@
-import { Line, LineSegmentId, MapState, Station, StationId } from "./structures";
+import { MapState } from "./structures";
 import { Model } from "./model";
-import { FigmlComponent, FigmlParser } from "./figml-parser";
-import { figmlImportResolver } from "./figml/resources";
-import busStopFigml from "./figml/bus-stop.figml";
-import busStopLineFigml from "./figml/bus-stop-line.figml";
+import { StationRenderer } from "./station-renderer";
+import { LineSegmentRenderer } from "./line-segment-renderer";
 
 export class View {
-  private figmaStationMap: Map<StationId, SceneNode> = new Map();
-  private figmaLineSegmentMap: Map<LineSegmentId, SceneNode> = new Map();
-  private lineConnectionPoints: Map<string, {x: number, y: number}> = new Map();
   private model?: Model;
-  private busStopTemplate: FigmlComponent | null = null;
-  private busStopLineTemplate: FigmlComponent | null = null;
+  private stationRenderer: StationRenderer;
+  private lineSegmentRenderer: LineSegmentRenderer;
 
   constructor() {
-    FigmlParser.setImportResolver(figmlImportResolver);
-    this.loadTemplates();
+    this.stationRenderer = new StationRenderer();
+    this.lineSegmentRenderer = new LineSegmentRenderer(this.stationRenderer);
   }
 
   public setModel(model: Model): void {
     this.model = model;
-  }
-
-  private loadTemplates(): void {
-    try {
-      this.busStopTemplate = FigmlParser.parseComponent(busStopFigml);
-      this.busStopLineTemplate = FigmlParser.parseComponent(busStopLineFigml);
-      console.log('Figml templates loaded successfully');
-    } catch (error) {
-      console.error('Failed to load figml templates:', error);
-    }
+    this.stationRenderer.setModel(model);
   }
 
   public async render(state: Readonly<MapState>): Promise<void> {
-    // Clear old connection points since we're recalculating everything
-    for (const [key, value] of this.figmaLineSegmentMap.entries()) {
-      if (value && !value.removed) {
-        value.remove();
-      }
-      this.figmaLineSegmentMap.delete(key);
-    }
+    // Clear old line segments and connection points
+    this.lineSegmentRenderer.clearAllSegments();
+    this.stationRenderer.clearConnectionPoints();
 
     // First render all stations to calculate and store connection points
-    await Promise.all([...state.stations.values()].map(station => this.renderStation(station, state)));
+    await Promise.all([...state.stations.values()].map(station =>
+      this.stationRenderer.renderStation(station, state)
+    ));
 
-    // Then render ALL lines using the stored connection points (this updates existing lines too)
-    await Promise.all([...state.lines.values()].map(line => this.renderLine(line, state)));
+    // Then render ALL lines using the stored connection points (with bezier curves)
+    await Promise.all([...state.lines.values()].map(line =>
+      this.lineSegmentRenderer.renderLine(line, state.stations)
+    ));
 
-    // Finally, move all line segments to the back so they appear behind nodes
-    for (const node of this.figmaLineSegmentMap.values()) {
-      const parent = node.parent;
-      if (parent && 'insertChild' in parent) {
-        parent.insertChild(0, node);
-      }
-    }
-  }
-
-  private async renderStation(station: Station, state: Readonly<MapState>): Promise<void> {
-    let frame: FrameNode | null = null;
-    if (station.figmaNodeId) {
-      try { frame = await figma.getNodeByIdAsync(station.figmaNodeId) as FrameNode | null }
-      catch {}
-    }
-    if (!frame) {
-      frame = figma.createFrame();
-      frame.name = `Stop: ${station.name}`;
-      frame.layoutMode = 'HORIZONTAL';
-      frame.layoutSizingHorizontal = 'HUG';
-      frame.layoutSizingVertical = 'HUG';
-
-      this.figmaStationMap.set(station.id, frame);
-      figma.currentPage.appendChild(frame);
-      this.model?.updateStationFigmaNodeId(station.id, frame.id);
-    }
-
-    frame.fills = [];
-    frame.clipsContent = false;
-
-    // Clear existing children and rebuild
-    frame.children.forEach(child => child.remove());
-
-    // Position frame so that station.position is at the center
-    frame.x = station.position.x - frame.width / 2;
-    frame.y = station.position.y - frame.height / 2;
-
-    // Use figml template to render the bus stop
-    await this.renderBusStopWithTemplate(frame, station, state);
-  }
-
-  private async renderBusStopWithTemplate(parentFrame: FrameNode, station: Station, state: Readonly<MapState>): Promise<void> {
-    if (!this.busStopTemplate || !this.busStopLineTemplate) {
-      console.warn('Templates not loaded, falling back to basic rendering');
-      return;
-    }
-
-    const isRightHandTraffic = this.model?.isRightHandTraffic() || true;
-
-    // Determine text location based on orientation and traffic direction
-    let textLocation = this.getTextLocation(station.orientation, isRightHandTraffic);
-    let rotation = this.getRotation(station.orientation);
-
-    // Get bus lines for this station
-    const busLines = this.getBusLinesForStation(station, state);
-
-    // Render individual bus lines using the bus-stop-line template in parallel
-    const facing = this.getLineFacing(station.orientation);
-    const lineRenderResults = busLines
-      .map(busLine => this.busStopLineTemplate!.render(
-        { text: busLine.line.name, color: busLine.line.color, visible: busLine.stopsAt },
-        `facing:${facing}`
-      ));
-
-    const children = await Promise.all(lineRenderResults.map(result => result.intoNode()));
-
-    // Render the bus stop container using the bus-stop template
-    const busStopElement = await this.busStopTemplate.render(
-      { text: station.name, visible: !station.hidden, rotation, children },
-      `textLocation:${textLocation}`
-    ).intoNode();
-
-    parentFrame.appendChild(busStopElement);
-
-    // After rendering, calculate and store the absolute center position of each line's dot
-    this.storeLineConnectionPoints(parentFrame, station, busLines);
-  }
-
-  private getTextLocation(orientation: string, isRightHandTraffic: boolean): string {
-    switch (orientation) {
-      case 'left': return isRightHandTraffic ? 'bottom' : 'top';
-      case 'right': return isRightHandTraffic ? 'top' : 'bottom';
-      case 'up': return isRightHandTraffic ? 'right' : 'left';
-      case 'down': return isRightHandTraffic ? 'left' : 'right';
-      default: return 'top';
-    }
-  }
-
-  private getRotation(orientation: string): number {
-    switch (orientation) {
-      case 'up':
-      case 'down':
-        return 270; // Rotate 270 degrees for vertical orientations
-      default:
-        return 0;
-    }
-  }
-
-  private getLineFacing(orientation: string): string {
-    switch (orientation) {
-      case 'left':
-      case 'down':
-        return 'left';
-      case 'right':
-      case 'up':
-        return 'right';
-      default:
-        return 'right';
-    }
-  }
-
-  private getBusLinesForStation(station: Station, state: Readonly<MapState>): Array<{line: Line, stopsAt: boolean}> {
-    if (!this.model) return [];
-
-    const linesAtNode = this.model.getLineStackingOrderForStation(station.id);
-    return linesAtNode.map(lineId => {
-      const line = state.lines.get(lineId);
-      const lineInfo = station.lines.get(lineId);
-      return {
-        line: line!,
-        stopsAt: lineInfo?.stopsAt || false
-      };
-    }).filter(line => line.line);
-  }
-
-  private storeLineConnectionPoints(parentFrame: FrameNode, station: Station, busLines: Array<{line: Line, stopsAt: boolean}>) {
-    // Find the bus stop content frame (should be the first child of parentFrame)
-    if (parentFrame.children.length === 0) return;
-
-    const busStopContainer = parentFrame.children[0] as FrameNode;
-
-    // Navigate to find the bus-stop-content frame and then its children container
-    // Structure: busStopContainer -> bus-stop-content -> [rectangle, frame with children]
-    const findContentFrame = (node: SceneNode): FrameNode | null => {
-      if (node.name === "Bus stop content" && 'children' in node) {
-        return node as FrameNode;
-      }
-      if ('children' in node) {
-        for (const child of (node as FrameNode).children) {
-          const result = findContentFrame(child);
-          if (result) return result;
-        }
-      }
-      return null;
-    };
-
-    const busStopContentFrame = findContentFrame(busStopContainer);
-    if (!busStopContentFrame || busStopContentFrame.children.length < 2) return;
-
-    // The second child is the frame containing the line elements
-    const linesContainerFrame = busStopContentFrame.children[1] as FrameNode;
-    if (!linesContainerFrame || !('children' in linesContainerFrame)) return;
-
-    // Each child in linesContainerFrame corresponds to a bus line element
-    const lineElements = linesContainerFrame.children;
-
-    for (let i = 0; i < Math.min(lineElements.length, busLines.length); i++) {
-      const lineElement = lineElements[i] as FrameNode;
-      const busLine = busLines[i];
-
-      // Get absolute position of the line element's center
-      const absoluteX = lineElement.absoluteTransform[0][2] + lineElement.width / 2;
-      const absoluteY = lineElement.absoluteTransform[1][2] + lineElement.height / 2;
-
-      // Store the connection point
-      const key = `${station.id}-${busLine.line.id}`;
-      this.lineConnectionPoints.set(key, { x: absoluteX, y: absoluteY });
-    }
-  }
-
-  private async renderLine(line: Line, state: Readonly<MapState>): Promise<void> {
-    // Draw straight line segments between consecutive nodes in the line's path
-    for (let i = 0; i < line.path.length - 1; i++) {
-      const startStationId = line.path[i];
-      const endStationId = line.path[i + 1];
-
-      const startStation = state.stations.get(startStationId);
-      const endStation = state.stations.get(endStationId);
-
-      if (!startStation || !endStation) continue;
-
-      this.renderLineSegment(line, startStation, endStation);
-    }
-  }
-
-  private renderLineSegment(line: Line, startStation: Station, endStation: Station) {
-    // Create a unique ID for this line segment
-    const segmentId = `${line.id}:${startStation.id}-${endStation.id}` as LineSegmentId;
-
-    // Check if line already exists, otherwise create new one
-    let lineNode = this.figmaLineSegmentMap.get(segmentId) as VectorNode | undefined;
-
-    if (!lineNode) {
-      lineNode = figma.createVector();
-      lineNode.name = `Line: ${line.name} (${startStation.id} → ${endStation.id})`;
-      this.figmaLineSegmentMap.set(segmentId, lineNode);
-      figma.currentPage.appendChild(lineNode);
-    }
-
-    // Get the stored connection points for this line at both nodes
-    const startKey = `${startStation.id}-${line.id}`;
-    const endKey = `${endStation.id}-${line.id}`;
-
-    const startPoint = this.lineConnectionPoints.get(startKey);
-    const endPoint = this.lineConnectionPoints.get(endKey);
-
-    if (!startPoint || !endPoint) {
-      console.warn(`Missing connection points for line ${line.id} (${line.name})`
-        + ` between ${startStation.id} (${startStation.name})`
-        + ` and ${endStation.id} (${endStation.name})`);
-      return;
-    }
-
-    // Build vector path (simple straight line using absolute coordinates)
-    lineNode.vectorPaths = [{
-      windingRule: 'NONZERO',
-      data: `M ${startPoint.x} ${startPoint.y} L ${endPoint.x} ${endPoint.y}`
-    }];
-
-    // Apply line styling
-    lineNode.strokes = [{
-      type: 'SOLID',
-      color: line.color
-    }];
-    lineNode.strokeWeight = 3;
-    lineNode.strokeCap = 'ROUND';
-    lineNode.strokeJoin = 'ROUND';
+    // Finally, move all line segments to the back so they appear behind stations
+    this.lineSegmentRenderer.moveSegmentsToBack();
   }
 }
