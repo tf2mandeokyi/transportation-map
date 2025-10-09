@@ -1,0 +1,100 @@
+import { UIToPluginMessage } from "../../common/messages";
+import { FigmaApi } from "../figma";
+import { Model } from "../model";
+import { LineId, StationId } from "../structures";
+import { View } from "../view";
+import { ConnectionController } from "./connection-controller";
+import { LineController } from "./line-controller";
+import { RenderController } from "./render-controller";
+import { StationController } from "./station-controller";
+
+export class Controller {
+  private model: Model;
+  private view: View;
+  private stationController: StationController;
+  private lineController: LineController;
+  private connectionController: ConnectionController;
+  private renderController: RenderController;
+
+  constructor(model: Model, view: View) {
+    this.model = model;
+    this.view = view;
+
+    // Initialize sub-controllers
+    this.stationController = new StationController(model, view);
+    this.lineController = new LineController(model, view);
+    this.connectionController = new ConnectionController(model, view);
+    this.renderController = new RenderController(model, view);
+  }
+
+  public async render(): Promise<void> {
+    await this.view.render(this.model.getState());
+  }
+
+  public async save(): Promise<void> {
+    await this.model.save();
+  }
+
+  public async refresh(): Promise<void> {
+    await this.render();
+    await this.save();
+    this.syncLinesToUI();
+  }
+
+  public async initialize(): Promise<void> {
+    console.log("Controller initialized. Listening for user actions.");
+
+    // Listen for UI messages
+    FigmaApi.setMessageHandler(async (msg) => {
+      try {
+        await this.handleUIMessage(msg);
+      } catch (error) {
+        console.error("Error handling UI message:", error);
+      }
+    });
+
+    // Load all pages before setting up document change handler
+    try {
+      await figma.loadAllPagesAsync();
+      figma.on('documentchange', (event) =>
+        this.renderController.handleDocumentChange(event).catch(console.error)
+      );
+    } catch (error) {
+      console.warn("Could not load all pages or set up document change handler:", error);
+    }
+
+    // Listen for Figma events
+    figma.on('selectionchange', () => this.connectionController.handleSelectionChange());
+  }
+
+  private handleUIMessage(msg: UIToPluginMessage): Promise<void> {
+    switch (msg.type) {
+      case 'add-stop': return this.stationController.handleAddStop(msg.stop);
+      case 'add-line': return this.lineController.handleAddLine(msg.line);
+      case 'edit-line': return this.lineController.handleEditLine(msg.lineId);
+      case 'remove-line': return this.lineController.handleRemoveLine(msg.lineId);
+      case 'render-map': return this.renderController.handleRenderMap(msg.rightHandTraffic);
+      case 'connect-stations-to-line': return this.connectionController.handleConnectStationsToLine(msg.lineId, msg.stationIds, msg.stopsAt);
+      case 'start-adding-stations-mode': return this.connectionController.handleStartAddingStationsMode(msg.lineId);
+      case 'stop-adding-stations-mode': return this.connectionController.handleStopAddingStationsMode();
+      case 'get-line-path': return this.connectionController.handleGetLinePath(msg.lineId);
+      case 'remove-station-from-line': return this.connectionController.handleRemoveStationFromLine(msg.lineId, msg.stationId);
+      case 'set-line-stops-at-station': return this.connectionController.handleSetLineStopsAtStation(msg.lineId, msg.stationId, msg.stopsAt);
+    }
+  }
+
+  // Public API for creating stations (used by demo map)
+  public createStation(name: string, position: { x: number; y: number }, hidden: boolean = false, orientation: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT' = 'RIGHT'): StationId {
+    return this.stationController.createStation(name, position, hidden, orientation);
+  }
+
+  // Public API for connecting stations (used by demo map)
+  public connectStationsWithLine(lineId: LineId, startStationId: StationId, endStationId: StationId, stopsAtStart: boolean = true, stopsAtEnd: boolean = true): void {
+    this.connectionController.connectStationsWithLine(lineId, startStationId, endStationId, stopsAtStart, stopsAtEnd);
+  }
+
+  // Public API for syncing lines to UI (used on load)
+  public syncLinesToUI(): void {
+    this.lineController.syncLinesToUI();
+  }
+}

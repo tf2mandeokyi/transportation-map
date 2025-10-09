@@ -1,4 +1,4 @@
-import { Controller } from "./controller";
+import { Controller } from "./controllers";
 import { Model } from "./model";
 import { View } from "./view";
 
@@ -31,9 +31,6 @@ async function main() {
   } else {
     // Render existing map
     await controller.render();
-
-    // Sync existing lines to UI
-    controller.syncLinesToUI();
   }
 
   figma.viewport.scrollAndZoomIntoView(figma.currentPage.children);
