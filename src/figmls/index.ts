@@ -27,11 +27,12 @@ const BUS_STOP_LINE_TEMPLATE = FigmlParser.parseComponent(busStopLineFigml);
 interface BusStopLineProps {
   text: string,
   color: RGB,
+  stops: boolean,
   visible: boolean,
   facing: 'left' | 'right'
 }
-export function renderBusStopLine({ text, color, visible, facing }: BusStopLineProps): RenderResult {
-  return BUS_STOP_LINE_TEMPLATE.render({ text, color, visible }, { facing });
+export function renderBusStopLine({ text, color, stops, visible, facing }: BusStopLineProps): RenderResult {
+  return BUS_STOP_LINE_TEMPLATE.render({ text, color, stops, visible }, { facing });
 }
 
 const BUS_STOP_TEMPLATE = FigmlParser.parseComponent(busStopFigml);

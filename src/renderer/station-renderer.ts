@@ -1,8 +1,7 @@
 import { Line, MapState, Station, StationId, StationOrientation } from "../structures";
 import { Model } from "../model";
-import { renderBusStop, renderBusStopLine } from "../figml/resources";
+import { renderBusStop, renderBusStopLine } from "../figmls";
 import { ErrorChain } from "../error";
-import { FigmlAlignment } from "../figml-parser/types";
 
 export interface ConnectionPoints {
   head: {x: number, y: number},
@@ -68,7 +67,8 @@ export class StationRenderer {
       renderBusStopLine({
         text: busLine.line.name,
         color: busLine.line.color,
-        visible: busLine.stopsAt,
+        stops: busLine.stopsAt,
+        visible: !station.hidden,
         facing: stopLineFacing
       })
       .intoNode()
