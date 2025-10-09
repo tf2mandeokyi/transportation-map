@@ -14,6 +14,36 @@ export class Controller {
     this.view = view;
   }
 
+  public async render(): Promise<void> {
+    await this.view.render(this.model.getState());
+  }
+
+  public async save(): Promise<void> {
+    // For now, just log the state - in a full implementation you'd save to persistent storage
+    console.log("Saving model state:", this.model.toJSON());
+    await this.model.save();
+  }
+
+  // Re-render the map and save the model state
+  public async refresh(): Promise<void> {
+    await this.render();
+    await this.save();
+  }
+
+  // Sync existing lines to the UI (used when loading saved data)
+  public syncLinesToUI(): void {
+    const state = this.model.getState();
+    for (const line of state.lines.values()) {
+      const hexColor = this.rgbToHex(line.color);
+      FigmaApi.postMessage({
+        type: 'line-added',
+        lineId: line.id,
+        name: line.name,
+        color: hexColor
+      });
+    }
+  }
+
   public async initialize(): Promise<void> {
     console.log("Controller initialized. Listening for user actions.");
 
@@ -67,7 +97,7 @@ export class Controller {
     }
 
     this.createStation(name, position, hidden, orientation);
-    await this.view.render(this.model.getState());
+    await this.refresh();
 
     FigmaApi.postMessage({ type: 'stop-added' });
   }
@@ -78,7 +108,7 @@ export class Controller {
     const rgb = this.hexToRgb(color);
 
     const lineId = this.model.addLine({ name, color: rgb, path: [] });
-    await this.view.render(this.model.getState());
+    await this.refresh();
 
     // Send the line ID back to the UI so it can store it
     FigmaApi.postMessage({
@@ -97,12 +127,12 @@ export class Controller {
 
   private async handleRemoveLine(lineId: string): Promise<void> {
     this.model.removeLine(lineId as LineId);
-    await this.view.render(this.model.getState());
+    await this.refresh();
   }
 
   private async handleRenderMap(rightHandTraffic: boolean): Promise<void> {
     this.model.setTrafficDirection(rightHandTraffic);
-    await this.view.render(this.model.getState());
+    await this.refresh();
   }
 
   private hexToRgb(hex: string): RGB {
@@ -112,6 +142,14 @@ export class Controller {
       g: parseInt(result[2], 16) / 255,
       b: parseInt(result[3], 16) / 255
     } : { r: 1, g: 0, b: 0 }; // Default to red
+  }
+
+  private rgbToHex(rgb: RGB): string {
+    const toHex = (value: number) => {
+      const hex = Math.round(value * 255).toString(16);
+      return hex.length === 1 ? '0' + hex : hex;
+    };
+    return `#${toHex(rgb.r)}${toHex(rgb.g)}${toHex(rgb.b)}`;
   }
 
   private handleSelectionChange(): void {
@@ -200,7 +238,7 @@ export class Controller {
     }
 
     // Re-render the map with updated connections
-    await this.view.render(this.model.getState());
+    await this.refresh();
 
     // Notify UI of success
     FigmaApi.postMessage({ type: 'stations-connected' });
@@ -253,7 +291,7 @@ export class Controller {
     this.model.removeStationFromLine(lineId as LineId, stationId as StationId);
 
     // Re-render the map
-    await this.view.render(this.model.getState());
+    await this.refresh();
 
     // Notify UI
     FigmaApi.postMessage({
@@ -265,7 +303,7 @@ export class Controller {
     this.model.setLineStopsAtStation(lineId as LineId, stationId as StationId, stopsAt);
 
     // Re-render the map
-    await this.view.render(this.model.getState());
+    await this.refresh();
 
     // Send updated line path data
     await this.handleGetLinePath(lineId);

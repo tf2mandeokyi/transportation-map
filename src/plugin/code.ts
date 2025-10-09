@@ -7,20 +7,39 @@ async function main() {
 
   console.log("Bus Map Generator Initialized!");
 
-  const model = new Model();
+  // Try to load existing map data from document
+  let model = await Model.load();
+
+  if (model) {
+    console.log("Loaded existing map data from document: ", model);
+  } else {
+    console.log("No existing map data found, creating new model");
+    model = new Model();
+  }
+
   const view = new View();
   view.setModel(model); // Link model to view for stacking calculations
   const controller = new Controller(model, view);
 
   await controller.initialize();
 
-  // Create some demo content to show functionality
-  await createDemoMap(controller, model, view);
+  // Only create demo map if this is a fresh model with no data
+  const hasExistingData = model.getState().stations.size > 0 || model.getState().lines.size > 0;
+  if (!hasExistingData) {
+    console.log("Creating demo map");
+    await createDemoMap(controller, model);
+  } else {
+    // Render existing map
+    await controller.render();
+
+    // Sync existing lines to UI
+    controller.syncLinesToUI();
+  }
 
   figma.viewport.scrollAndZoomIntoView(figma.currentPage.children);
 }
 
-async function createDemoMap(controller: Controller, model: Model, view: View) {
+async function createDemoMap(controller: Controller, model: Model) {
   // Create demo bus stops with different orientations
   const s1 = controller.createStation('Central Station', { x: 200, y: 200 }, false, 'RIGHT'); // Facing right
   const s2 = controller.createStation('Park Ave', { x: 450, y: 350 }, false, 'RIGHT'); // Facing right
@@ -67,7 +86,7 @@ async function createDemoMap(controller: Controller, model: Model, view: View) {
   model.addStationToLine(blueLine, s2, false);
 
   // Render the complete map
-  await view.render(model.getState());
+  controller.refresh();
 }
 
 // Start the plugin
