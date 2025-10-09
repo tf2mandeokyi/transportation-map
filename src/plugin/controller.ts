@@ -19,8 +19,6 @@ export class Controller {
   }
 
   public async save(): Promise<void> {
-    // For now, just log the state - in a full implementation you'd save to persistent storage
-    console.log("Saving model state:", this.model.toJSON());
     await this.model.save();
   }
 

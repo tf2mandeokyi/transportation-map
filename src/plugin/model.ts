@@ -1,5 +1,6 @@
 import { StationOrientation } from "../common/messages";
 import { Line, LineId, MapState, Station, StationId, Vector } from "./structures";
+import { deserializeMapState, serializeMapState } from "./serde";
 
 function generateBase62(length: number): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -197,54 +198,10 @@ export class Model {
     }
   }
 
-  // Serialize state to JSON-compatible format for pluginData storage
-  public toJSON() {
-    const stations = Array.from(this.state.stations.entries()).map(([_, station]) => ({
-      ...station,
-      lines: Array.from(station.lines.entries())
-    }));
-
-    const lines = Array.from(this.state.lines.entries()).map(([_, line]) => ({
-      ...line
-    }));
-
-    return {
-      stations,
-      lines,
-      lineStackingOrder: this.state.lineStackingOrder,
-      rightHandTraffic: this.rightHandTraffic
-    };
-  }
-
-  // Deserialize state from JSON (loaded from pluginData)
-  public static fromJSON(data: any): Model {
-    const stations = new Map<StationId, Station>();
-    for (const stationData of data.stations || []) {
-      const { id, lines: linesArray, ...rest } = stationData;
-      const lines = new Map(linesArray);
-      stations.set(id, { id, lines, ...rest });
-    }
-
-    const lines = new Map<LineId, Line>();
-    for (const lineData of data.lines || []) {
-      lines.set(lineData.id, lineData);
-    }
-
-    const model = new Model({
-      stations,
-      lines,
-      lineStackingOrder: data.lineStackingOrder || []
-    });
-
-    model.setTrafficDirection(data.rightHandTraffic ?? true);
-
-    return model;
-  }
-
   // Save the model state to Figma's pluginData (stored in the document)
   public async save(): Promise<void> {
-    const data = JSON.stringify(this.toJSON());
-    figma.root.setPluginData('mapState', data);
+    const serialized = serializeMapState(this.state, this.rightHandTraffic);
+    figma.root.setPluginData('mapState', serialized);
   }
 
   // Load the model state from Figma's pluginData
@@ -252,12 +209,12 @@ export class Model {
     const data = figma.root.getPluginData('mapState');
     if (!data) return null;
 
-    try {
-      const parsed = JSON.parse(data);
-      return Model.fromJSON(parsed);
-    } catch (error) {
-      console.error('Failed to load map state:', error);
-      return null;
-    }
+    const deserialized = deserializeMapState(data);
+    if (!deserialized) return null;
+
+    const model = new Model(deserialized.state);
+    model.setTrafficDirection(deserialized.rightHandTraffic);
+
+    return model;
   }
 }
