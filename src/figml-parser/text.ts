@@ -10,7 +10,8 @@ export class TextRenderer extends BaseRenderer {
       BaseRenderer.applyCommonAttributes(text, node.attributes, props);
       await this.applyTextAttributes(text, node.attributes, props);
 
-      let content = node.content || node.attributes.text || StringTemplate.fromRaw('');
+      let content = node.content || node.attributes.text;
+      if (!content) throw new Error("Text node must have content or text attribute");
       text.characters = content.interpolate(props);
     });
   }

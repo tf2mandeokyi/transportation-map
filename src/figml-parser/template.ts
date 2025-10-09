@@ -1,6 +1,6 @@
 import { FigmlProps } from "./types";
 
-function isRgbObject(value: any): value is RGB {
+export function isRgbObject(value: any): value is RGB {
   return value && typeof value.r === 'number' && typeof value.g === 'number' && typeof value.b === 'number';
 }
 
@@ -37,7 +37,7 @@ export class StringTemplate {
     this.templates = templates;
   }
 
-  onlyHasChildren(): boolean {
+  onlyHasChildrenTemplate(): boolean {
     return this.raws.length === 2
       && this.raws[0].trim() === ''
       && this.raws[1].trim() === ''

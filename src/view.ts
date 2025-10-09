@@ -2,6 +2,7 @@ import { MapState } from "./structures";
 import { Model } from "./model";
 import { StationRenderer } from "./renderer/station-renderer";
 import { LineSegmentRenderer } from "./renderer/line-segment-renderer";
+import { ErrorChain } from "./error";
 
 export class View {
   private model?: Model;
@@ -26,11 +27,13 @@ export class View {
     // First render all stations to calculate and store connection points
     await Promise.all([...state.stations.values()].map(station =>
       this.stationRenderer.renderStation(station, state)
+        .catch(e => { throw new ErrorChain(`Error rendering station ${station.name}`, e) })
     ));
 
     // Then render ALL lines using the stored connection points (with bezier curves)
     await Promise.all([...state.lines.values()].map(line =>
       this.lineSegmentRenderer.renderLine(line, state.stations)
+        .catch(e => { throw new ErrorChain(`Error rendering line ${line.name}`, e) })
     ));
 
     // Finally, move all line segments to the back so they appear behind stations

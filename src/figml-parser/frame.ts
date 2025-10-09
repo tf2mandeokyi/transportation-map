@@ -2,7 +2,7 @@ import { FigmlNode, FigmlProps } from './types';
 import { BaseRenderer } from './base';
 import { renderNode } from '.';
 import { RenderResult } from './result';
-import { StringTemplate } from './template';
+import { isRgbObject, StringTemplate } from './template';
 
 export class FrameRenderer extends BaseRenderer {
   render(node: FigmlNode, props: FigmlProps): RenderResult {
@@ -10,19 +10,24 @@ export class FrameRenderer extends BaseRenderer {
     const children: RenderResult[] = [];
 
     // Handle special case for children prop
-    if (node.content?.onlyHasChildren() && props.children) {
-      if (Array.isArray(props.children)) {
-        for (const child of props.children) {
+    if (node.content?.onlyHasChildrenTemplate() && props.children) {
+      const children = props.children;
+      if (Array.isArray(children)) {
+        for (const child of children) {
           frame.appendChild(child);
         }
+      } else if (typeof children === 'number' || typeof children === 'string' || typeof children === 'boolean' || isRgbObject(children)) {
+        throw new Error("Invalid type for children prop: " + typeof children);
       } else {
-        frame.appendChild(props.children);
+        frame.appendChild(children);
       }
-    } else {
+    } else if (node.children.length > 0) {
       // Render normal children but defer appendChild
       for (const child of node.children) {
         children.push(renderNode(child, props));
       }
+    } else {
+      throw new Error(`Frame node must have either children or content with only $$prop:children$$`);
     }
 
     return RenderResult.newFrameNode(frame, children, () => {

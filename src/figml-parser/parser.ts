@@ -117,13 +117,11 @@ export class FigmlParser {
     }
 
     const result: FigmlNode = {
-      tag: tag,
-      attributes: attributes,
-      children: []
+      tag, attributes, children: []
     };
 
     if (xmlNode['#text']) {
-      result.content = xmlNode['#text'];
+      result.content = StringTemplate.parseDollarTemplates(xmlNode['#text']);
     }
 
     for (const [key, value] of Object.entries(xmlNode)) {

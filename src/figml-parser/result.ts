@@ -1,10 +1,12 @@
+import { ErrorChain } from "../error";
+
 export class RenderResult {
   private readonly node: SceneNode;
-  private readonly render: () => void | Promise<void>;
+  private readonly render: () => Promise<void>;
 
   private constructor(node: SceneNode, render: () => void | Promise<void>) {
     this.node = node;
-    this.render = render;
+    this.render = async () => await render();
   }
 
   static newNode(node: SceneNode, render: () => void | Promise<void>): RenderResult {
@@ -17,7 +19,9 @@ export class RenderResult {
     }
     return new RenderResult(node, async () => {
       await render();
-      await Promise.all(children.map(c => c.render()));
+      await Promise.all(children.map(c =>
+        c.render().catch(e => { throw new ErrorChain(`Error rendering child node ${c.node.type} of frame ${node.name}`, e) })
+      ));
     });
   }
 

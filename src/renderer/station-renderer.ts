@@ -4,6 +4,7 @@ import { FigmlComponent, FigmlParser } from "../figml-parser";
 import { figmlImportResolver } from "../figml/resources";
 import busStopFigml from "../figml/bus-stop.figml";
 import busStopLineFigml from "../figml/bus-stop-line.figml";
+import { ErrorChain } from "../error";
 
 export interface ConnectionPoints {
   head: {x: number, y: number},
@@ -85,14 +86,15 @@ export class StationRenderer {
 
     // Render individual bus lines using the bus-stop-line template in parallel
     const facing = this.getLineFacing(station.orientation);
-    const lineRenderResults = busLines
-      .map(busLine => this.busStopLineTemplate!.render({
+    const children = await Promise.all(busLines.map(busLine =>
+      this.busStopLineTemplate!.render({
         text: busLine.line.name,
         color: busLine.line.color,
         visible: busLine.stopsAt
-      }, `facing:${facing}`));
-
-    const children = await Promise.all(lineRenderResults.map(result => result.intoNode()));
+      }, `facing:${facing}`)
+      .intoNode()
+      .catch(e => { throw new ErrorChain(`Error rendering line ${busLine.line.name} at station ${station.name}`, e) })
+    ));
 
     // Render the bus stop container using the bus-stop template
     const busStopElement = await this.busStopTemplate.render({

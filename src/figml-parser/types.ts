@@ -2,7 +2,7 @@ import { FigmlRenderer } from ".";
 import { RenderResult } from "./result";
 import { StringTemplate } from "./template";
 
-export type FigmlProps = Record<Exclude<string, 'children'>, any> & { children?: SceneNode | SceneNode[] };
+export type FigmlProps = Record<string, string | number | boolean | RGB | SceneNode | SceneNode[]>;
 
 export interface FigmlNode {
   tag: string;
