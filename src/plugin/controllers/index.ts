@@ -84,12 +84,18 @@ export class Controller {
       case 'update-station': return this.stationController.handleUpdateStation(msg.stationId, msg.name, msg.orientation, msg.hidden);
       case 'remove-line-from-station': return this.stationController.handleRemoveLineFromStation(msg.stationId, msg.lineId);
       case 'clear-plugin-data': return this.handleClearPluginData();
+      case 'request-initial-data': return this.handleRequestInitialData();
     }
   }
 
   private async handleClearPluginData(): Promise<void> {
     figma.root.setPluginData('mapState', '');
     figma.closePlugin('Plugin data cleared. Please reopen the plugin.');
+  }
+
+  private async handleRequestInitialData(): Promise<void> {
+    // Send all existing lines to the UI
+    this.syncLinesToUI();
   }
 
   // Public API for creating stations (used by demo map)

@@ -56,21 +56,31 @@ const App: React.FC = () => {
 
       switch (msg.type) {
         case 'line-added':
-          setLines(prev => [...prev, msg]);
+          setLines(prev => {
+            // Check if line already exists to avoid duplicates
+            const exists = prev.some(line => line.id === msg.id);
+            if (exists) {
+              return prev;
+            }
+            return [...prev, msg];
+          });
           break;
 
         case 'station-clicked':
-          if (isAddingStations) {
-            // Allow adding the same station multiple times for circular routes
-            setStationPath(prev => [...prev, msg.stationId]);
-            setStationPathNames(prev => [...prev, msg.stationName]);
-          } else {
-            // Not in adding stations mode, so this is a station edit request
-            postMessageToPlugin({
-              type: 'get-station-info',
-              stationId: msg.stationId
-            });
-          }
+          setIsAddingStations(current => {
+            if (current) {
+              // Allow adding the same station multiple times for circular routes
+              setStationPath(prev => [...prev, msg.stationId]);
+              setStationPathNames(prev => [...prev, msg.stationName]);
+            } else {
+              // Not in adding stations mode, so this is a station edit request
+              postMessageToPlugin({
+                type: 'get-station-info',
+                stationId: msg.stationId
+              });
+            }
+            return current;
+          });
           break;
 
         case 'station-info':
@@ -94,12 +104,15 @@ const App: React.FC = () => {
 
         case 'station-removed-from-line':
           // Refresh the current line path if we're editing
-          if (currentEditingLineId) {
-            postMessageToPlugin({
-              type: 'get-line-path',
-              lineId: currentEditingLineId
-            });
-          }
+          setCurrentEditingLineId(current => {
+            if (current) {
+              postMessageToPlugin({
+                type: 'get-line-path',
+                lineId: current
+              });
+            }
+            return current;
+          });
           break;
 
         case 'stations-connected':
@@ -111,7 +124,10 @@ const App: React.FC = () => {
           break;
       }
     };
-  }, [isAddingStations, stationPath, currentEditingLineId]);
+
+    // Request initial line data when UI is ready
+    postMessageToPlugin({ type: 'request-initial-data' });
+  }, []); // Empty dependency array - only run once on mount
 
   const handleRemoveLine = (lineId: LineId) => {
     setLines(prev => prev.filter(line => line.id !== lineId));

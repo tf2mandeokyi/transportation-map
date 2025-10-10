@@ -16,7 +16,8 @@ export type UIToPluginMessage =
   | { type: 'get-station-info'; stationId: StationId }
   | { type: 'update-station'; stationId: StationId; name: string; orientation: StationOrientation; hidden: boolean }
   | { type: 'remove-line-from-station'; stationId: StationId; lineId: LineId }
-  | { type: 'clear-plugin-data' };
+  | { type: 'clear-plugin-data' }
+  | { type: 'request-initial-data' };
 
 export type LineData = { id: LineId; name: string; color: string };
 export type LineAtStationData = LineData & { stopsAt: boolean };
