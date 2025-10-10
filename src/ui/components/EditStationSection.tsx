@@ -19,19 +19,28 @@ const EditStationSection: React.FC<Props> = ({ messageManagerRef }) => {
   const [orientation, setOrientation] = useState<StationOrientation>('RIGHT');
   const [hidden, setHidden] = useState(false);
 
-  messageManagerRef.current.onMessage('station-info', msg => {
-    setStationId(msg.stationId);
-    setStationName(msg.stationName);
-    setStationOrientation(msg.orientation);
-    setStationHidden(msg.hidden);
-    setLinesAtStation(msg.lines);
-  });
+  // Set up message listeners once on mount
+  useEffect(() => {
+    const unsubscribe1 = messageManagerRef.current.onMessage('station-info', msg => {
+      setStationId(msg.stationId);
+      setStationName(msg.stationName);
+      setStationOrientation(msg.orientation);
+      setStationHidden(msg.hidden);
+      setLinesAtStation(msg.lines);
+    });
 
-  messageManagerRef.current.onMessage('toggle-stops-at', msg => {
-    setLinesAtStation(prev => prev.map(line =>
-      line.id === msg.lineId ? { ...line, stopsAt: msg.stopsAt } : line
-    ));
-  });
+    const unsubscribe2 = messageManagerRef.current.onMessage('toggle-stops-at', msg => {
+      setLinesAtStation(prev => prev.map(line =>
+        line.id === msg.lineId ? { ...line, stopsAt: msg.stopsAt } : line
+      ));
+    });
+
+    // Cleanup
+    return () => {
+      unsubscribe1();
+      unsubscribe2();
+    };
+  }, []);
 
   const onClose = () => {
     setStationId(null);

@@ -40,22 +40,23 @@ const App: React.FC = () => {
 
   const messageManagerRef = useRef(new FigmaPluginMessageManager());
 
-  messageManagerRef.current.onMessage('line-added', msg => {
-    setLines(prev => {
-      // Check if line already exists to avoid duplicates
-      const exists = prev.some(line => line.id === msg.id);
-      if (exists) {
-        return prev;
-      }
-      return [...prev, msg];
-    });
-  });
-
-  messageManagerRef.current.onMessage('stop-added', () => {
-    // Stop was successfully added
-  });
-
   useEffect(() => {
+    // Set up message listeners
+    const unsubscribe1 = messageManagerRef.current.onMessage('line-added', msg => {
+      setLines(prev => {
+        // Check if line already exists to avoid duplicates
+        const exists = prev.some(line => line.id === msg.id);
+        if (exists) {
+          return prev;
+        }
+        return [...prev, msg];
+      });
+    });
+
+    const unsubscribe2 = messageManagerRef.current.onMessage('stop-added', () => {
+      // Stop was successfully added
+    });
+
     // Listen for messages from the plugin
     window.onmessage = (event) => {
       const msg: PluginToUIMessage = event.data.pluginMessage;
@@ -64,6 +65,12 @@ const App: React.FC = () => {
 
     // Request initial line data when UI is ready
     postMessageToPlugin({ type: 'request-initial-data' });
+
+    // Cleanup
+    return () => {
+      unsubscribe1();
+      unsubscribe2();
+    };
   }, []); // Empty dependency array - only run once on mount
 
   const handleRemoveLine = (lineId: LineId) => {
