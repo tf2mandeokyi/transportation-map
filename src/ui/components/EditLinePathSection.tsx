@@ -135,19 +135,21 @@ const EditLinePathSection: React.FC<Props> = ({
     }
   };
 
-  const handleRemoveStation = (lineId: LineId, stationId: StationId) => {
+  const handleRemoveStation = (lineId: LineId, stationId: StationId, lineIndex: number) => {
     postMessageToPlugin({
       type: 'remove-station-from-line',
       lineId,
-      stationId
+      stationId,
+      lineIndex
     });
   };
 
-  const handleToggleStopsAt = (lineId: LineId, stationId: StationId, currentStopsAt: boolean) => {
+  const handleToggleStopsAt = (lineId: LineId, stationId: StationId, lineIndex: number, currentStopsAt: boolean) => {
     postMessageToPlugin({
       type: 'set-line-stops-at-station',
       lineId,
       stationId,
+      lineIndex,
       stopsAt: !currentStopsAt
     });
   };
@@ -267,8 +269,8 @@ const EditLinePathSection: React.FC<Props> = ({
                       name={linePathData.stationNames[index]}
                       index={index}
                       stopsAt={linePathData.stopsAt[index]}
-                      onToggleStopsAt={() => handleToggleStopsAt(linePathData.lineId, stationId, linePathData.stopsAt[index])}
-                      onRemove={() => handleRemoveStation(linePathData.lineId, stationId)}
+                      onToggleStopsAt={() => handleToggleStopsAt(linePathData.lineId, stationId, index, linePathData.stopsAt[index])}
+                      onRemove={() => handleRemoveStation(linePathData.lineId, stationId, index)}
                     />
                     <AddStationsHereButton onClick={() => handleStartInsertion(index + 1)} />
                   </React.Fragment>

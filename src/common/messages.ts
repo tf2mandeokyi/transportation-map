@@ -12,8 +12,8 @@ export type UIToPluginMessage =
   | { type: 'start-adding-stations-mode'; lineId: LineId }
   | { type: 'stop-adding-stations-mode' }
   | { type: 'get-line-path'; lineId: LineId }
-  | { type: 'remove-station-from-line'; lineId: LineId; stationId: StationId }
-  | { type: 'set-line-stops-at-station'; lineId: LineId; stationId: StationId; stopsAt: boolean }
+  | { type: 'remove-station-from-line'; lineId: LineId; stationId: StationId; lineIndex: number }
+  | { type: 'set-line-stops-at-station'; lineId: LineId; stationId: StationId; lineIndex?: number; stopsAt: boolean }
   | { type: 'update-line-path'; lineId: LineId; stationIds: StationId[]; stopsAt: boolean[] }
   | { type: 'remove-line-from-station'; stationId: StationId; lineId: LineId }
   | { type: 'clear-plugin-data' }

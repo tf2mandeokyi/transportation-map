@@ -44,8 +44,24 @@ export class ConnectionController extends BaseController {
     });
   }
 
-  public async handleRemoveStationFromLine(lineId: LineId, stationId: StationId): Promise<void> {
-    this.model.removeStationFromLine(lineId, stationId);
+  public async handleRemoveStationFromLine(lineId: LineId, stationId: StationId, lineIndex: number): Promise<void> {
+    const line = this.model.getState().lines.get(lineId);
+    const station = this.model.getState().stations.get(stationId);
+
+    if (!line || !station) {
+      console.warn(`Line ${lineId} or Station ${stationId} not found`);
+      return;
+    }
+
+    // Remove station from line path at the specific index
+    if (lineIndex >= 0 && lineIndex < line.path.length) {
+      line.path.splice(lineIndex, 1);
+    }
+
+    // Remove line from station only if this was the last occurrence in the path
+    if (!line.path.includes(stationId)) {
+      station.lines.delete(lineId);
+    }
 
     // Re-render the map
     await this.refresh();
@@ -56,8 +72,29 @@ export class ConnectionController extends BaseController {
     });
   }
 
-  public async handleSetLineStopsAtStation(lineId: LineId, stationId: StationId, stopsAt: boolean): Promise<void> {
-    this.model.setLineStopsAtStation(lineId, stationId, stopsAt);
+  public async handleSetLineStopsAtStation(lineId: LineId, stationId: StationId, lineIndex: number | undefined, stopsAt: boolean): Promise<void> {
+    const line = this.model.getState().lines.get(lineId);
+    const station = this.model.getState().stations.get(stationId);
+
+    if (!line || !station) {
+      console.warn(`Line ${lineId} or Station ${stationId} not found`);
+      return;
+    }
+
+    // If lineIndex is provided, verify the station at this index matches
+    // If not provided, just update the station's line info (applies to all occurrences)
+    if (lineIndex !== undefined) {
+      if (line.path[lineIndex] !== stationId) {
+        console.warn(`Station at index ${lineIndex} does not match ${stationId}`);
+        return;
+      }
+    }
+
+    // Update the station's line info
+    const lineInfo = station.lines.get(lineId);
+    if (lineInfo) {
+      lineInfo.stopsAt = stopsAt;
+    }
 
     // Re-render the map
     await this.refresh();

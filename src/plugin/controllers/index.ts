@@ -77,8 +77,8 @@ export class Controller {
       case 'start-adding-stations-mode': return this.connectionController.handleStartAddingStationsMode(msg.lineId);
       case 'stop-adding-stations-mode': return this.connectionController.handleStopAddingStationsMode();
       case 'get-line-path': return this.connectionController.handleGetLinePath(msg.lineId);
-      case 'remove-station-from-line': return this.connectionController.handleRemoveStationFromLine(msg.lineId, msg.stationId);
-      case 'set-line-stops-at-station': return this.connectionController.handleSetLineStopsAtStation(msg.lineId, msg.stationId, msg.stopsAt);
+      case 'remove-station-from-line': return this.connectionController.handleRemoveStationFromLine(msg.lineId, msg.stationId, msg.lineIndex);
+      case 'set-line-stops-at-station': return this.connectionController.handleSetLineStopsAtStation(msg.lineId, msg.stationId, msg.lineIndex, msg.stopsAt);
       case 'update-line-path': return this.connectionController.handleUpdateLinePath(msg.lineId, msg.stationIds, msg.stopsAt);
       case 'update-station': return this.stationController.handleUpdateStation(msg.stationId, msg.name, msg.orientation, msg.hidden);
       case 'delete-station': return this.stationController.handleDeleteStation(msg.stationId);

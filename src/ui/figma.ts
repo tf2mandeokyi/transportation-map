@@ -1,5 +1,6 @@
 import { UIToPluginMessage } from "../common/messages";
 
 export function postMessageToPlugin(message: UIToPluginMessage) {
-    parent.postMessage({ pluginMessage: message }, "*");
+  console.log('Posting message to plugin:', message);
+  parent.postMessage({ pluginMessage: message }, "*");
 }
