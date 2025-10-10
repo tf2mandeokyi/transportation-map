@@ -60,6 +60,7 @@ export class LineRenderer {
     if (segmentNodes.length > 0) {
       const lineGroup = figma.group(segmentNodes, figma.currentPage);
       lineGroup.name = `Line: ${line.name}`;
+      lineGroup.locked = true; // Prevent accidental movement
       this.lineGroupMap.set(line.id, lineGroup);
 
       // Store the group ID in the model
