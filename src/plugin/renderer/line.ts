@@ -3,6 +3,11 @@ import { Line, Station } from "../structures";
 import { Model } from "../model";
 import { StationRenderer } from "./station";
 
+interface BezierSegment {
+  outline: VectorNode;
+  main: VectorNode;
+}
+
 export class LineRenderer {
   private stationRenderer: StationRenderer;
   private model: Model | null = null;
@@ -39,7 +44,9 @@ export class LineRenderer {
     await this.cleanupOldLineGroup(line);
 
     // Collect all segment nodes first
-    const segmentNodes: SceneNode[] = [];
+    // const segmentNodes: SceneNode[] = [];
+    const outlineNodes: VectorNode[] = [];
+    const mainNodes: VectorNode[] = [];
 
     // Draw bezier curve segments between consecutive nodes in the line's path
     for (let i = 0; i < line.path.length - 1; i++) {
@@ -53,13 +60,25 @@ export class LineRenderer {
 
       const segmentGroup = this.renderLineSegment(line, i, startStation, endStation);
       if (segmentGroup) {
-        segmentNodes.push(segmentGroup);
+        outlineNodes.push(segmentGroup.outline);
+        mainNodes.push(segmentGroup.main);
+      }
+
+      if (i < line.path.length - 1) {
+        // Also render a small segment at the end station to create a "dot" effect
+        const middleSegment = this.renderMiddleSegment(line, i + 1, endStation);
+        if (middleSegment) {
+          outlineNodes.push(middleSegment.outline);
+          mainNodes.push(middleSegment.main);
+        }
       }
     }
 
     // Create parent group for this line only if we have segments
-    if (segmentNodes.length > 0) {
-      const lineGroup = figma.group(segmentNodes, figma.currentPage);
+    if (outlineNodes.length > 0 && mainNodes.length > 0) {
+      const outlineGroup = figma.group(outlineNodes, figma.currentPage);
+      const mainGroup = figma.group(mainNodes, figma.currentPage);
+      const lineGroup = figma.group([outlineGroup, mainGroup], figma.currentPage);
       lineGroup.name = `Line: ${line.name}`;
       lineGroup.locked = true; // Prevent accidental movement
 
@@ -84,7 +103,7 @@ export class LineRenderer {
     }
   }
 
-  private renderLineSegment(line: Line, segmentIndex: number, startStation: Station, endStation: Station): GroupNode | null {
+  private renderLineSegment(line: Line, segmentIndex: number, startStation: Station, endStation: Station): BezierSegment | null {
     // Get the stored connection points for this line at both stations
     // segmentIndex is the index of the start station, segmentIndex + 1 is the index of the end station
     const startStationPoints = this.stationRenderer.getConnectionPoint(startStation.id, line.id, segmentIndex);
@@ -99,10 +118,25 @@ export class LineRenderer {
 
     // Calculate bezier curve control points for smooth curves based on station orientations
     const pathData = this.createBezierPath(startStationPoints.head, endStationPoints.tail, startStation, endStation);
+    return this.bezierPathToSegments(pathData, line.color);
+  }
 
+  private renderMiddleSegment(line: Line, segmentIndex: number, station: Station): BezierSegment | null {
+    // Get the stored connection points for this line at the station
+    const stationPoints = this.stationRenderer.getConnectionPoint(station.id, line.id, segmentIndex);
+
+    if (!stationPoints) {
+      console.warn(`Missing connection points for line ${line.id} (${line.name}) segment ${segmentIndex} at station ${station.id} (${station.name})`);
+      return null;
+    }
+
+    const pathData = this.createBezierPath(stationPoints.tail, stationPoints.head);
+    return this.bezierPathToSegments(pathData, line.color);
+  }
+
+  private bezierPathToSegments(pathData: string, color: RGB): BezierSegment | null {
     // Create white outline (rendered first, so it's behind)
     const outlineNode = figma.createVector();
-    outlineNode.name = 'Outline';
     outlineNode.vectorPaths = [{
       windingRule: 'NONZERO',
       data: pathData
@@ -117,31 +151,26 @@ export class LineRenderer {
 
     // Create colored main line (rendered second, so it's on top)
     const mainNode = figma.createVector();
-    mainNode.name = 'Main';
     mainNode.vectorPaths = [{
       windingRule: 'NONZERO',
       data: pathData
     }];
     mainNode.strokes = [{
       type: 'SOLID',
-      color: line.color
+      color
     }];
     mainNode.strokeWeight = 2;
     mainNode.strokeCap = 'ROUND';
     mainNode.strokeJoin = 'ROUND';
 
-    // Create segment group
-    const segmentGroup = figma.group([outlineNode, mainNode], figma.currentPage);
-    segmentGroup.name = `Segment: ${startStation.name} → ${endStation.name}`;
-
-    return segmentGroup;
+    return { outline: outlineNode, main: mainNode };
   }
 
   private createBezierPath(
     start: {x: number, y: number},
     end: {x: number, y: number},
-    startStation: Station,
-    endStation: Station
+    startStation?: Station,
+    endStation?: Station
   ): string {
     // Calculate the distance between points
     const dx = end.x - start.x;
@@ -153,8 +182,8 @@ export class LineRenderer {
     const controlDistance = distance * 0.3;
 
     // Get control point offsets based on station orientations
-    const startOffset = this.getOrientationOffset(startStation.orientation, controlDistance);
-    const endOffset = this.getOrientationOffset(endStation.orientation, controlDistance);
+    const startOffset = startStation ? this.getOrientationOffset(startStation.orientation, controlDistance) : { x: 0, y: 0 };
+    const endOffset = endStation ? this.getOrientationOffset(endStation.orientation, controlDistance) : { x: 0, y: 0 };
 
     // Calculate control points based on station orientations
     const cp1x = start.x + startOffset.x;

@@ -52,8 +52,10 @@ export class StationRenderer {
     frame.x = station.position.x - frame.width / 2;
     frame.y = station.position.y - frame.height / 2;
 
+    const maxWidth = children.reduce((max, c) => Math.max(max, c.node.width), 0);
+
     // After rendering, calculate and store the absolute center position of each line's dot
-    this.storeLineConnectionPoints(station, children);
+    this.storeLineConnectionPoints(station, children, maxWidth);
   }
 
   private async renderStationWithTemplate(parentFrame: FrameNode, station: Station, state: Readonly<MapState>): Promise<{ line: Line, segmentIndex: number, node: SceneNode }[]> {
@@ -166,16 +168,15 @@ export class StationRenderer {
     }).filter(item => item.line);
   }
 
-  private storeLineConnectionPoints(station: Station, lines: Array<{line: Line, segmentIndex: number, node: SceneNode}>) {
+  private storeLineConnectionPoints(station: Station, lines: Array<{line: Line, segmentIndex: number, node: SceneNode}>, maxWidth: number) {
     for (let i = 0; i < lines.length; i++) {
-      const { line: stationLine, node: lineElement, segmentIndex } = lines[i];
+      const { line, node, segmentIndex } = lines[i];
 
       // Use absoluteTransform to calculate transformed positions
       // absoluteTransform is a 2x3 matrix: [[a, b, tx], [c, d, ty]]
       // where (tx, ty) is the top-left corner position
-      const transform = lineElement.absoluteTransform;
-      const width = lineElement.width;
-      const height = lineElement.height;
+      const transform = node.absoluteTransform;
+      const height = node.height;
 
       // Calculate the four corners of the element in absolute coordinates
       const topLeft = {
@@ -183,16 +184,16 @@ export class StationRenderer {
         y: transform[1][2]
       };
       const topRight = {
-        x: transform[0][2] + transform[0][0] * width,
-        y: transform[1][2] + transform[1][0] * width
+        x: transform[0][2] + transform[0][0] * maxWidth,
+        y: transform[1][2] + transform[1][0] * maxWidth
       };
       const bottomLeft = {
         x: transform[0][2] + transform[0][1] * height,
         y: transform[1][2] + transform[1][1] * height
       };
       const bottomRight = {
-        x: transform[0][2] + transform[0][0] * width + transform[0][1] * height,
-        y: transform[1][2] + transform[1][0] * width + transform[1][1] * height
+        x: transform[0][2] + transform[0][0] * maxWidth + transform[0][1] * height,
+        y: transform[1][2] + transform[1][0] * maxWidth + transform[1][1] * height
       };
 
       // Calculate center of left, right, top, and bottom edges
@@ -208,26 +209,14 @@ export class StationRenderer {
       let head: Vector;
       let tail: Vector;
       switch (station.orientation) {
-        case 'LEFT':
-          head = centerLeft;
-          tail = centerRight;
-          break;
-        case 'RIGHT':
-          head = centerRight;
-          tail = centerLeft;
-          break;
-        case 'UP':
-          head = centerRight;
-          tail = centerLeft;
-          break;
-        case 'DOWN':
-          head = centerLeft;
-          tail = centerRight;
-          break;
+        case 'LEFT': head = centerLeft; tail = centerRight; break;
+        case 'RIGHT': head = centerRight; tail = centerLeft; break;
+        case 'UP': head = centerRight; tail = centerLeft; break;
+        case 'DOWN': head = centerLeft; tail = centerRight; break;
       }
 
       // Store the connection point with segment index
-      const key = `${station.id}-${stationLine.id}-${segmentIndex}`;
+      const key = `${station.id}-${line.id}-${segmentIndex}`;
       this.lineConnectionPoints.set(key, { head, tail });
     }
   }
