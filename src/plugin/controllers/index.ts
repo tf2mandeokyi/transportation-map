@@ -71,8 +71,8 @@ export class Controller {
     switch (msg.type) {
       case 'add-station': return this.stationController.handleAddStation(msg.station);
       case 'add-line': return this.lineController.handleAddLine(msg.line);
-      case 'edit-line': return this.lineController.handleEditLine(msg.lineId);
       case 'remove-line': return this.lineController.handleRemoveLine(msg.lineId);
+      case 'update-line-stacking-order': return this.lineController.handleUpdateLineStackingOrder(msg.lineIds);
       case 'render-map': return this.renderController.handleRenderMap(msg.rightHandTraffic);
       case 'start-adding-stations-mode': return this.connectionController.handleStartAddingStationsMode(msg.lineId);
       case 'stop-adding-stations-mode': return this.connectionController.handleStopAddingStationsMode();

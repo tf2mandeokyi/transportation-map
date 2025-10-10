@@ -78,6 +78,10 @@ const App: React.FC = () => {
     setLines(prev => prev.filter(line => line.id !== lineId));
   };
 
+  const handleReorderLines = (newLines: LineData[]) => {
+    setLines(newLines);
+  };
+
   const handleRenderMap = () => {
     postMessageToPlugin({
       type: 'render-map',
@@ -121,6 +125,7 @@ const App: React.FC = () => {
           <LinesSection
             lines={lines}
             onRemoveLine={handleRemoveLine}
+            onReorderLines={handleReorderLines}
           />
           <EditLinePathSection
             lines={lines}

@@ -18,17 +18,13 @@ export class LineController extends BaseController {
     });
   }
 
-  public async handleEditLine(lineId: LineId): Promise<void> {
-    const line = this.model.getState().lines.get(lineId);
-
-    if (line) {
-      // For now, just log - in a full implementation you'd open an edit dialog
-      console.log("Editing line:", line);
-    }
-  }
-
   public async handleRemoveLine(lineId: LineId): Promise<void> {
     this.model.removeLine(lineId);
+    await this.refresh();
+  }
+
+  public async handleUpdateLineStackingOrder(lineIds: LineId[]): Promise<void> {
+    this.model.updateLineStackingOrder(lineIds);
     await this.refresh();
   }
 

@@ -6,7 +6,6 @@ export type UIToPluginMessage =
   | { type: 'update-station'; stationId: StationId; name: string; orientation: StationOrientation; hidden: boolean }
   | { type: 'delete-station'; stationId: StationId }
   | { type: 'add-line'; line: { name: string; color: string } }
-  | { type: 'edit-line'; lineId: LineId }
   | { type: 'remove-line'; lineId: LineId }
   | { type: 'render-map'; rightHandTraffic: boolean }
   | { type: 'start-adding-stations-mode'; lineId: LineId }
@@ -16,6 +15,7 @@ export type UIToPluginMessage =
   | { type: 'set-line-stops-at-station'; lineId: LineId; stationId: StationId; lineIndex?: number; stopsAt: boolean }
   | { type: 'update-line-path'; lineId: LineId; stationIds: StationId[]; stopsAt: boolean[] }
   | { type: 'remove-line-from-station'; stationId: StationId; lineId: LineId }
+  | { type: 'update-line-stacking-order'; lineIds: LineId[] }
   | { type: 'clear-plugin-data' }
   | { type: 'request-initial-data' };
 
