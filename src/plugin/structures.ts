@@ -5,7 +5,7 @@ export interface LineStopInfo {
   stopsAt: boolean;
 }
 
-// Represents a single bus stop (a visible station or a hidden shaping point)
+// Represents a single stop (a visible station or a hidden shaping point)
 export interface Station {
   id: StationId;
   name: string;
@@ -17,7 +17,7 @@ export interface Station {
   lines: Map<LineId, LineStopInfo>;
 }
 
-// Represents a single bus line
+// Represents a single line
 export interface Line {
   id: LineId;
   name: string;

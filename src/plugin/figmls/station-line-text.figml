@@ -1,6 +1,6 @@
 <component prop:text="1A" prop:color="#FF0000">
   <variant prop:facing="left">
-    <frame name="Left bus line text" align="left,center" width="hug" height="6" flow="horizontal" clip="false" gap="3" padding="h=2,v=0" fill="#FFFFFF">
+    <frame name="Left line text" align="left,center" width="hug" height="6" flow="horizontal" clip="false" gap="3" padding="h=2,v=0" fill="#FFFFFF">
       <polygon points="3,0 0,1.5 3,3" fill="$$prop:color$$" />
       <text align="left,center" fontSize="6" fontFamily="NanumSquare Neo" fill="$$prop:color$$" style="Heavy" width="hug" height="hug">
         $$prop:text$$
@@ -8,7 +8,7 @@
     </frame>
   </variant>
   <variant prop:facing="right">
-    <frame name="Right bus line text" align="right,center" width="hug" height="6" flow="horizontal" clip="false" gap="3" padding="h=2,v=0" fill="#FFFFFF">
+    <frame name="Right line text" align="right,center" width="hug" height="6" flow="horizontal" clip="false" gap="3" padding="h=2,v=0" fill="#FFFFFF">
       <text align="right,center" fontSize="6" fontFamily="NanumSquare Neo" fill="$$prop:color$$" style="Heavy" width="hug" height="hug">
         $$prop:text$$
       </text>

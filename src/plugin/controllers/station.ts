@@ -5,7 +5,7 @@ import { postMessageToUI } from "../figma";
 import { BaseController } from "./base";
 
 export class StationController extends BaseController {
-  public async handleAddStop(stopData: { name: string, orientation: StationOrientation, hidden: boolean }): Promise<void> {
+  public async handleAddStation(stopData: { name: string, orientation: StationOrientation, hidden: boolean }): Promise<void> {
     const { name, orientation, hidden } = stopData;
 
     // Get current selection position or use default
@@ -20,7 +20,7 @@ export class StationController extends BaseController {
     this.createStation(name, position, hidden, orientation);
     await this.refresh();
 
-    postMessageToUI({ type: 'stop-added' });
+    postMessageToUI({ type: 'station-added' });
   }
 
   public createStation(name: string, position: Vector, hidden: boolean = false, orientation: StationOrientation = 'RIGHT'): StationId {

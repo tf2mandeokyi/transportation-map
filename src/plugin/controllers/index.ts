@@ -69,7 +69,7 @@ export class Controller {
 
   private handleUIMessage(msg: UIToPluginMessage): Promise<void> {
     switch (msg.type) {
-      case 'add-stop': return this.stationController.handleAddStop(msg.stop);
+      case 'add-station': return this.stationController.handleAddStation(msg.station);
       case 'add-line': return this.lineController.handleAddLine(msg.line);
       case 'edit-line': return this.lineController.handleEditLine(msg.lineId);
       case 'remove-line': return this.lineController.handleRemoveLine(msg.lineId);

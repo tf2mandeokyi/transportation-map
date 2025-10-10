@@ -10,7 +10,7 @@ export class RenderController extends BaseController {
     // Handle station movements, deletions, etc.
     for (const change of event.documentChanges) {
       if (change.type === 'PROPERTY_CHANGE' && (change.properties.includes('x') || change.properties.includes('y'))) {
-        // A station was moved - update our model if it's a bus stop
+        // A station was moved - update our model if it's a stop
         try {
           const figmaNode = await figma.getNodeByIdAsync(change.id);
           if (figmaNode && 'x' in figmaNode && 'y' in figmaNode && 'width' in figmaNode && 'height' in figmaNode) {

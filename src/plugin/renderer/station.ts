@@ -1,6 +1,6 @@
 import { Line, MapState, Station } from "../structures";
 import { Model } from "../model";
-import { renderBusStop, renderBusStopLine } from "../figmls";
+import { renderStation, renderStationLine } from "../figmls";
 import { ErrorChain } from "../error";
 import { LineId, StationId, StationOrientation } from "../../common/types";
 
@@ -48,24 +48,24 @@ export class StationRenderer {
     frame.x = station.position.x - frame.width / 2;
     frame.y = station.position.y - frame.height / 2;
 
-    // Use figml template to render the bus stop
-    await this.renderBusStopWithTemplate(frame, station, state);
+    // Use figml template to render the station
+    await this.renderStationWithTemplate(frame, station, state);
   }
 
-  private async renderBusStopWithTemplate(parentFrame: FrameNode, station: Station, state: Readonly<MapState>): Promise<void> {
+  private async renderStationWithTemplate(parentFrame: FrameNode, station: Station, state: Readonly<MapState>): Promise<void> {
     const isRightHandTraffic = this.model?.isRightHandTraffic() || true;
 
     // Determine text location based on orientation and traffic direction
     let textLocation = this.getTextLocation(station.orientation, isRightHandTraffic);
     let rotation = this.getRotation(station.orientation);
 
-    // Get bus lines for this station
-    const busLines = this.getBusLinesForStation(station, state);
+    // Get lines for this station
+    const lines = this.getLinesForStation(station, state);
 
-    // Render individual bus lines using the bus-stop-line template in parallel
+    // Render individual station lines using the station-line template in parallel
     const stopLineFacing = this.getStopLineFacing(station.orientation);
-    const children = await Promise.all(busLines.map(async ({ line, segmentIndex, stopsAt }) => {
-      const node = await renderBusStopLine({
+    const children = await Promise.all(lines.map(async ({ line, segmentIndex, stopsAt }) => {
+      const node = await renderStationLine({
           text: line.name,
           color: line.color,
           stops: stopsAt,
@@ -77,16 +77,16 @@ export class StationRenderer {
       return { line, segmentIndex, node };
     }));
 
-    // Render the bus stop container using the bus-stop template
+    // Render the station container using the station template
     const align = `${stopLineFacing},center` as const;
-    const busStopElement = await renderBusStop({
+    const stationElement = await renderStation({
       text: station.name,
       visible: !station.hidden,
       rotation, children: children.map(c => c.node),
       align, textLocation
     }).intoNode();
 
-    parentFrame.appendChild(busStopElement);
+    parentFrame.appendChild(stationElement);
 
     // After rendering, calculate and store the absolute center position of each line's dot
     this.storeLineConnectionPoints(station, children);
@@ -116,7 +116,7 @@ export class StationRenderer {
     }
   }
 
-  private getBusLinesForStation(station: Station, state: Readonly<MapState>): Array<{line: Line, stopsAt: boolean, segmentIndex: number}> {
+  private getLinesForStation(station: Station, state: Readonly<MapState>): Array<{line: Line, stopsAt: boolean, segmentIndex: number}> {
     if (!this.model) return [];
 
     // Collect all instances where lines visit this station (with their segment indices)
@@ -152,9 +152,9 @@ export class StationRenderer {
     }).filter(item => item.line);
   }
 
-  private storeLineConnectionPoints(station: Station, busLines: Array<{line: Line, segmentIndex: number, node: SceneNode}>) {
-    for (let i = 0; i < busLines.length; i++) {
-      const { line: busLine, node: lineElement, segmentIndex } = busLines[i];
+  private storeLineConnectionPoints(station: Station, lines: Array<{line: Line, segmentIndex: number, node: SceneNode}>) {
+    for (let i = 0; i < lines.length; i++) {
+      const { line: stationLine, node: lineElement, segmentIndex } = lines[i];
 
       // Use absoluteTransform to calculate transformed positions
       // absoluteTransform is a 2x3 matrix: [[a, b, tx], [c, d, ty]]
@@ -213,7 +213,7 @@ export class StationRenderer {
       }
 
       // Store the connection point with segment index
-      const key = `${station.id}-${busLine.id}-${segmentIndex}`;
+      const key = `${station.id}-${stationLine.id}-${segmentIndex}`;
       this.lineConnectionPoints.set(key, { head, tail });
     }
   }

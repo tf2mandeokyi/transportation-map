@@ -1,20 +1,20 @@
-import busStopFigml from "./bus-stop.figml";
-import busStopLineFigml from "./bus-stop-line.figml";
-import busStopTextFigml from "./bus-stop-text.figml";
-import busStopContentFigml from "./bus-stop-content.figml";
-import busLineDotFigml from "./bus-line-dot.figml";
-import busLineTextFigml from "./bus-line-text.figml";
+import stationFigml from "./station.figml";
+import stationTextFigml from "./station-text.figml";
+import stationContentFigml from "./station-content.figml";
+import stationLineFigml from "./station-line.figml";
+import stationLineDotFigml from "./station-line-dot.figml";
+import stationLineTextFigml from "./station-line-text.figml";
 import { RenderResult } from "../figml-parser/result";
 import { FigmlParser } from "../figml-parser";
 import { FigmlAlignment } from "../figml-parser/types";
 
 const FIGML_IMPORTS = {
-  'bus-stop.figml': busStopFigml,
-  'bus-stop-line.figml': busStopLineFigml,
-  'bus-stop-text.figml': busStopTextFigml,
-  'bus-stop-content.figml': busStopContentFigml,
-  'bus-line-dot.figml': busLineDotFigml,
-  'bus-line-text.figml': busLineTextFigml,
+  'station.figml': stationFigml,
+  'station-text.figml': stationTextFigml,
+  'station-content.figml': stationContentFigml,
+  'station-line.figml': stationLineFigml,
+  'station-line-dot.figml': stationLineDotFigml,
+  'station-line-text.figml': stationLineTextFigml,
 } as const;
 
 export function resolveImport(filename: string): string {
@@ -23,20 +23,20 @@ export function resolveImport(filename: string): string {
   return importContent;
 }
 
-const BUS_STOP_LINE_TEMPLATE = FigmlParser.parseComponent(busStopLineFigml);
-interface BusStopLineProps {
+const STATION_LINE_TEMPLATE = FigmlParser.parseComponent(stationLineFigml);
+interface StationLineProps {
   text: string,
   color: RGB,
   stops: boolean,
   visible: boolean,
   facing: 'left' | 'right'
 }
-export function renderBusStopLine({ text, color, stops, visible, facing }: BusStopLineProps): RenderResult {
-  return BUS_STOP_LINE_TEMPLATE.render({ text, color, stops, visible }, { facing });
+export function renderStationLine({ text, color, stops, visible, facing }: StationLineProps): RenderResult {
+  return STATION_LINE_TEMPLATE.render({ text, color, stops, visible }, { facing });
 }
 
-const BUS_STOP_TEMPLATE = FigmlParser.parseComponent(busStopFigml);
-interface BusStopProps {
+const STATION_TEMPLATE = FigmlParser.parseComponent(stationFigml);
+interface StationProps {
   text: string,
   visible: boolean,
   rotation: number,
@@ -44,6 +44,6 @@ interface BusStopProps {
   align: FigmlAlignment,
   children: SceneNode[]
 }
-export function renderBusStop({ text, visible, rotation, textLocation, align, children }: BusStopProps): RenderResult {
-  return BUS_STOP_TEMPLATE.render({ text, visible, rotation, align, children }, { textLocation });
+export function renderStation({ text, visible, rotation, textLocation, align, children }: StationProps): RenderResult {
+  return STATION_TEMPLATE.render({ text, visible, rotation, align, children }, { textLocation });
 }

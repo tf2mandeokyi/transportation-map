@@ -1,5 +1,5 @@
 <component prop:color="#FF0000" prop:stops="true" prop:visible="true">
-  <frame name="Bus line dot" align="center,center" width="7" height="6" flow="horizontal" visible="$$prop:visible$$">
+  <frame name="Station line dot" align="center,center" width="7" height="6" flow="horizontal" visible="$$prop:visible$$">
     <ellipse fill="$$prop:color$$" width="3" height="3" visible="$$prop:stops$$"/>
   </frame>
 </component>

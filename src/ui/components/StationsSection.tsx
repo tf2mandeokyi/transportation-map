@@ -3,23 +3,23 @@ import { StationOrientation } from '../../common/types';
 import { postMessageToPlugin } from '../figma';
 
 const StationsSection: React.FC = () => {
-  const [stopName, setStopName] = useState('');
+  const [stationName, setStationName] = useState('');
   const [orientation, setOrientation] = useState<StationOrientation>('RIGHT');
   const [hidden, setHidden] = useState(false);
 
-  const handleAddStop = () => {
-    const stopData = {
-      name: stopName || `Stop_${Date.now()}`,
+  const handleAddStation = () => {
+    const stationData = {
+      name: stationName || `Station_${Date.now()}`,
       orientation,
       hidden
     };
 
     postMessageToPlugin({
-      type: 'add-stop',
-      stop: stopData
+      type: 'add-station',
+      station: stationData
     });
 
-    setStopName('');
+    setStationName('');
     setHidden(false);
   };
 
@@ -29,21 +29,21 @@ const StationsSection: React.FC = () => {
       <div className="grid">
         <div className="two-column">
           <div>
-            <label htmlFor="stop-name">Stop Name</label>
+            <label htmlFor="station-name">Station Name</label>
             <input
               className="input"
-              id="stop-name"
+              id="station-name"
               type="text"
-              placeholder="Stop A"
-              value={stopName}
-              onChange={(e) => setStopName(e.target.value)}
+              placeholder="Station A"
+              value={stationName}
+              onChange={(e) => setStationName(e.target.value)}
             />
           </div>
           <div>
-            <label htmlFor="stop-orientation">Facing</label>
+            <label htmlFor="station-orientation">Facing</label>
             <select
               className="input"
-              id="stop-orientation"
+              id="station-orientation"
               value={orientation}
               onChange={(e) => setOrientation(e.target.value as StationOrientation)}
             >
@@ -57,14 +57,14 @@ const StationsSection: React.FC = () => {
         <div className="checkbox-container">
           <input
             type="checkbox"
-            id="stop-hidden"
+            id="station-hidden"
             checked={hidden}
             onChange={(e) => setHidden(e.target.checked)}
           />
-          <label htmlFor="stop-hidden">Hidden (shaping point)</label>
+          <label htmlFor="station-hidden">Hidden (shaping point)</label>
         </div>
-        <button className="button button--primary" onClick={handleAddStop}>
-          Add Stop
+        <button className="button button--primary" onClick={handleAddStation}>
+          Add Station
         </button>
       </div>
     </div>

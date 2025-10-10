@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import StationsSection from './components/StationsSection';
-import BusLinesSection from './components/BusLinesSection';
+import LinesSection from './components/LinesSection';
 import EditLinePathSection from './components/EditLinePathSection';
 import EditStationSection from './components/EditStationSection';
 import SettingsSection from './components/SettingsSection';
@@ -53,7 +53,7 @@ const App: React.FC = () => {
       });
     });
 
-    const unsubscribe2 = messageManagerRef.current.onMessage('stop-added', () => {
+    const unsubscribe2 = messageManagerRef.current.onMessage('station-added', () => {
       // Stop was successfully added
     });
 
@@ -104,7 +104,7 @@ const App: React.FC = () => {
 
       {activeTab === 'lines' && (
         <div>
-          <BusLinesSection
+          <LinesSection
             lines={lines}
             onRemoveLine={handleRemoveLine}
           />

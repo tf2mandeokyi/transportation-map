@@ -3,7 +3,7 @@ import { LineId } from '../../common/types';
 import { postMessageToPlugin } from '../figma';
 import { LineData } from '../../common/messages';
 
-const BusLineItem: React.FC<{ line: LineData; onEdit: (lineId: LineId) => void; onRemove: (lineId: LineId) => void; }> = ({ line, onEdit, onRemove }) => {
+const LineItem: React.FC<{ line: LineData; onEdit: (lineId: LineId) => void; onRemove: (lineId: LineId) => void; }> = ({ line, onEdit, onRemove }) => {
   return (
     <div key={line.id} className="line-item">
       <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -33,7 +33,7 @@ interface Props {
   onRemoveLine: (lineId: LineId) => void;
 }
 
-const BusLinesSection: React.FC<Props> = ({ lines, onRemoveLine }) => {
+const LinesSection: React.FC<Props> = ({ lines, onRemoveLine }) => {
   const [lineName, setLineName] = useState('');
   const [lineColor, setLineColor] = useState('#ff0000');
   const [lineCounter, setLineCounter] = useState(0);
@@ -71,7 +71,7 @@ const BusLinesSection: React.FC<Props> = ({ lines, onRemoveLine }) => {
 
   return (
     <div className="section">
-      <h3>Bus Lines</h3>
+      <h3>Lines</h3>
       <div className="grid">
         <div className="two-column">
           <div>
@@ -103,11 +103,11 @@ const BusLinesSection: React.FC<Props> = ({ lines, onRemoveLine }) => {
 
       <div id="lines-list">
         {lines.map(line => (
-          <BusLineItem key={line.id} line={line} onEdit={handleEditLine} onRemove={handleRemoveLine} />
+          <LineItem key={line.id} line={line} onEdit={handleEditLine} onRemove={handleRemoveLine} />
         ))}
       </div>
     </div>
   );
 };
 
-export default BusLinesSection;
+export default LinesSection;

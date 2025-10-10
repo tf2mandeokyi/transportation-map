@@ -1,0 +1,13 @@
+<component prop:text="1A" prop:color="#FF0000" prop:stops="true" props:visible="true">
+  <variant prop:facing="left">
+    <frame name="Left stop line" align="left,center" width="hug" height="6" flow="horizontal" clip="false">
+      <import from="station-line-dot.figml" color="$$prop:color$$" stops="$$prop:stops$$" visible="$$prop:visible$$" />
+      <import from="station-line-text.figml" text="$$prop:text$$" color="$$prop:color$$" facing="left" />
+    </frame>
+  </variant>
+  <variant prop:facing="right">
+    <frame name="Right stop line" align="right,center" width="hug" height="6" flow="horizontal" clip="false">
+      <import from="station-line-text.figml" text="$$prop:text$$" color="$$prop:color$$" facing="right" />
+      <import from="station-line-dot.figml" color="$$prop:color$$" stops="$$prop:stops$$" visible="$$prop:visible$$" />
+    </frame>
+</component>

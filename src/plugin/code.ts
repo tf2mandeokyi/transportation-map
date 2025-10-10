@@ -5,7 +5,7 @@ import { View } from "./view";
 async function main() {
   figma.showUI(__html__, { visible: true, width: 400, height: 480 });
 
-  console.log("Bus Map Generator Initialized!");
+  console.log("Transportation Map Generator Initialized!");
 
   // Try to load existing map data from document
   let model = await Model.load();
@@ -35,7 +35,7 @@ async function main() {
 }
 
 async function createDemoMap(controller: Controller, model: Model) {
-  // Create demo bus stops with different orientations
+  // Create demo stations with different orientations
   const s1 = controller.createStation('Central Station', { x: 200, y: 200 }, false, 'RIGHT'); // Facing right
   const s2 = controller.createStation('Park Ave', { x: 450, y: 350 }, false, 'RIGHT'); // Facing right
   const sHidden = controller.createStation('Hidden Point', { x: 700, y: 280 }, true, 'RIGHT'); // Hidden shaping point
@@ -46,7 +46,7 @@ async function createDemoMap(controller: Controller, model: Model) {
   const s5 = controller.createStation('South Station', { x: 450, y: 600 }, false, 'DOWN'); // Facing down
   const s6 = controller.createStation('West Station', { x: 700, y: 600 }, false, 'LEFT'); // Facing left
 
-  // Create demo bus lines
+  // Create demo lines
   const redLine = model.addLine({
     name: 'Red Line',
     color: { r: 1, g: 0, b: 0 },
@@ -65,7 +65,7 @@ async function createDemoMap(controller: Controller, model: Model) {
     path: []
   });
 
-  // Connect lines to stops
+  // Connect lines to stations
   controller.connectStationsWithLine(redLine, s1, s2);
   controller.connectStationsWithLine(redLine, s2, sHidden, true, false); // Passes by hidden point
   controller.connectStationsWithLine(redLine, sHidden, s3, false, true); // Passes by hidden point
