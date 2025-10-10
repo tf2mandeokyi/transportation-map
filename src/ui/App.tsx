@@ -39,6 +39,7 @@ const App: React.FC = () => {
   // State for station editing
 
   const messageManagerRef = useRef(new FigmaPluginMessageManager());
+  const rightHandTraffic = useRef(true);
 
   useEffect(() => {
     // Set up message listeners
@@ -77,8 +78,21 @@ const App: React.FC = () => {
     setLines(prev => prev.filter(line => line.id !== lineId));
   };
 
+  const handleRenderMap = () => {
+    postMessageToPlugin({
+      type: 'render-map',
+      rightHandTraffic: rightHandTraffic.current
+    });
+  };
+
   return (
     <div>
+      <div className="button-container" style={{ marginBottom: '16px' }}>
+        <button className="button button--secondary full-width" onClick={handleRenderMap} style={{ width: '100%' }}>
+          Render Map
+        </button>
+      </div>
+
       {/* Tab Navigation */}
       <div style={{ display: 'flex', borderBottom: '1px solid #e0e0e0', marginBottom: '16px' }}>
         <NavButton active={activeTab === 'stations'} onClick={() => setActiveTab('stations')}>
@@ -117,7 +131,7 @@ const App: React.FC = () => {
 
       {activeTab === 'settings' && (
         <div>
-          <SettingsSection />
+          <SettingsSection rightHandTraffic={rightHandTraffic} />
         </div>
       )}
     </div>

@@ -1,16 +1,11 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { postMessageToPlugin } from '../figma';
 
-const SettingsSection: React.FC = () => {
-  const [rightHandTraffic, setRightHandTraffic] = useState(true);
+interface Props {
+  rightHandTraffic: React.RefObject<boolean>;
+}
 
-  const handleRenderMap = () => {
-    postMessageToPlugin({
-      type: 'render-map',
-      rightHandTraffic
-    });
-  };
-
+const SettingsSection: React.FC<Props> = ({ rightHandTraffic }) => {
   const handleClearData = () => {
     if (confirm('Are you sure you want to clear all saved data? This will reload the plugin.')) {
       postMessageToPlugin({
@@ -27,17 +22,11 @@ const SettingsSection: React.FC = () => {
           <input
             type="checkbox"
             id="right-hand-traffic"
-            checked={rightHandTraffic}
-            onChange={(e) => setRightHandTraffic(e.target.checked)}
+            checked={rightHandTraffic.current}
+            onChange={(e) => (rightHandTraffic.current = e.target.checked)}
           />
           <label htmlFor="right-hand-traffic">Right-hand traffic</label>
         </div>
-      </div>
-
-      <div className="button-container">
-        <button className="button button--secondary full-width" onClick={handleRenderMap}>
-          Render Map
-        </button>
       </div>
 
       <div className="section">
