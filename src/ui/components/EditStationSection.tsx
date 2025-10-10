@@ -130,12 +130,12 @@ const EditStationSection: React.FC<Props> = ({ messageManagerRef }) => {
       <div style={{ marginBottom: '16px' }}>
         <div style={{ marginBottom: '8px' }}>
           <label htmlFor="edit-station-name">Station Name</label>
-          <input
+          <textarea
             className="input"
             id="edit-station-name"
-            type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            rows={2}
           />
         </div>
         <div style={{ marginBottom: '8px' }}>

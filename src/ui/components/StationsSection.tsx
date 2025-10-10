@@ -30,13 +30,13 @@ const StationsSection: React.FC = () => {
         <div className="two-column">
           <div>
             <label htmlFor="station-name">Station Name</label>
-            <input
+            <textarea
               className="input"
               id="station-name"
-              type="text"
               placeholder="Station A"
               value={stationName}
               onChange={(e) => setStationName(e.target.value)}
+              rows={2}
             />
           </div>
           <div>
