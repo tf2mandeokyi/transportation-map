@@ -44,15 +44,19 @@ export class StationRenderer {
     // Clear existing children and rebuild
     frame.children.forEach(child => child.remove());
 
+    // Use figml template to render the station
+    const children = await this.renderStationWithTemplate(frame, station, state);
+
     // Position frame so that station.position is at the center
+    // IMPORTANT: This must happen AFTER rendering content, when frame has correct width/height
     frame.x = station.position.x - frame.width / 2;
     frame.y = station.position.y - frame.height / 2;
 
-    // Use figml template to render the station
-    await this.renderStationWithTemplate(frame, station, state);
+    // After rendering, calculate and store the absolute center position of each line's dot
+    this.storeLineConnectionPoints(station, children);
   }
 
-  private async renderStationWithTemplate(parentFrame: FrameNode, station: Station, state: Readonly<MapState>): Promise<void> {
+  private async renderStationWithTemplate(parentFrame: FrameNode, station: Station, state: Readonly<MapState>): Promise<{ line: Line, segmentIndex: number, node: SceneNode }[]> {
     // Determine station configurations
     const isRightHandTraffic = this.model?.isRightHandTraffic() || true;
     const textLocation = this.getTextLocation(station.orientation, isRightHandTraffic);
@@ -90,8 +94,7 @@ export class StationRenderer {
 
     parentFrame.appendChild(stationElement);
 
-    // After rendering, calculate and store the absolute center position of each line's dot
-    this.storeLineConnectionPoints(station, children);
+    return children;
   }
 
   private getTextLocation(orientation: StationOrientation, isRightHandTraffic: boolean): 'left' | 'right' | 'top' | 'bottom' {
