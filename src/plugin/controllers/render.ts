@@ -13,11 +13,14 @@ export class RenderController extends BaseController {
         // A station was moved - update our model if it's a bus stop
         try {
           const figmaNode = await figma.getNodeByIdAsync(change.id);
-          if (figmaNode && 'x' in figmaNode && 'y' in figmaNode) {
+          if (figmaNode && 'x' in figmaNode && 'y' in figmaNode && 'width' in figmaNode && 'height' in figmaNode) {
             // Find the station using the figma node ID
             const station = this.model.findStationByFigmaId(change.id);
             if (station) {
-              this.model.updateStationPosition(station.id, { x: figmaNode.x, y: figmaNode.y });
+              // Calculate the center position from the frame's top-left corner
+              const centerX = figmaNode.x + figmaNode.width / 2;
+              const centerY = figmaNode.y + figmaNode.height / 2;
+              this.model.updateStationPosition(station.id, { x: centerX, y: centerY });
             }
           }
         } catch (error) {
