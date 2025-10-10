@@ -1,11 +1,9 @@
-import { createLineSegmentId, LineId, LineSegmentId, StationId, StationOrientation } from "../../common/types";
+import { StationId, StationOrientation } from "../../common/types";
 import { Line, Station } from "../structures";
 import { Model } from "../model";
 import { StationRenderer } from "./station";
 
 export class LineRenderer {
-  private figmaLineSegmentMap: Map<LineSegmentId, SceneNode> = new Map();
-  private lineGroupMap: Map<LineId, GroupNode> = new Map();
   private stationRenderer: StationRenderer;
   private model: Model | null = null;
 
@@ -17,19 +15,22 @@ export class LineRenderer {
     this.model = model;
   }
 
-  public clearAllSegments(): void {
-    for (const [key, value] of this.figmaLineSegmentMap.entries()) {
-      if (value && !value.removed) {
-        value.remove();
-      }
-      this.figmaLineSegmentMap.delete(key);
-    }
+  public async clearAllSegments(): Promise<void> {
+    if (!this.model) return;
 
-    for (const [key, value] of this.lineGroupMap.entries()) {
-      if (value && !value.removed) {
-        value.remove();
+    // Remove all line groups using the stored IDs in the model
+    const state = this.model.getState();
+    for (const line of state.lines.values()) {
+      if (line.figmaGroupId) {
+        try {
+          const node = await figma.getNodeByIdAsync(line.figmaGroupId);
+          if (node && !node.removed) {
+            node.remove();
+          }
+        } catch {
+          // Node doesn't exist anymore, that's fine
+        }
       }
-      this.lineGroupMap.delete(key);
     }
   }
 
@@ -61,7 +62,6 @@ export class LineRenderer {
       const lineGroup = figma.group(segmentNodes, figma.currentPage);
       lineGroup.name = `Line: ${line.name}`;
       lineGroup.locked = true; // Prevent accidental movement
-      this.lineGroupMap.set(line.id, lineGroup);
 
       // Store the group ID in the model
       if (this.model) {
@@ -71,31 +71,20 @@ export class LineRenderer {
   }
 
   private async cleanupOldLineGroup(line: Line): Promise<void> {
-    // Remove from memory map if exists
-    const existingGroup = this.lineGroupMap.get(line.id);
-    if (existingGroup && !existingGroup.removed) {
-      existingGroup.remove();
-    }
-    this.lineGroupMap.delete(line.id);
-
-    // Also try to remove group from Figma using stored ID
+    // Remove old group using the stored ID in the model
     if (line.figmaGroupId) {
       try {
         const oldGroup = await figma.getNodeByIdAsync(line.figmaGroupId);
         if (oldGroup && !oldGroup.removed) {
           oldGroup.remove();
         }
-      } catch (error) {
+      } catch {
         // Node doesn't exist anymore, that's fine
-        console.log(`Old line group ${line.figmaGroupId} not found, probably already deleted`);
       }
     }
   }
 
   private renderLineSegment(line: Line, segmentIndex: number, startStation: Station, endStation: Station): GroupNode | null {
-    // Create unique ID for the segment group using the index in the path
-    const segmentId = createLineSegmentId(line.id, segmentIndex);
-
     // Get the stored connection points for this line at both stations
     // segmentIndex is the index of the start station, segmentIndex + 1 is the index of the end station
     const startStationPoints = this.stationRenderer.getConnectionPoint(startStation.id, line.id, segmentIndex);
@@ -141,14 +130,9 @@ export class LineRenderer {
     mainNode.strokeCap = 'ROUND';
     mainNode.strokeJoin = 'ROUND';
 
-    // Add nodes to page first so we can group them
-    figma.currentPage.appendChild(outlineNode);
-    figma.currentPage.appendChild(mainNode);
-
     // Create segment group
     const segmentGroup = figma.group([outlineNode, mainNode], figma.currentPage);
     segmentGroup.name = `Segment: ${startStation.name} → ${endStation.name}`;
-    this.figmaLineSegmentMap.set(segmentId, segmentGroup);
 
     return segmentGroup;
   }
@@ -191,12 +175,24 @@ export class LineRenderer {
     }
   }
 
-  public moveSegmentsToBack(): void {
-    // Move parent line groups to the back
-    for (const lineGroup of this.lineGroupMap.values()) {
-      const parent = lineGroup.parent;
-      if (parent && 'insertChild' in parent) {
-        parent.insertChild(0, lineGroup);
+  public async moveSegmentsToBack(): Promise<void> {
+    if (!this.model) return;
+
+    // Move parent line groups to the back using stored IDs
+    const state = this.model.getState();
+    for (const line of state.lines.values()) {
+      if (line.figmaGroupId) {
+        try {
+          const lineGroup = await figma.getNodeByIdAsync(line.figmaGroupId);
+          if (lineGroup && !lineGroup.removed) {
+            const parent = lineGroup.parent;
+            if (parent && 'insertChild' in parent) {
+              parent.insertChild(0, lineGroup as SceneNode);
+            }
+          }
+        } catch {
+          // Node doesn't exist anymore, that's fine
+        }
       }
     }
   }

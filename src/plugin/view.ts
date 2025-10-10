@@ -20,7 +20,7 @@ export class View {
 
   public async render(state: Readonly<MapState>): Promise<void> {
     // Clear old line segments and connection points
-    this.lineSegmentRenderer.clearAllSegments();
+    await this.lineSegmentRenderer.clearAllSegments();
     this.stationRenderer.clearConnectionPoints();
 
     // First render all stations to calculate and store connection points
@@ -36,6 +36,6 @@ export class View {
     ));
 
     // Finally, move all line segments to the back so they appear behind stations
-    this.lineSegmentRenderer.moveSegmentsToBack();
+    await this.lineSegmentRenderer.moveSegmentsToBack();
   }
 }
