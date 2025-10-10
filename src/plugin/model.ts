@@ -111,10 +111,8 @@ export class Model {
     const station = this.state.stations.get(stationId);
 
     if (line && station) {
-      // Add station to line path if not already there
-      if (!line.path.includes(stationId)) {
-        line.path.push(stationId);
-      }
+      // Add station to line path (allowing duplicates for circular routes)
+      line.path.push(stationId);
 
       // Set line info for this station
       station.lines.set(lineId, { stopsAt });

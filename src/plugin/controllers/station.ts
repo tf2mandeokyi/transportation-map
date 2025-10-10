@@ -56,8 +56,28 @@ export class StationController extends BaseController {
       type: 'station-info',
       stationId,
       stationName: station.name,
+      orientation: station.orientation,
+      hidden: station.hidden,
       lines
     });
+  }
+
+  public async handleUpdateStation(stationId: StationId, name: string, orientation: StationOrientation, hidden: boolean): Promise<void> {
+    const station = this.model.getState().stations.get(stationId);
+    if (!station) {
+      console.warn(`Station ${stationId} not found`);
+      return;
+    }
+
+    // Update station properties
+    station.name = name;
+    station.orientation = orientation;
+    station.hidden = hidden;
+
+    await this.refresh();
+
+    // Send updated station info back to UI
+    await this.handleGetStationInfo(stationId);
   }
 
   public async handleRemoveLineFromStation(stationId: StationId, lineId: string): Promise<void> {

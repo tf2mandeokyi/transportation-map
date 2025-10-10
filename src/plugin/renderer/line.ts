@@ -50,7 +50,7 @@ export class LineRenderer {
 
       if (!startStation || !endStation) continue;
 
-      const segmentGroup = this.renderLineSegment(line, startStation, endStation);
+      const segmentGroup = this.renderLineSegment(line, i, startStation, endStation);
       if (segmentGroup) {
         segmentNodes.push(segmentGroup);
       }
@@ -91,17 +91,18 @@ export class LineRenderer {
     }
   }
 
-  private renderLineSegment(line: Line, startStation: Station, endStation: Station): GroupNode | null {
-    // Create unique ID for the segment group
-    const segmentId = createLineSegmentId(line.id, startStation.id, endStation.id);
+  private renderLineSegment(line: Line, segmentIndex: number, startStation: Station, endStation: Station): GroupNode | null {
+    // Create unique ID for the segment group using the index in the path
+    const segmentId = createLineSegmentId(line.id, segmentIndex);
 
-    // Get the stored connection points for this line at both nodes
-    const startStationPoints = this.stationRenderer.getConnectionPoint(startStation.id, line.id);
-    const endStationPoints = this.stationRenderer.getConnectionPoint(endStation.id, line.id);
+    // Get the stored connection points for this line at both stations
+    // segmentIndex is the index of the start station, segmentIndex + 1 is the index of the end station
+    const startStationPoints = this.stationRenderer.getConnectionPoint(startStation.id, line.id, segmentIndex);
+    const endStationPoints = this.stationRenderer.getConnectionPoint(endStation.id, line.id, segmentIndex + 1);
 
     if (!startStationPoints || !endStationPoints) {
       console.warn(`Missing connection points for line ${line.id} (${line.name})`
-        + ` between ${startStation.id} (${startStation.name})`
+        + ` segment ${segmentIndex} between ${startStation.id} (${startStation.name})`
         + ` and ${endStation.id} (${endStation.name})`);
       return null;
     }

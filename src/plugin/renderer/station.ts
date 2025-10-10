@@ -115,21 +115,43 @@ export class StationRenderer {
     }
   }
 
-  private getBusLinesForStation(station: Station, state: Readonly<MapState>): Array<{line: Line, stopsAt: boolean}> {
+  private getBusLinesForStation(station: Station, state: Readonly<MapState>): Array<{line: Line, stopsAt: boolean, segmentIndex: number}> {
     if (!this.model) return [];
 
-    const linesAtNode = this.model.getLineStackingOrderForStation(station.id);
-    return linesAtNode.map(lineId => {
-      const line = state.lines.get(lineId);
-      const lineInfo = station.lines.get(lineId);
+    // Collect all instances where lines visit this station (with their segment indices)
+    const lineVisits: Array<{lineId: LineId, segmentIndex: number}> = [];
+
+    for (const line of state.lines.values()) {
+      // Find all positions where this station appears in the line's path
+      for (let i = 0; i < line.path.length; i++) {
+        if (line.path[i] === station.id) {
+          lineVisits.push({ lineId: line.id, segmentIndex: i });
+        }
+      }
+    }
+
+    // Sort by: 1. global line stacking order, 2. segment index
+    const globalStackingOrder = state.lineStackingOrder;
+    lineVisits.sort((a, b) => {
+      const orderA = globalStackingOrder.indexOf(a.lineId);
+      const orderB = globalStackingOrder.indexOf(b.lineId);
+      if (orderA !== orderB) return orderA - orderB;
+      return a.segmentIndex - b.segmentIndex;
+    });
+
+    // Map to line objects with stopsAt info
+    return lineVisits.map(visit => {
+      const line = state.lines.get(visit.lineId);
+      const lineInfo = station.lines.get(visit.lineId);
       return {
         line: line!,
-        stopsAt: lineInfo?.stopsAt || false
+        stopsAt: lineInfo?.stopsAt || false,
+        segmentIndex: visit.segmentIndex
       };
-    }).filter(line => line.line);
+    }).filter(item => item.line);
   }
 
-  private storeLineConnectionPoints(parentFrame: FrameNode, station: Station, busLines: Array<{line: Line, stopsAt: boolean}>) {
+  private storeLineConnectionPoints(parentFrame: FrameNode, station: Station, busLines: Array<{line: Line, stopsAt: boolean, segmentIndex: number}>) {
     // Find the bus stop content frame (should be the first child of parentFrame)
     if (parentFrame.children.length === 0) return;
 
@@ -220,14 +242,14 @@ export class StationRenderer {
           break;
       }
 
-      // Store the connection point
-      const key = `${station.id}-${busLine.line.id}`;
+      // Store the connection point with segment index
+      const key = `${station.id}-${busLine.line.id}-${busLine.segmentIndex}`;
       this.lineConnectionPoints.set(key, { head, tail });
     }
   }
 
-  public getConnectionPoint(stationId: StationId, lineId: LineId): ConnectionPoints | undefined {
-    const key = `${stationId}-${lineId}`;
+  public getConnectionPoint(stationId: StationId, lineId: LineId, segmentIndex: number): ConnectionPoints | undefined {
+    const key = `${stationId}-${lineId}-${segmentIndex}`;
     return this.lineConnectionPoints.get(key);
   }
 

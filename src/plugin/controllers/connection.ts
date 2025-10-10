@@ -12,6 +12,9 @@ export class ConnectionController extends BaseController {
       return;
     }
 
+    // Clear the existing path first (replace, not append)
+    line.path = [];
+
     // Add each station to the line's path in order
     for (const stationId of stationIds) {
       const station = this.model.getState().stations.get(stationId);

@@ -6,7 +6,7 @@ import EditLinePathSection from './components/EditLinePathSection';
 import EditStationSection from './components/EditStationSection';
 import SettingsSection from './components/SettingsSection';
 import { LineAtStationData, LineData, PluginToUIMessage } from '../common/messages';
-import { LineId, StationId } from '../common/types';
+import { LineId, StationId, StationOrientation } from '../common/types';
 import { postMessageToPlugin } from './figma';
 
 interface NavButtonProps {
@@ -44,6 +44,8 @@ const App: React.FC = () => {
   // State for station editing
   const [editingStationId, setEditingStationId] = useState<StationId | null>(null);
   const [editingStationName, setEditingStationName] = useState<string | null>(null);
+  const [editingStationOrientation, setEditingStationOrientation] = useState<StationOrientation | null>(null);
+  const [editingStationHidden, setEditingStationHidden] = useState<boolean | null>(null);
   const [linesAtStation, setLinesAtStation] = useState<Array<LineAtStationData>>([]);
 
   useEffect(() => {
@@ -59,10 +61,9 @@ const App: React.FC = () => {
 
         case 'station-clicked':
           if (isAddingStations) {
-            if (!stationPath.includes(msg.stationId)) {
-              setStationPath(prev => [...prev, msg.stationId]);
-              setStationPathNames(prev => [...prev, msg.stationName]);
-            }
+            // Allow adding the same station multiple times for circular routes
+            setStationPath(prev => [...prev, msg.stationId]);
+            setStationPathNames(prev => [...prev, msg.stationName]);
           } else {
             // Not in adding stations mode, so this is a station edit request
             postMessageToPlugin({
@@ -75,6 +76,8 @@ const App: React.FC = () => {
         case 'station-info':
           setEditingStationId(msg.stationId);
           setEditingStationName(msg.stationName);
+          setEditingStationOrientation(msg.orientation);
+          setEditingStationHidden(msg.hidden);
           setLinesAtStation(msg.lines);
           break;
 
@@ -135,9 +138,23 @@ const App: React.FC = () => {
     });
   };
 
+  const handleUpdateStation = (name: string, orientation: StationOrientation, hidden: boolean) => {
+    if (!editingStationId) return;
+
+    postMessageToPlugin({
+      type: 'update-station',
+      stationId: editingStationId,
+      name,
+      orientation,
+      hidden
+    });
+  };
+
   const handleCloseStationEdit = () => {
     setEditingStationId(null);
     setEditingStationName(null);
+    setEditingStationOrientation(null);
+    setEditingStationHidden(null);
     setLinesAtStation([]);
   };
 
@@ -163,9 +180,12 @@ const App: React.FC = () => {
           <EditStationSection
             stationId={editingStationId}
             stationName={editingStationName}
+            stationOrientation={editingStationOrientation}
+            stationHidden={editingStationHidden}
             linesAtStation={linesAtStation}
             onToggleStopsAt={handleToggleStopsAt}
             onRemoveLine={handleRemoveLineFromStation}
+            onUpdateStation={handleUpdateStation}
             onClose={handleCloseStationEdit}
           />
         </div>
