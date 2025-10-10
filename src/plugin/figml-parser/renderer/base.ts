@@ -56,6 +56,14 @@ export abstract class BaseRenderer {
         (node as any).rotation = Number(rotation);
       }
     }
+
+    if (attributes.locked) {
+      const locked = attributes.locked.interpolate(props);
+      if (locked !== 'true' && locked !== 'false') {
+        throw Error(`Invalid value for locked attribute: ${locked}. Expected 'true' or 'false'.`);
+      }
+      node.locked = locked === 'true';
+    }
   }
 
   protected static hexToRgb(hex: string): RGB {

@@ -1,6 +1,6 @@
 <component prop:text="Station" prop:visible="true" prop:rotation="0" prop:align="center,center" prop:children>
   <variant prop:textLocation="top">
-    <frame align="center,bottom" width="hug" height="hug" flow="vertical" clip="false">
+    <frame align="center,bottom" width="hug" height="hug" flow="vertical" clip="false" locked="true">
       <import from="station-text.figml" text="$$prop:text$$" visible="$$prop:visible$$" align="center,bottom" />
       <import from="station-content.figml" visible="$$prop:visible$$" rotation="$$prop:rotation$$" align="$$prop:align$$">
         $$prop:children$$
@@ -8,7 +8,7 @@
     </frame>
   </variant>
   <variant prop:textLocation="bottom">
-    <frame align="center,top" width="hug" height="hug" flow="vertical" clip="false">
+    <frame align="center,top" width="hug" height="hug" flow="vertical" clip="false" locked="true">
       <import from="station-content.figml" visible="$$prop:visible$$" rotation="$$prop:rotation$$" align="$$prop:align$$">
         $$prop:children$$
       </import>
@@ -16,7 +16,7 @@
     </frame>
   </variant>
   <variant prop:textLocation="left">
-    <frame align="right,center" width="hug" height="hug" flow="horizontal" clip="false">
+    <frame align="right,center" width="hug" height="hug" flow="horizontal" clip="false" locked="true">
       <import from="station-text.figml" text="$$prop:text$$" visible="$$prop:visible$$" align="right,center" />
       <import from="station-content.figml" visible="$$prop:visible$$" rotation="$$prop:rotation$$" align="$$prop:align$$">
         $$prop:children$$
@@ -24,7 +24,7 @@
     </frame>
   </variant>
   <variant prop:textLocation="right">
-    <frame align="left,center" width="hug" height="hug" flow="horizontal" clip="false">
+    <frame align="left,center" width="hug" height="hug" flow="horizontal" clip="false" locked="true">
       <import from="station-content.figml" visible="$$prop:visible$$" rotation="$$prop:rotation$$" align="$$prop:align$$">
         $$prop:children$$
       </import>
