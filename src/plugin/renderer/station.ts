@@ -53,17 +53,15 @@ export class StationRenderer {
   }
 
   private async renderStationWithTemplate(parentFrame: FrameNode, station: Station, state: Readonly<MapState>): Promise<void> {
+    // Determine station configurations
     const isRightHandTraffic = this.model?.isRightHandTraffic() || true;
-
-    // Determine text location based on orientation and traffic direction
-    let textLocation = this.getTextLocation(station.orientation, isRightHandTraffic);
-    let rotation = this.getRotation(station.orientation);
+    const textLocation = this.getTextLocation(station.orientation, isRightHandTraffic);
+    const rotation = this.getRotation(station.orientation);
+    const stopLineFacing = this.getStopLineFacing(station.orientation);
+    const reverseStationOrder = this.shouldReverseStationOrder(station.orientation, isRightHandTraffic);
 
     // Get lines for this station
     const lines = this.getLinesForStation(station, state);
-
-    // Render individual station lines using the station-line template in parallel
-    const stopLineFacing = this.getStopLineFacing(station.orientation);
     const children = await Promise.all(lines.map(async ({ line, segmentIndex, stopsAt }) => {
       const node = await renderStationLine({
           text: line.name,
@@ -76,6 +74,10 @@ export class StationRenderer {
         .catch(ErrorChain.thrower<SceneNode>(`Error rendering line ${line.name} at station ${station.name}`));
       return { line, segmentIndex, node };
     }));
+
+    if (reverseStationOrder) {
+      children.reverse();
+    }
 
     // Render the station container using the station template
     const align = `${stopLineFacing},center` as const;
@@ -113,6 +115,15 @@ export class StationRenderer {
     switch (orientation) {
       case 'LEFT': case 'DOWN': return 'left';
       case 'RIGHT': case 'UP': return 'right';
+    }
+  }
+
+  private shouldReverseStationOrder(orientation: StationOrientation, isRightHandTraffic: boolean): boolean {
+    switch (orientation) {
+      case 'LEFT': return isRightHandTraffic;
+      case 'RIGHT': return !isRightHandTraffic;
+      case 'UP': return isRightHandTraffic;
+      case 'DOWN': return !isRightHandTraffic;
     }
   }
 
