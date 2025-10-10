@@ -120,10 +120,10 @@ export class StationRenderer {
 
   private shouldReverseStationOrder(orientation: StationOrientation, isRightHandTraffic: boolean): boolean {
     switch (orientation) {
-      case 'LEFT': return isRightHandTraffic;
-      case 'RIGHT': return !isRightHandTraffic;
-      case 'UP': return isRightHandTraffic;
-      case 'DOWN': return !isRightHandTraffic;
+      case 'LEFT': return !isRightHandTraffic;
+      case 'RIGHT': return isRightHandTraffic;
+      case 'UP': return !isRightHandTraffic;
+      case 'DOWN': return isRightHandTraffic;
     }
   }
 
