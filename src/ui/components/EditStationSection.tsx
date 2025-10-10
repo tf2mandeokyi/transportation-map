@@ -21,7 +21,7 @@ const EditStationSection: React.FC<Props> = ({ messageManagerRef }) => {
 
   // Set up message listeners once on mount
   useEffect(() => {
-    const unsubscribe1 = messageManagerRef.current.onMessage('station-info', msg => {
+    const unsubscribe1 = messageManagerRef.current.onMessage('station-clicked', msg => {
       setStationId(msg.stationId);
       setStationName(msg.stationName);
       setStationOrientation(msg.orientation);

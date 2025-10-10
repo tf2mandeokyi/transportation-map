@@ -53,7 +53,7 @@ export class StationController extends BaseController {
     }
 
     postMessageToUI({
-      type: 'station-info',
+      type: 'station-clicked',
       stationId,
       stationName: station.name,
       orientation: station.orientation,

@@ -64,6 +64,22 @@ export class Model {
     }
   }
 
+  public findStationFromNode(node: SceneNode): Station | null {
+    // Recursively traverse up the parent chain to find a station node
+    // by checking if the node ID matches any station's figmaNodeId
+    let currentNode: BaseNode | null = node;
+
+    while (currentNode && 'id' in currentNode) {
+      const station = this.findStationByFigmaId(currentNode.id);
+      if (station) {
+        return station;
+      }
+      currentNode = currentNode.parent;
+    }
+
+    return null;
+  }
+
   public updateStationFigmaNodeId(id: StationId, figmaNodeId: string): void {
     const station = this.state.stations.get(id);
     if (station) station.figmaNodeId = figmaNodeId;

@@ -13,7 +13,6 @@ export type UIToPluginMessage =
   | { type: 'remove-station-from-line'; lineId: LineId; stationId: StationId }
   | { type: 'set-line-stops-at-station'; lineId: LineId; stationId: StationId; stopsAt: boolean }
   | { type: 'update-line-path'; lineId: LineId; stationIds: StationId[]; stopsAt: boolean[] }
-  | { type: 'get-station-info'; stationId: StationId }
   | { type: 'update-station'; stationId: StationId; name: string; orientation: StationOrientation; hidden: boolean }
   | { type: 'remove-line-from-station'; stationId: StationId; lineId: LineId }
   | { type: 'clear-plugin-data' }
@@ -26,8 +25,7 @@ export type LineAtStationData = LineData & { stopsAt: boolean };
 export type PluginToUIMessage =
   | { type: 'line-added' } & LineData
   | { type: 'stop-added' }
-  | { type: 'station-clicked'; stationId: StationId; stationName: string }
   | { type: 'line-path-data'; lineId: LineId; stationIds: StationId[]; stationNames: string[]; stopsAt: boolean[] }
   | { type: 'toggle-stops-at'; lineId: LineId; stationId: StationId; stopsAt: boolean }
   | { type: 'station-removed-from-line' }
-  | { type: 'station-info'; stationId: StationId; stationName: string; orientation: StationOrientation; hidden: boolean; lines: Array<LineAtStationData> };
+  | { type: 'station-clicked'; stationId: StationId; stationName: string; orientation: StationOrientation; hidden: boolean; lines: Array<LineAtStationData> };

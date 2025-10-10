@@ -106,12 +106,6 @@ const EditLinePathSection: React.FC<Props> = ({
         // Allow adding the same station multiple times for circular routes
         // Default to stops at this station
         setStationPath(prev => [...prev, { id: msg.stationId, name: msg.stationName, stopsAt: true }]);
-      } else {
-        // Not in adding stations mode, so this is a station edit request
-        postMessageToPlugin({
-          type: 'get-station-info',
-          stationId: msg.stationId
-        });
       }
     });
 

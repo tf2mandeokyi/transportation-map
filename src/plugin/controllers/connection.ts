@@ -1,6 +1,5 @@
 import { LineId, StationId } from "../../common/types";
 import { postMessageToUI } from "../figma";
-import { Station } from "../structures";
 import { BaseController } from "./base";
 
 export class ConnectionController extends BaseController {
@@ -117,32 +116,27 @@ export class ConnectionController extends BaseController {
     const selection = figma.currentPage.selection;
 
     // Handle station clicks for both adding stations mode and editing mode
-    if (selection.length === 1) {
-      const station = this.findStationFromNode(selection[0]);
-      if (station) {
-        // Send station click to UI
-        postMessageToUI({
-          type: 'station-clicked',
-          stationId: station.id,
-          stationName: station.name
-        });
-      }
+    if (selection.length !== 1) { return }
+
+    const station = this.model.findStationFromNode(selection[0]);
+    if (station) {
+      // Send station click to UI
+      postMessageToUI({
+        type: 'station-clicked',
+        stationId: station.id,
+        stationName: station.name,
+        orientation: station.orientation,
+        hidden: station.hidden,
+        lines: Array.from(station.lines.entries()).map(([lineId, lineStopInfo]) => {
+          const line = this.model.getState().lines.get(lineId);
+          return {
+            id: lineId,
+            name: line ? line.name : "Unknown",
+            color: line ? this.rgbToHex(line.color) : "#000000",
+            stopsAt: lineStopInfo.stopsAt
+          };
+        })
+      });
     }
-  }
-
-  private findStationFromNode(node: SceneNode): Station | null {
-    // Recursively traverse up the parent chain to find a station node
-    // by checking if the node ID matches any station's figmaNodeId
-    let currentNode: BaseNode | null = node;
-
-    while (currentNode && 'id' in currentNode) {
-      const station = this.model.findStationByFigmaId(currentNode.id);
-      if (station) {
-        return station;
-      }
-      currentNode = currentNode.parent;
-    }
-
-    return null;
   }
 }
