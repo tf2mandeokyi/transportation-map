@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import StationsSection from './components/StationsSection';
 import BusLinesSection from './components/BusLinesSection';
-import ConnectStationsSection from './components/ConnectStationsSection';
 import EditLinePathSection from './components/EditLinePathSection';
 import EditStationSection from './components/EditStationSection';
 import SettingsSection from './components/SettingsSection';
@@ -105,10 +104,6 @@ const App: React.FC = () => {
           <BusLinesSection
             lines={lines}
             onRemoveLine={handleRemoveLine}
-          />
-          <ConnectStationsSection
-            lines={lines}
-            messageManagerRef={messageManagerRef}
           />
           <EditLinePathSection
             lines={lines}

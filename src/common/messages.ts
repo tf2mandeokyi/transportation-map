@@ -13,6 +13,7 @@ export type UIToPluginMessage =
   | { type: 'get-line-path'; lineId: LineId }
   | { type: 'remove-station-from-line'; lineId: LineId; stationId: StationId }
   | { type: 'set-line-stops-at-station'; lineId: LineId; stationId: StationId; stopsAt: boolean }
+  | { type: 'update-line-path'; lineId: LineId; stationIds: StationId[]; stopsAt: boolean[] }
   | { type: 'get-station-info'; stationId: StationId }
   | { type: 'update-station'; stationId: StationId; name: string; orientation: StationOrientation; hidden: boolean }
   | { type: 'remove-line-from-station'; stationId: StationId; lineId: LineId }

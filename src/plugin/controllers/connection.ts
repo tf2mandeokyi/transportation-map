@@ -100,6 +100,41 @@ export class ConnectionController extends BaseController {
     });
   }
 
+  public async handleUpdateLinePath(lineId: LineId, stationIds: StationId[], stopsAt: boolean[]): Promise<void> {
+    const line = this.model.getState().lines.get(lineId);
+
+    if (!line) {
+      console.error("Line not found:", lineId);
+      return;
+    }
+
+    // Clear the existing path
+    line.path = [];
+
+    // Remove this line from all stations that had it
+    for (const station of this.model.getState().stations.values()) {
+      if (station.lines.has(lineId)) {
+        station.lines.delete(lineId);
+      }
+    }
+
+    // Add each station to the line's path with the corresponding stopsAt value
+    for (let i = 0; i < stationIds.length; i++) {
+      const stationId = stationIds[i];
+      const stationStopsAt = stopsAt[i] ?? true;
+      const station = this.model.getState().stations.get(stationId);
+
+      if (station) {
+        this.model.addStationToLine(lineId, stationId, stationStopsAt);
+      } else {
+        console.warn("Station not found:", stationId);
+      }
+    }
+
+    // Re-render the map with updated connections
+    await this.refresh();
+  }
+
   public connectStationsWithLine(lineId: LineId, startStationId: StationId, endStationId: StationId, stopsAtStart: boolean = true, stopsAtEnd: boolean = true): void {
     // Add stations to the line
     this.model.addStationToLine(lineId, startStationId, stopsAtStart);
