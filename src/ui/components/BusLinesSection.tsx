@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { LineId } from '../../common/types';
-import { LineData } from '../types';
 import { postMessageToPlugin } from '../figma';
+import { LineData } from '../../common/messages';
 
 interface Props {
   lines: LineData[];

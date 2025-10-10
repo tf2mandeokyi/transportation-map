@@ -1,5 +1,6 @@
 
-import { StationId, StationOrientation } from "../../common/types";
+import { LineAtStationData } from "../../common/messages";
+import { LineId, StationId, StationOrientation } from "../../common/types";
 import { postMessageToUI } from "../figma";
 import { BaseController } from "./base";
 
@@ -27,5 +28,59 @@ export class StationController extends BaseController {
       name, position, hidden, orientation,
       lines: new Map()
     });
+  }
+
+  public async handleGetStationInfo(stationId: StationId): Promise<void> {
+    const station = this.model.getState().stations.get(stationId);
+    if (!station) {
+      console.warn(`Station ${stationId} not found`);
+      return;
+    }
+
+    const lines: Array<LineAtStationData> = [];
+
+    // Collect all lines that pass through this station
+    for (const [lineId, lineStopInfo] of station.lines.entries()) {
+      const line = this.model.getState().lines.get(lineId);
+      if (line) {
+        lines.push({
+          id: lineId,
+          name: line.name,
+          color: this.rgbToHex(line.color),
+          stopsAt: lineStopInfo.stopsAt
+        });
+      }
+    }
+
+    postMessageToUI({
+      type: 'station-info',
+      stationId,
+      stationName: station.name,
+      lines
+    });
+  }
+
+  public async handleRemoveLineFromStation(stationId: StationId, lineId: string): Promise<void> {
+    const station = this.model.getState().stations.get(stationId);
+    if (!station) {
+      console.warn(`Station ${stationId} not found`);
+      return;
+    }
+
+    const typedLineId = lineId as LineId;
+
+    // Remove the line from the station's lines map
+    station.lines.delete(typedLineId);
+
+    // Also remove this station from the line's path
+    const line = this.model.getState().lines.get(typedLineId);
+    if (line) {
+      line.path = line.path.filter(sid => sid !== stationId);
+    }
+
+    await this.refresh();
+
+    // Send updated station info back to UI
+    await this.handleGetStationInfo(stationId);
   }
 }

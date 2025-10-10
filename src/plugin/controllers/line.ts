@@ -14,7 +14,7 @@ export class LineController extends BaseController {
 
     // Send the line ID back to the UI so it can store it
     postMessageToUI({
-      type: 'line-added', lineId, name, color
+      type: 'line-added', id: lineId, name, color
     });
   }
 
@@ -38,7 +38,7 @@ export class LineController extends BaseController {
       const hexColor = this.rgbToHex(line.color);
       postMessageToUI({
         type: 'line-added',
-        lineId: line.id,
+        id: line.id,
         name: line.name,
         color: hexColor
       });

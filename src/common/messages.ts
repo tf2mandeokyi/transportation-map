@@ -13,14 +13,20 @@ export type UIToPluginMessage =
   | { type: 'get-line-path'; lineId: LineId }
   | { type: 'remove-station-from-line'; lineId: LineId; stationId: StationId }
   | { type: 'set-line-stops-at-station'; lineId: LineId; stationId: StationId; stopsAt: boolean }
+  | { type: 'get-station-info'; stationId: StationId }
+  | { type: 'remove-line-from-station'; stationId: StationId; lineId: LineId }
   | { type: 'clear-plugin-data' };
+
+export type LineData = { id: LineId; name: string; color: string };
+export type LineAtStationData = LineData & { stopsAt: boolean };
 
 // Messages from Plugin to UI
 export type PluginToUIMessage =
-  | { type: 'line-added'; lineId: LineId; name: string; color: string }
+  | { type: 'line-added' } & LineData
   | { type: 'stop-added' }
   | { type: 'station-clicked'; stationId: StationId; stationName: string }
   | { type: 'stations-connected' }
   | { type: 'line-path-data'; lineId: LineId; stationIds: StationId[]; stationNames: string[]; stopsAt: boolean[] }
   | { type: 'toggle-stops-at'; lineId: LineId; stationId: StationId; stopsAt: boolean }
-  | { type: 'station-removed-from-line' };
+  | { type: 'station-removed-from-line' }
+  | { type: 'station-info'; stationId: StationId; stationName: string; lines: Array<LineAtStationData> };

@@ -3,7 +3,7 @@ import { Model } from "./model";
 import { View } from "./view";
 
 async function main() {
-  figma.showUI(__html__, { visible: true, width: 320, height: 480 });
+  figma.showUI(__html__, { visible: true, width: 400, height: 480 });
 
   console.log("Bus Map Generator Initialized!");
 

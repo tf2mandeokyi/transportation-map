@@ -4,8 +4,6 @@ import { Station } from "../structures";
 import { BaseController } from "./base";
 
 export class ConnectionController extends BaseController {
-  private isAddingStationsMode: boolean = false;
-
   public async handleConnectStationsToLine(lineId: LineId, stationIds: StationId[], stopsAt: boolean): Promise<void> {
     const line = this.model.getState().lines.get(lineId);
 
@@ -32,12 +30,10 @@ export class ConnectionController extends BaseController {
   }
 
   public async handleStartAddingStationsMode(lineId: LineId): Promise<void> {
-    this.isAddingStationsMode = true;
     console.log("Entered station-adding mode for line:", lineId);
   }
 
   public async handleStopAddingStationsMode(): Promise<void> {
-    this.isAddingStationsMode = false;
     console.log("Exited station-adding mode");
   }
 
@@ -92,8 +88,13 @@ export class ConnectionController extends BaseController {
     // Re-render the map
     await this.refresh();
 
-    // Send updated line path data
-    await this.handleGetLinePath(lineId);
+    // Send toggle confirmation message with updated state
+    postMessageToUI({
+      type: 'toggle-stops-at',
+      lineId,
+      stationId,
+      stopsAt
+    });
   }
 
   public connectStationsWithLine(lineId: LineId, startStationId: StationId, endStationId: StationId, stopsAtStart: boolean = true, stopsAtEnd: boolean = true): void {
@@ -105,8 +106,8 @@ export class ConnectionController extends BaseController {
   public handleSelectionChange(): void {
     const selection = figma.currentPage.selection;
 
-    // If we're in adding-stations mode, handle clicks differently
-    if (this.isAddingStationsMode && selection.length === 1) {
+    // Handle station clicks for both adding stations mode and editing mode
+    if (selection.length === 1) {
       const station = this.findStationFromNode(selection[0]);
       if (station) {
         // Send station click to UI
