@@ -35,6 +35,7 @@ const NavButton: React.FC<NavButtonProps> = ({ active, onClick, children }) => (
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'stations' | 'lines' | 'settings'>('stations');
   const [lines, setLines] = useState<LineData[]>([]);
+  const [currentEditingLineId, setCurrentEditingLineId] = useState<LineId | null>(null);
 
   // State for station editing
 
@@ -48,7 +49,12 @@ const App: React.FC = () => {
         // Check if line already exists to avoid duplicates
         const exists = prev.some(line => line.id === msg.id);
         if (exists) {
-          return prev;
+          // Update existing line data
+          return prev.map(line =>
+            line.id === msg.id
+              ? { id: msg.id, name: msg.name, color: msg.color }
+              : line
+          );
         }
         return [...prev, msg];
       });
@@ -80,6 +86,10 @@ const App: React.FC = () => {
 
   const handleReorderLines = (newLines: LineData[]) => {
     setLines(newLines);
+  };
+
+  const handleEditLine = (lineId: LineId) => {
+    setCurrentEditingLineId(lineId);
   };
 
   const handleRenderMap = () => {
@@ -124,12 +134,15 @@ const App: React.FC = () => {
         <div>
           <LinesSection
             lines={lines}
+            currentEditingLineId={currentEditingLineId}
             onRemoveLine={handleRemoveLine}
+            onEditLine={handleEditLine}
             onReorderLines={handleReorderLines}
           />
           <EditLinePathSection
             lines={lines}
             messageManagerRef={messageManagerRef}
+            currentEditingLineId={currentEditingLineId}
           />
         </div>
       )}

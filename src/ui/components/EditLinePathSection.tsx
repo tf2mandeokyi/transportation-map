@@ -49,13 +49,14 @@ const StationPathItem: React.FC<{
 interface Props {
   lines: LineData[];
   messageManagerRef: React.RefObject<FigmaPluginMessageManager>;
+  currentEditingLineId: LineId | null;
 }
 
 const EditLinePathSection: React.FC<Props> = ({
   lines,
-  messageManagerRef
+  messageManagerRef,
+  currentEditingLineId
 }) => {
-  const [currentEditingLineId, setCurrentEditingLineId] = useState<LineId | null>(null);
   const [linePathData, setLinePathData] = useState<{ lineId: LineId; stationIds: StationId[]; stationNames: string[]; stopsAt: boolean[] } | null>(null);
 
   // Station insertion state
@@ -118,22 +119,15 @@ const EditLinePathSection: React.FC<Props> = ({
     };
   }, []); // Only run once on mount
 
-  const handleLineChange = (lineId: LineId) => {
-    if (lineId) {
-      setCurrentEditingLineId(lineId);
+  // Watch for changes to currentEditingLineId from parent
+  useEffect(() => {
+    if (currentEditingLineId) {
       postMessageToPlugin({
         type: 'get-line-path',
-        lineId
+        lineId: currentEditingLineId
       });
-    } else {
-      setCurrentEditingLineId(null);
     }
-
-    // Cancel any ongoing station insertion
-    if (isAddingStations) {
-      handleCancelInsertion();
-    }
-  };
+  }, [currentEditingLineId]);
 
   const handleRemoveStation = (lineId: LineId, stationId: StationId, lineIndex: number) => {
     postMessageToPlugin({
@@ -232,26 +226,64 @@ const EditLinePathSection: React.FC<Props> = ({
     ));
   };
 
+  const handleUpdateLineName = (newName: string) => {
+    if (currentEditingLineId && newName.trim()) {
+      postMessageToPlugin({
+        type: 'update-line-name',
+        lineId: currentEditingLineId,
+        name: newName.trim()
+      });
+    }
+  };
+
+  const handleUpdateLineColor = (newColor: string) => {
+    if (currentEditingLineId) {
+      postMessageToPlugin({
+        type: 'update-line-color',
+        lineId: currentEditingLineId,
+        color: newColor
+      });
+    }
+  };
+
+  const currentLine = lines.find(line => line.id === currentEditingLineId);
   const showPath = currentEditingLineId && linePathData && linePathData.lineId === currentEditingLineId;
 
   return (
     <div className="section">
       <h3>Edit Line Path</h3>
-      <div className="grid">
-        <div>
-          <label htmlFor="edit-line-select">Select Line to Edit</label>
-          <select
-            className="input"
-            id="edit-line-select"
-            value={currentEditingLineId ?? ''}
-            onChange={(e) => handleLineChange(e.target.value as LineId)}
-          >
-            <option value="">Choose a line...</option>
-            {lines.map(line => (
-              <option key={line.id} value={line.id}>{line.name}</option>
-            ))}
-          </select>
+      {!currentEditingLineId && (
+        <p style={{ color: '#666', fontSize: '12px', padding: '8px', textAlign: 'center' }}>
+          Click a line above to edit its path
+        </p>
+      )}
+      {currentLine && (
+        <div className="grid">
+          <div className="two-column">
+            <div>
+              <label htmlFor="edit-line-name">Line Name</label>
+              <input
+                className="input"
+                id="edit-line-name"
+                type="text"
+                value={currentLine.name}
+                onChange={(e) => handleUpdateLineName(e.target.value)}
+              />
+            </div>
+            <div>
+              <label htmlFor="edit-line-color">Color</label>
+              <input
+                className="input"
+                id="edit-line-color"
+                type="color"
+                value={currentLine.color}
+                onChange={(e) => handleUpdateLineColor(e.target.value)}
+              />
+            </div>
+          </div>
         </div>
+      )}
+      <div className="grid">
         {showPath && !isAddingStations && (
           <div>
             <label>Current Path (☑ = stops, ☐ = passes by)</label>

@@ -122,6 +122,16 @@ export class Model {
     }
   }
 
+  public updateLineName(id: LineId, name: string): void {
+    const line = this.state.lines.get(id);
+    if (line) line.name = name;
+  }
+
+  public updateLineColor(id: LineId, color: RGB): void {
+    const line = this.state.lines.get(id);
+    if (line) line.color = color;
+  }
+
   public addStationToLine(lineId: LineId, stationId: StationId, stopsAt: boolean = true): void {
     const line = this.state.lines.get(lineId);
     const station = this.state.stations.get(stationId);

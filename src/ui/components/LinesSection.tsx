@@ -5,14 +5,16 @@ import { LineData } from '../../common/messages';
 
 interface LineItemProps {
   line: LineData;
+  isSelected: boolean;
   onRemove: (lineId: LineId) => void;
+  onEdit: (lineId: LineId) => void;
   onDragStart: (e: React.DragEvent, index: number) => void;
   onDragOver: (e: React.DragEvent, index: number) => void;
   onDrop: (e: React.DragEvent) => void;
   index: number;
 }
 
-const LineItem: React.FC<LineItemProps> = ({ line, onRemove, onDragStart, onDragOver, onDrop, index }) => {
+const LineItem: React.FC<LineItemProps> = ({ line, isSelected, onRemove, onEdit, onDragStart, onDragOver, onDrop, index }) => {
   return (
     <div
       key={line.id}
@@ -21,9 +23,18 @@ const LineItem: React.FC<LineItemProps> = ({ line, onRemove, onDragStart, onDrag
       onDragStart={(e) => onDragStart(e, index)}
       onDragOver={(e) => onDragOver(e, index)}
       onDrop={onDrop}
-      style={{ cursor: 'grab' }}
+      onClick={() => onEdit(line.id)}
+      style={{
+        cursor: 'grab',
+        backgroundColor: isSelected ? '#e3f2fd' : 'transparent',
+        border: isSelected ? '2px solid #18a0fb' : '2px solid transparent',
+        transition: 'all 0.2s ease'
+      }}
     >
-      <div style={{ display: 'flex', alignItems: 'center' }}>
+      <div
+        style={{ display: 'flex', alignItems: 'center', flex: 1, cursor: 'pointer' }}
+        title="Click to edit line path"
+      >
         <span style={{ marginRight: '8px', color: '#999', fontSize: '12px' }}>⋮⋮</span>
         <div className="line-color" style={{ backgroundColor: line.color }}></div>
         <span className="line-info">{line.name}</span>
@@ -31,7 +42,10 @@ const LineItem: React.FC<LineItemProps> = ({ line, onRemove, onDragStart, onDrag
       <div className="line-controls">
         <button
           className="button button--secondary small-btn"
-          onClick={() => onRemove(line.id)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove(line.id);
+          }}
         >
           Remove
         </button>
@@ -42,11 +56,13 @@ const LineItem: React.FC<LineItemProps> = ({ line, onRemove, onDragStart, onDrag
 
 interface Props {
   lines: LineData[];
+  currentEditingLineId: LineId | null;
   onRemoveLine: (lineId: LineId) => void;
+  onEditLine: (lineId: LineId) => void;
   onReorderLines: (lines: LineData[]) => void;
 }
 
-const LinesSection: React.FC<Props> = ({ lines, onRemoveLine, onReorderLines }) => {
+const LinesSection: React.FC<Props> = ({ lines, currentEditingLineId, onRemoveLine, onEditLine, onReorderLines }) => {
   const [lineName, setLineName] = useState('');
   const [lineColor, setLineColor] = useState('#ff0000');
   const [lineCounter, setLineCounter] = useState(0);
@@ -152,8 +168,10 @@ const LinesSection: React.FC<Props> = ({ lines, onRemoveLine, onReorderLines }) 
           <LineItem
             key={line.id}
             line={line}
+            isSelected={line.id === currentEditingLineId}
             index={index}
             onRemove={handleRemoveLine}
+            onEdit={onEditLine}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDrop={handleDrop}

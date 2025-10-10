@@ -7,6 +7,8 @@ export type UIToPluginMessage =
   | { type: 'delete-station'; stationId: StationId }
   | { type: 'add-line'; line: { name: string; color: string } }
   | { type: 'remove-line'; lineId: LineId }
+  | { type: 'update-line-name'; lineId: LineId; name: string }
+  | { type: 'update-line-color'; lineId: LineId; color: string }
   | { type: 'render-map'; rightHandTraffic: boolean }
   | { type: 'start-adding-stations-mode'; lineId: LineId }
   | { type: 'stop-adding-stations-mode' }

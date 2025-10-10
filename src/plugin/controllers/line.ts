@@ -23,6 +23,39 @@ export class LineController extends BaseController {
     await this.refresh();
   }
 
+  public async handleUpdateLineName(lineId: LineId, name: string): Promise<void> {
+    this.model.updateLineName(lineId, name);
+    await this.refresh();
+
+    // Send updated line data to UI
+    const line = this.model.getState().lines.get(lineId);
+    if (line) {
+      postMessageToUI({
+        type: 'line-added',
+        id: lineId,
+        name: line.name,
+        color: this.rgbToHex(line.color)
+      });
+    }
+  }
+
+  public async handleUpdateLineColor(lineId: LineId, color: string): Promise<void> {
+    const rgb = this.hexToRgb(color);
+    this.model.updateLineColor(lineId, rgb);
+    await this.refresh();
+
+    // Send updated line data to UI
+    const line = this.model.getState().lines.get(lineId);
+    if (line) {
+      postMessageToUI({
+        type: 'line-added',
+        id: lineId,
+        name: line.name,
+        color: this.rgbToHex(line.color)
+      });
+    }
+  }
+
   public async handleUpdateLineStackingOrder(lineIds: LineId[]): Promise<void> {
     this.model.updateLineStackingOrder(lineIds);
     await this.refresh();
