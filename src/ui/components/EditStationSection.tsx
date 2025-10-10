@@ -83,6 +83,18 @@ const EditStationSection: React.FC<Props> = ({ messageManagerRef }) => {
     });
   };
 
+  const onDeleteStation = () => {
+    if (!stationId) return;
+
+    if (confirm(`Are you sure you want to delete "${stationName}"? This action cannot be undone.`)) {
+      postMessageToPlugin({
+        type: 'delete-station',
+        stationId
+      });
+      onClose();
+    }
+  };
+
   // Update local state when station data changes
   useEffect(() => {
     if (stationName) setName(stationName);
@@ -149,9 +161,14 @@ const EditStationSection: React.FC<Props> = ({ messageManagerRef }) => {
           />
           <label htmlFor="edit-station-hidden">Hidden (shaping point)</label>
         </div>
-        <button className="button button--primary" onClick={handleUpdate}>
-          Update Station
-        </button>
+        <div className="two-column">
+          <button className="button button--primary" onClick={handleUpdate}>
+            Update Station
+          </button>
+          <button className="button button--secondary" onClick={onDeleteStation} style={{ color: '#F24822' }}>
+            Delete Station
+          </button>
+        </div>
       </div>
 
       {/* Lines Section */}

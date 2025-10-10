@@ -80,6 +80,27 @@ export class StationController extends BaseController {
     await this.handleGetStationInfo(stationId);
   }
 
+  public async handleDeleteStation(stationId: StationId): Promise<void> {
+    const station = this.model.getState().stations.get(stationId);
+    if (!station) {
+      console.warn(`Station ${stationId} not found`);
+      return;
+    }
+
+    // Delete the station's Figma node
+    if (station.figmaNodeId) {
+      const node = await figma.getNodeByIdAsync(station.figmaNodeId);
+      if (node) {
+        node.remove();
+      }
+    }
+
+    // Remove the station from the model (also removes from all lines)
+    this.model.removeStation(stationId);
+
+    await this.refresh();
+  }
+
   public async handleRemoveLineFromStation(stationId: StationId, lineId: string): Promise<void> {
     const station = this.model.getState().stations.get(stationId);
     if (!station) {

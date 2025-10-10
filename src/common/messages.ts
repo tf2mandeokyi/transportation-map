@@ -14,6 +14,7 @@ export type UIToPluginMessage =
   | { type: 'set-line-stops-at-station'; lineId: LineId; stationId: StationId; stopsAt: boolean }
   | { type: 'update-line-path'; lineId: LineId; stationIds: StationId[]; stopsAt: boolean[] }
   | { type: 'update-station'; stationId: StationId; name: string; orientation: StationOrientation; hidden: boolean }
+  | { type: 'delete-station'; stationId: StationId }
   | { type: 'remove-line-from-station'; stationId: StationId; lineId: LineId }
   | { type: 'clear-plugin-data' }
   | { type: 'request-initial-data' };
