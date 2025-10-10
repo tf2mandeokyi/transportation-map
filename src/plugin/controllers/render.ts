@@ -1,4 +1,4 @@
-import { BaseController } from "./base-controller";
+import { BaseController } from "./base";
 
 export class RenderController extends BaseController {
   public async handleRenderMap(rightHandTraffic: boolean): Promise<void> {

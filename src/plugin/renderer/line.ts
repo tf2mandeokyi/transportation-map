@@ -1,13 +1,20 @@
-import { createLineSegmentId, LineSegmentId, StationId, StationOrientation } from "../../common/types";
+import { createLineSegmentId, LineId, LineSegmentId, StationId, StationOrientation } from "../../common/types";
 import { Line, Station } from "../structures";
+import { Model } from "../model";
 import { StationRenderer } from "./station";
 
 export class LineRenderer {
   private figmaLineSegmentMap: Map<LineSegmentId, SceneNode> = new Map();
+  private lineGroupMap: Map<LineId, GroupNode> = new Map();
   private stationRenderer: StationRenderer;
+  private model: Model | null = null;
 
   constructor(stationRenderer: StationRenderer) {
     this.stationRenderer = stationRenderer;
+  }
+
+  public setModel(model: Model): void {
+    this.model = model;
   }
 
   public clearAllSegments(): void {
@@ -17,9 +24,22 @@ export class LineRenderer {
       }
       this.figmaLineSegmentMap.delete(key);
     }
+
+    for (const [key, value] of this.lineGroupMap.entries()) {
+      if (value && !value.removed) {
+        value.remove();
+      }
+      this.lineGroupMap.delete(key);
+    }
   }
 
   public async renderLine(line: Line, stations: Map<StationId, Station>): Promise<void> {
+    // Clean up old group if it exists (from previous render)
+    await this.cleanupOldLineGroup(line);
+
+    // Collect all segment nodes first
+    const segmentNodes: SceneNode[] = [];
+
     // Draw bezier curve segments between consecutive nodes in the line's path
     for (let i = 0; i < line.path.length - 1; i++) {
       const startStationId = line.path[i];
@@ -30,11 +50,48 @@ export class LineRenderer {
 
       if (!startStation || !endStation) continue;
 
-      this.renderLineSegment(line, startStation, endStation);
+      const segmentGroup = this.renderLineSegment(line, startStation, endStation);
+      if (segmentGroup) {
+        segmentNodes.push(segmentGroup);
+      }
+    }
+
+    // Create parent group for this line only if we have segments
+    if (segmentNodes.length > 0) {
+      const lineGroup = figma.group(segmentNodes, figma.currentPage);
+      lineGroup.name = `Line: ${line.name}`;
+      this.lineGroupMap.set(line.id, lineGroup);
+
+      // Store the group ID in the model
+      if (this.model) {
+        this.model.updateLineFigmaGroupId(line.id, lineGroup.id);
+      }
     }
   }
 
-  private renderLineSegment(line: Line, startStation: Station, endStation: Station): void {
+  private async cleanupOldLineGroup(line: Line): Promise<void> {
+    // Remove from memory map if exists
+    const existingGroup = this.lineGroupMap.get(line.id);
+    if (existingGroup && !existingGroup.removed) {
+      existingGroup.remove();
+    }
+    this.lineGroupMap.delete(line.id);
+
+    // Also try to remove group from Figma using stored ID
+    if (line.figmaGroupId) {
+      try {
+        const oldGroup = await figma.getNodeByIdAsync(line.figmaGroupId);
+        if (oldGroup && !oldGroup.removed) {
+          oldGroup.remove();
+        }
+      } catch (error) {
+        // Node doesn't exist anymore, that's fine
+        console.log(`Old line group ${line.figmaGroupId} not found, probably already deleted`);
+      }
+    }
+  }
+
+  private renderLineSegment(line: Line, startStation: Station, endStation: Station): GroupNode | null {
     // Create unique ID for the segment group
     const segmentId = createLineSegmentId(line.id, startStation.id, endStation.id);
 
@@ -46,7 +103,7 @@ export class LineRenderer {
       console.warn(`Missing connection points for line ${line.id} (${line.name})`
         + ` between ${startStation.id} (${startStation.name})`
         + ` and ${endStation.id} (${endStation.name})`);
-      return;
+      return null;
     }
 
     // Calculate bezier curve control points for smooth curves based on station orientations
@@ -82,23 +139,16 @@ export class LineRenderer {
     mainNode.strokeCap = 'ROUND';
     mainNode.strokeJoin = 'ROUND';
 
-    // Create or update group for this segment
-    let segmentGroup = this.figmaLineSegmentMap.get(segmentId) as GroupNode | undefined;
-    if (!segmentGroup) {
-      // Add nodes to page first
-      figma.currentPage.appendChild(outlineNode);
-      figma.currentPage.appendChild(mainNode);
+    // Add nodes to page first so we can group them
+    figma.currentPage.appendChild(outlineNode);
+    figma.currentPage.appendChild(mainNode);
 
-      // Group them together
-      segmentGroup = figma.group([outlineNode, mainNode], figma.currentPage);
-      segmentGroup.name = `Line: ${line.name} (${startStation.id} → ${endStation.id})`;
-      this.figmaLineSegmentMap.set(segmentId, segmentGroup);
-    } else {
-      // Clear existing children and add new ones
-      segmentGroup.children.forEach(child => child.remove());
-      segmentGroup.appendChild(outlineNode);
-      segmentGroup.appendChild(mainNode);
-    }
+    // Create segment group
+    const segmentGroup = figma.group([outlineNode, mainNode], figma.currentPage);
+    segmentGroup.name = `Segment: ${startStation.name} → ${endStation.name}`;
+    this.figmaLineSegmentMap.set(segmentId, segmentGroup);
+
+    return segmentGroup;
   }
 
   private createBezierPath(
@@ -140,10 +190,11 @@ export class LineRenderer {
   }
 
   public moveSegmentsToBack(): void {
-    for (const node of this.figmaLineSegmentMap.values()) {
-      const parent = node.parent;
+    // Move parent line groups to the back
+    for (const lineGroup of this.lineGroupMap.values()) {
+      const parent = lineGroup.parent;
       if (parent && 'insertChild' in parent) {
-        parent.insertChild(0, node);
+        parent.insertChild(0, lineGroup);
       }
     }
   }

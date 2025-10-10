@@ -1,7 +1,7 @@
 
 import { LineId } from "../../common/types";
 import { postMessageToUI } from "../figma";
-import { BaseController } from "./base-controller";
+import { BaseController } from "./base";
 
 export class LineController extends BaseController {
   public async handleAddLine(lineData: { name: string, color: string }): Promise<void> {

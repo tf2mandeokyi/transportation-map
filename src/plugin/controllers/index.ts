@@ -3,10 +3,10 @@ import { LineId, StationId } from "../../common/types";
 import { setUIMessageHandler } from "../figma";
 import { Model } from "../model";
 import { View } from "../view";
-import { ConnectionController } from "./connection-controller";
-import { LineController } from "./line-controller";
-import { RenderController } from "./render-controller";
-import { StationController } from "./station-controller";
+import { ConnectionController } from "./connection";
+import { LineController } from "./line";
+import { RenderController } from "./render";
+import { StationController } from "./station";
 
 export class Controller {
   private model: Model;

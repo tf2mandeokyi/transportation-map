@@ -1,7 +1,7 @@
 import { LineId, StationId } from "../../common/types";
 import { postMessageToUI } from "../figma";
 import { Station } from "../structures";
-import { BaseController } from "./base-controller";
+import { BaseController } from "./base";
 
 export class ConnectionController extends BaseController {
   private isAddingStationsMode: boolean = false;

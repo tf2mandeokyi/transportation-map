@@ -15,6 +15,7 @@ export class View {
 
   public setModel(model: Model): void {
     this.stationRenderer.setModel(model);
+    this.lineSegmentRenderer.setModel(model);
   }
 
   public async render(state: Readonly<MapState>): Promise<void> {

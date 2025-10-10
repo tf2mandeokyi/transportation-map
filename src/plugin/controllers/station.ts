@@ -1,7 +1,7 @@
 
 import { StationId, StationOrientation } from "../../common/types";
 import { postMessageToUI } from "../figma";
-import { BaseController } from "./base-controller";
+import { BaseController } from "./base";
 
 export class StationController extends BaseController {
   public async handleAddStop(stopData: { name: string, orientation: StationOrientation, hidden: boolean }): Promise<void> {
