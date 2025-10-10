@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { LineId, StationId } from '../../common/types';
 import { postMessageToPlugin } from '../figma';
 import { LineData } from '../../common/messages';
@@ -63,35 +63,46 @@ const EditLinePathSection: React.FC<Props> = ({
   const [insertionIndex, setInsertionIndex] = useState<number | null>(null);
   const [stationPath, setStationPath] = useState<{ id: StationId, name: string, stopsAt: boolean }[]>([]);
 
-  messageManagerRef.current.onMessage('station-removed-from-line', () => {
-    setCurrentEditingLineId(current => {
-      if (current) {
+  // Use refs to track current state in event handlers
+  const isAddingStationsRef = useRef(isAddingStations);
+  const currentEditingLineIdRef = useRef(currentEditingLineId);
+
+  useEffect(() => {
+    isAddingStationsRef.current = isAddingStations;
+  }, [isAddingStations]);
+
+  useEffect(() => {
+    currentEditingLineIdRef.current = currentEditingLineId;
+  }, [currentEditingLineId]);
+
+  // Set up message listeners once on mount
+  useEffect(() => {
+    const unsubscribe1 = messageManagerRef.current.onMessage('station-removed-from-line', () => {
+      const lineId = currentEditingLineIdRef.current;
+      if (lineId) {
         postMessageToPlugin({
           type: 'get-line-path',
-          lineId: current
+          lineId
         });
       }
-      return current;
     });
-  });
 
-  messageManagerRef.current.onMessage('toggle-stops-at', msg => {
-    // After toggling, request fresh line path data
-    if (currentEditingLineId === msg.lineId) {
-      postMessageToPlugin({
-        type: 'get-line-path',
-        lineId: msg.lineId
-      });
-    }
-  });
+    const unsubscribe2 = messageManagerRef.current.onMessage('toggle-stops-at', msg => {
+      // After toggling, request fresh line path data
+      if (currentEditingLineIdRef.current === msg.lineId) {
+        postMessageToPlugin({
+          type: 'get-line-path',
+          lineId: msg.lineId
+        });
+      }
+    });
 
-  messageManagerRef.current.onMessage('line-path-data', msg => {
-    setLinePathData(msg);
-  });
+    const unsubscribe3 = messageManagerRef.current.onMessage('line-path-data', msg => {
+      setLinePathData(msg);
+    });
 
-  messageManagerRef.current.onMessage('station-clicked', msg => {
-    setIsAddingStations(current => {
-      if (current) {
+    const unsubscribe4 = messageManagerRef.current.onMessage('station-clicked', msg => {
+      if (isAddingStationsRef.current) {
         // Allow adding the same station multiple times for circular routes
         // Default to stops at this station
         setStationPath(prev => [...prev, { id: msg.stationId, name: msg.stationName, stopsAt: true }]);
@@ -102,9 +113,16 @@ const EditLinePathSection: React.FC<Props> = ({
           stationId: msg.stationId
         });
       }
-      return current;
     });
-  });
+
+    // Cleanup function to unsubscribe all listeners
+    return () => {
+      unsubscribe1();
+      unsubscribe2();
+      unsubscribe3();
+      unsubscribe4();
+    };
+  }, []); // Only run once on mount
 
   const handleLineChange = (lineId: LineId) => {
     if (lineId) {
