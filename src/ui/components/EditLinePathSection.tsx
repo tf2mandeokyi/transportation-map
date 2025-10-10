@@ -4,6 +4,48 @@ import { postMessageToPlugin } from '../figma';
 import { LineData } from '../../common/messages';
 import { FigmaPluginMessageManager } from '../events';
 
+const AddStationsHereButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
+  <div style={{ textAlign: 'center', margin: '4px 0' }}>
+    <button
+      className="button button--secondary"
+      onClick={onClick}
+      style={{ fontSize: '11px', padding: '4px 8px' }}
+    >
+      + Add stations here
+    </button>
+  </div>
+);
+
+const StationPathItem: React.FC<{
+  name: string;
+  index: number;
+  stopsAt: boolean;
+  onToggleStopsAt: () => void;
+  onRemove: () => void;
+}> = ({ name, index, stopsAt, onToggleStopsAt, onRemove }) => (
+  <div className="station-path-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+      <span className="station-number" style={{ paddingLeft: '4px', paddingRight: '4px' }}>{index + 1}</span>
+      <input
+        type="checkbox"
+        checked={stopsAt}
+        onChange={onToggleStopsAt}
+        title={stopsAt ? "Line stops at this station" : "Line passes by this station"}
+        width={16} height={16}
+      />
+    </div>
+    <span style={{ opacity: stopsAt ? 1 : 0.6 }}>
+      {name}
+    </span>
+    <button
+      className="button button--secondary small-btn"
+      onClick={onRemove}
+    >
+      X
+    </button>
+  </div>
+);
+
 interface Props {
   lines: LineData[];
   messageManagerRef: React.RefObject<FigmaPluginMessageManager>;
@@ -19,8 +61,7 @@ const EditLinePathSection: React.FC<Props> = ({
   // Station insertion state
   const [isAddingStations, setIsAddingStations] = useState(false);
   const [insertionIndex, setInsertionIndex] = useState<number | null>(null);
-  const [stationPath, setStationPath] = useState<{ id: StationId, name: string }[]>([]);
-  const [stopsAt, setStopsAt] = useState(true);
+  const [stationPath, setStationPath] = useState<{ id: StationId, name: string, stopsAt: boolean }[]>([]);
 
   messageManagerRef.current.onMessage('station-removed-from-line', () => {
     setCurrentEditingLineId(current => {
@@ -34,6 +75,16 @@ const EditLinePathSection: React.FC<Props> = ({
     });
   });
 
+  messageManagerRef.current.onMessage('toggle-stops-at', msg => {
+    // After toggling, request fresh line path data
+    if (currentEditingLineId === msg.lineId) {
+      postMessageToPlugin({
+        type: 'get-line-path',
+        lineId: msg.lineId
+      });
+    }
+  });
+
   messageManagerRef.current.onMessage('line-path-data', msg => {
     setLinePathData(msg);
   });
@@ -42,7 +93,8 @@ const EditLinePathSection: React.FC<Props> = ({
     setIsAddingStations(current => {
       if (current) {
         // Allow adding the same station multiple times for circular routes
-        setStationPath(prev => [...prev, { id: msg.stationId, name: msg.stationName }]);
+        // Default to stops at this station
+        setStationPath(prev => [...prev, { id: msg.stationId, name: msg.stationName, stopsAt: true }]);
       } else {
         // Not in adding stations mode, so this is a station edit request
         postMessageToPlugin({
@@ -114,11 +166,11 @@ const EditLinePathSection: React.FC<Props> = ({
       ...currentStationIds.slice(insertionIndex)
     ];
 
-    // Create stopsAt array for the new stations
+    // Create stopsAt array using individual stopsAt values for each station
     const currentStopsAt = linePathData?.stopsAt || [];
     const newStopsAtArray = [
       ...currentStopsAt.slice(0, insertionIndex),
-      ...stationPath.map(() => stopsAt),
+      ...stationPath.map(s => s.stopsAt),
       ...currentStopsAt.slice(insertionIndex)
     ];
 
@@ -160,10 +212,13 @@ const EditLinePathSection: React.FC<Props> = ({
     setStationPath([]);
   };
 
+  const handleToggleStationStopsAt = (index: number) => {
+    setStationPath(prev => prev.map((station, i) =>
+      i === index ? { ...station, stopsAt: !station.stopsAt } : station
+    ));
+  };
+
   const showPath = currentEditingLineId && linePathData && linePathData.lineId === currentEditingLineId;
-  const pathDisplay = stationPath.length === 0
-    ? 'None'
-    : stationPath.map((station, idx) => `${idx + 1}. ${station.name}`).join(' → ');
 
   return (
     <div className="section">
@@ -187,60 +242,25 @@ const EditLinePathSection: React.FC<Props> = ({
           <div>
             <label>Current Path (☑ = stops, ☐ = passes by)</label>
             <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-              {/* Add stations button at the beginning */}
-              <div style={{ textAlign: 'center', margin: '4px 0' }}>
-                <button
-                  className="button button--secondary"
-                  onClick={() => handleStartInsertion(0)}
-                  style={{ fontSize: '11px', padding: '4px 8px' }}
-                >
-                  + Add stations here
-                </button>
-              </div>
+              <AddStationsHereButton onClick={() => handleStartInsertion(0)} />
 
               {linePathData.stationIds.length === 0 ? (
                 <p style={{ color: '#666', fontSize: '11px', padding: '8px' }}>
                   No stations in path
                 </p>
               ) : (
-                linePathData.stationIds.map((stationId, index) => {
-                  const stopsAtStation = linePathData.stopsAt[index];
-                  return (
-                    <React.Fragment key={`${stationId}-${index}`}>
-                      <div className="station-path-item">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span className="station-number">{index + 1}</span>
-                          <input
-                            type="checkbox"
-                            checked={stopsAtStation}
-                            onChange={() => handleToggleStopsAt(linePathData.lineId, stationId, stopsAtStation)}
-                            title={stopsAtStation ? "Line stops at this station" : "Line passes by this station"}
-                          />
-                          <span style={{ opacity: stopsAtStation ? 1 : 0.6 }}>
-                            {linePathData.stationNames[index]}
-                          </span>
-                        </div>
-                        <button
-                          className="button button--secondary small-btn"
-                          onClick={() => handleRemoveStation(linePathData.lineId, stationId)}
-                        >
-                          X
-                        </button>
-                      </div>
-
-                      {/* Add stations button after each station */}
-                      <div style={{ textAlign: 'center', margin: '4px 0' }}>
-                        <button
-                          className="button button--secondary"
-                          onClick={() => handleStartInsertion(index + 1)}
-                          style={{ fontSize: '11px', padding: '4px 8px' }}
-                        >
-                          + Add stations here
-                        </button>
-                      </div>
-                    </React.Fragment>
-                  );
-                })
+                linePathData.stationIds.map((stationId, index) => (
+                  <React.Fragment key={`${stationId}-${index}`}>
+                    <StationPathItem
+                      name={linePathData.stationNames[index]}
+                      index={index}
+                      stopsAt={linePathData.stopsAt[index]}
+                      onToggleStopsAt={() => handleToggleStopsAt(linePathData.lineId, stationId, linePathData.stopsAt[index])}
+                      onRemove={() => handleRemoveStation(linePathData.lineId, stationId)}
+                    />
+                    <AddStationsHereButton onClick={() => handleStartInsertion(index + 1)} />
+                  </React.Fragment>
+                ))
               )}
             </div>
           </div>
@@ -253,21 +273,30 @@ const EditLinePathSection: React.FC<Props> = ({
               <p style={{ fontSize: '11px', color: '#666', margin: 0 }}>
                 <strong>Inserting at position {insertionIndex! + 1}</strong><br />
                 1. Click stations on canvas in order<br />
-                2. Toggle "stops at" if needed<br />
+                2. Toggle "stops at" for each station if needed<br />
                 3. Click "Finish" when done
               </p>
             </div>
-            <div style={{ fontSize: '11px', padding: '8px', background: '#f5f5f5', borderRadius: '4px', minHeight: '40px' }}>
-              <strong>New stations:</strong> <span>{pathDisplay}</span>
-            </div>
-            <div className="checkbox-container">
-              <input
-                type="checkbox"
-                id="stops-at-station"
-                checked={stopsAt}
-                onChange={(e) => setStopsAt(e.target.checked)}
-              />
-              <label htmlFor="stops-at-station">Line stops at these stations</label>
+            <div>
+              <label>New stations (☑ = stops, ☐ = passes by)</label>
+              <div style={{ maxHeight: '150px', overflowY: 'auto', padding: '8px', background: '#f5f5f5', borderRadius: '4px' }}>
+                {stationPath.length === 0 ? (
+                  <p style={{ color: '#666', fontSize: '11px', margin: 0 }}>
+                    No stations selected yet
+                  </p>
+                ) : (
+                  stationPath.map((station, index) => (
+                    <StationPathItem
+                      key={`${station.id}-${index}`}
+                      name={station.name}
+                      index={index}
+                      stopsAt={station.stopsAt}
+                      onToggleStopsAt={() => handleToggleStationStopsAt(index)}
+                      onRemove={() => setStationPath(prev => prev.filter((_, i) => i !== index))}
+                    />
+                  ))
+                )}
+              </div>
             </div>
             <div className="two-column">
               <button

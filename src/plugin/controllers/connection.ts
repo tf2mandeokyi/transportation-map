@@ -4,34 +4,6 @@ import { Station } from "../structures";
 import { BaseController } from "./base";
 
 export class ConnectionController extends BaseController {
-  public async handleConnectStationsToLine(lineId: LineId, stationIds: StationId[], stopsAt: boolean): Promise<void> {
-    const line = this.model.getState().lines.get(lineId);
-
-    if (!line) {
-      console.error("Line not found:", lineId);
-      return;
-    }
-
-    // Clear the existing path first (replace, not append)
-    line.path = [];
-
-    // Add each station to the line's path in order
-    for (const stationId of stationIds) {
-      const station = this.model.getState().stations.get(stationId);
-      if (station) {
-        this.model.addStationToLine(lineId, stationId, stopsAt);
-      } else {
-        console.warn("Station not found:", stationId);
-      }
-    }
-
-    // Re-render the map with updated connections
-    await this.refresh();
-
-    // Notify UI of success
-    postMessageToUI({ type: 'stations-connected' });
-  }
-
   public async handleStartAddingStationsMode(lineId: LineId): Promise<void> {
     console.log("Entered station-adding mode for line:", lineId);
   }

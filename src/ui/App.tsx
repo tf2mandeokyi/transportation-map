@@ -51,10 +51,6 @@ const App: React.FC = () => {
     });
   });
 
-  messageManagerRef.current.onMessage('stations-connected', () => {
-    console.log('Stations connected to line');
-  });
-
   messageManagerRef.current.onMessage('stop-added', () => {
     // Stop was successfully added
   });

@@ -74,7 +74,6 @@ export class Controller {
       case 'edit-line': return this.lineController.handleEditLine(msg.lineId);
       case 'remove-line': return this.lineController.handleRemoveLine(msg.lineId);
       case 'render-map': return this.renderController.handleRenderMap(msg.rightHandTraffic);
-      case 'connect-stations-to-line': return this.connectionController.handleConnectStationsToLine(msg.lineId, msg.stationIds, msg.stopsAt);
       case 'start-adding-stations-mode': return this.connectionController.handleStartAddingStationsMode(msg.lineId);
       case 'stop-adding-stations-mode': return this.connectionController.handleStopAddingStationsMode();
       case 'get-line-path': return this.connectionController.handleGetLinePath(msg.lineId);
