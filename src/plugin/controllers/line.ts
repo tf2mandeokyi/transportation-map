@@ -63,14 +63,18 @@ export class LineController extends BaseController {
 
   public syncLinesToUI(): void {
     const state = this.model.getState();
-    for (const line of state.lines.values()) {
-      const hexColor = this.rgbToHex(line.color);
-      postMessageToUI({
-        type: 'line-added',
-        id: line.id,
-        name: line.name,
-        color: hexColor
-      });
+    // Send lines in the order specified by lineStackingOrder
+    for (const lineId of state.lineStackingOrder) {
+      const line = state.lines.get(lineId);
+      if (line) {
+        const hexColor = this.rgbToHex(line.color);
+        postMessageToUI({
+          type: 'line-added',
+          id: line.id,
+          name: line.name,
+          color: hexColor
+        });
+      }
     }
   }
 }
