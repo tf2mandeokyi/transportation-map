@@ -2,28 +2,39 @@ import React, { useState } from 'react';
 import { LineId, StationId } from '../../common/types';
 import { postMessageToPlugin } from '../figma';
 import { LineData } from '../../common/messages';
+import { FigmaPluginMessageManager } from '../events';
 
 interface Props {
   lines: LineData[];
-  isAddingStations: boolean;
-  setIsAddingStations: (value: boolean) => void;
-  stationPath: StationId[];
-  setStationPath: (value: StationId[]) => void;
-  stationPathNames: string[];
-  setStationPathNames: (value: string[]) => void;
+  messageManagerRef: React.RefObject<FigmaPluginMessageManager>;
 }
 
 const ConnectStationsSection: React.FC<Props> = ({
   lines,
-  isAddingStations,
-  setIsAddingStations,
-  stationPath,
-  setStationPath,
-  stationPathNames,
-  setStationPathNames
+  messageManagerRef,
 }) => {
+  const [isAddingStations, setIsAddingStations] = useState(false);
+  const [stationPath, setStationPath] = useState<StationId[]>([]);
+  const [stationPathNames, setStationPathNames] = useState<string[]>([]);
   const [selectedLineId, setSelectedLineId] = useState('' as LineId);
   const [stopsAt, setStopsAt] = useState(true);
+
+  messageManagerRef.current.onMessage('station-clicked', msg => {
+    setIsAddingStations(current => {
+      if (current) {
+        // Allow adding the same station multiple times for circular routes
+        setStationPath(prev => [...prev, msg.stationId]);
+        setStationPathNames(prev => [...prev, msg.stationName]);
+      } else {
+        // Not in adding stations mode, so this is a station edit request
+        postMessageToPlugin({
+          type: 'get-station-info',
+          stationId: msg.stationId
+        });
+      }
+      return current;
+    });
+  })
 
   const handleStartAdding = () => {
     setIsAddingStations(true);

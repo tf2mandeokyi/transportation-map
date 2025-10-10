@@ -1,21 +1,37 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { LineId, StationId } from '../../common/types';
 import { postMessageToPlugin } from '../figma';
 import { LineData } from '../../common/messages';
+import { FigmaPluginMessageManager } from '../events';
 
 interface Props {
   lines: LineData[];
-  currentEditingLineId: LineId | null;
-  setCurrentEditingLineId: (value: LineId | null) => void;
-  linePathData: { lineId: LineId; stationIds: StationId[]; stationNames: string[]; stopsAt: boolean[] } | null;
+  messageManagerRef: React.RefObject<FigmaPluginMessageManager>;
 }
 
 const EditLinePathSection: React.FC<Props> = ({
   lines,
-  currentEditingLineId,
-  setCurrentEditingLineId,
-  linePathData
+  messageManagerRef
 }) => {
+  const [currentEditingLineId, setCurrentEditingLineId] = useState<LineId | null>(null);
+  const [linePathData, setLinePathData] = useState<{ lineId: LineId; stationIds: StationId[]; stationNames: string[]; stopsAt: boolean[] } | null>(null);
+
+  messageManagerRef.current.onMessage('station-removed-from-line', () => {
+    setCurrentEditingLineId(current => {
+      if (current) {
+        postMessageToPlugin({
+          type: 'get-line-path',
+          lineId: current
+        });
+      }
+      return current;
+    });
+  });
+
+  messageManagerRef.current.onMessage('line-path-data', msg => {
+    setLinePathData(msg);
+  });
+
   const handleLineChange = (lineId: LineId) => {
     if (lineId) {
       setCurrentEditingLineId(lineId);

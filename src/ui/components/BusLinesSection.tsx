@@ -3,6 +3,31 @@ import { LineId } from '../../common/types';
 import { postMessageToPlugin } from '../figma';
 import { LineData } from '../../common/messages';
 
+const BusLineItem: React.FC<{ line: LineData; onEdit: (lineId: LineId) => void; onRemove: (lineId: LineId) => void; }> = ({ line, onEdit, onRemove }) => {
+  return (
+    <div key={line.id} className="line-item">
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <div className="line-color" style={{ backgroundColor: line.color }}></div>
+        <span className="line-info">{line.name}</span>
+      </div>
+      <div className="line-controls">
+        <button
+          className="button button--secondary small-btn"
+          onClick={() => onEdit(line.id)}
+        >
+          Edit
+        </button>
+        <button
+          className="button button--secondary small-btn"
+          onClick={() => onRemove(line.id)}
+        >
+          Remove
+        </button>
+      </div>
+    </div>
+  );
+};
+
 interface Props {
   lines: LineData[];
   onRemoveLine: (lineId: LineId) => void;
@@ -78,26 +103,7 @@ const BusLinesSection: React.FC<Props> = ({ lines, onRemoveLine }) => {
 
       <div id="lines-list">
         {lines.map(line => (
-          <div key={line.id} className="line-item">
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <div className="line-color" style={{ backgroundColor: line.color }}></div>
-              <span className="line-info">{line.name}</span>
-            </div>
-            <div className="line-controls">
-              <button
-                className="button button--secondary small-btn"
-                onClick={() => handleEditLine(line.id)}
-              >
-                Edit
-              </button>
-              <button
-                className="button button--secondary small-btn"
-                onClick={() => handleRemoveLine(line.id)}
-              >
-                Remove
-              </button>
-            </div>
-          </div>
+          <BusLineItem key={line.id} line={line} onEdit={handleEditLine} onRemove={handleRemoveLine} />
         ))}
       </div>
     </div>

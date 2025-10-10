@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { StationOrientation } from '../../common/types';
 import { postMessageToPlugin } from '../figma';
 
-const BusStopsSection: React.FC = () => {
+const StationsSection: React.FC = () => {
   const [stopName, setStopName] = useState('');
   const [orientation, setOrientation] = useState<StationOrientation>('RIGHT');
   const [hidden, setHidden] = useState(false);
@@ -25,7 +25,7 @@ const BusStopsSection: React.FC = () => {
 
   return (
     <div className="section">
-      <h3>Bus Stops</h3>
+      <h3>Stations</h3>
       <div className="grid">
         <div className="two-column">
           <div>
@@ -71,4 +71,4 @@ const BusStopsSection: React.FC = () => {
   );
 };
 
-export default BusStopsSection;
+export default StationsSection;

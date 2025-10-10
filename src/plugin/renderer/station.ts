@@ -64,31 +64,32 @@ export class StationRenderer {
 
     // Render individual bus lines using the bus-stop-line template in parallel
     const stopLineFacing = this.getStopLineFacing(station.orientation);
-    const children = await Promise.all(busLines.map(busLine =>
-      renderBusStopLine({
-        text: busLine.line.name,
-        color: busLine.line.color,
-        stops: busLine.stopsAt,
-        visible: !station.hidden,
-        facing: stopLineFacing
-      })
-      .intoNode()
-      .catch(ErrorChain.thrower<SceneNode>(`Error rendering line ${busLine.line.name} at station ${station.name}`))
-    ));
+    const children = await Promise.all(busLines.map(async ({ line, segmentIndex, stopsAt }) => {
+      const node = await renderBusStopLine({
+          text: line.name,
+          color: line.color,
+          stops: stopsAt,
+          visible: !station.hidden,
+          facing: stopLineFacing
+        })
+        .intoNode()
+        .catch(ErrorChain.thrower<SceneNode>(`Error rendering line ${line.name} at station ${station.name}`));
+      return { line, segmentIndex, node };
+    }));
 
     // Render the bus stop container using the bus-stop template
     const align = `${stopLineFacing},center` as const;
     const busStopElement = await renderBusStop({
       text: station.name,
       visible: !station.hidden,
-      rotation, children,
+      rotation, children: children.map(c => c.node),
       align, textLocation
     }).intoNode();
 
     parentFrame.appendChild(busStopElement);
 
     // After rendering, calculate and store the absolute center position of each line's dot
-    this.storeLineConnectionPoints(parentFrame, station, busLines);
+    this.storeLineConnectionPoints(station, children);
   }
 
   private getTextLocation(orientation: StationOrientation, isRightHandTraffic: boolean): 'left' | 'right' | 'top' | 'bottom' {
@@ -151,40 +152,9 @@ export class StationRenderer {
     }).filter(item => item.line);
   }
 
-  private storeLineConnectionPoints(parentFrame: FrameNode, station: Station, busLines: Array<{line: Line, stopsAt: boolean, segmentIndex: number}>) {
-    // Find the bus stop content frame (should be the first child of parentFrame)
-    if (parentFrame.children.length === 0) return;
-
-    const busStopContainer = parentFrame.children[0] as FrameNode;
-
-    // Navigate to find the bus-stop-content frame and then its children container
-    // Structure: busStopContainer -> bus-stop-content -> [rectangle, frame with children]
-    const findContentFrame = (node: SceneNode): FrameNode | null => {
-      if (node.name === "Bus stop content" && 'children' in node) {
-        return node as FrameNode;
-      }
-      if ('children' in node) {
-        for (const child of (node as FrameNode).children) {
-          const result = findContentFrame(child);
-          if (result) return result;
-        }
-      }
-      return null;
-    };
-
-    const busStopContentFrame = findContentFrame(busStopContainer);
-    if (!busStopContentFrame || busStopContentFrame.children.length < 2) return;
-
-    // The second child is the frame containing the line elements
-    const linesContainerFrame = busStopContentFrame.children[1] as FrameNode;
-    if (!linesContainerFrame || !('children' in linesContainerFrame)) return;
-
-    // Each child in linesContainerFrame corresponds to a bus line element
-    const lineElements = linesContainerFrame.children;
-
-    for (let i = 0; i < Math.min(lineElements.length, busLines.length); i++) {
-      const lineElement = lineElements[i] as FrameNode;
-      const busLine = busLines[i];
+  private storeLineConnectionPoints(station: Station, busLines: Array<{line: Line, segmentIndex: number, node: SceneNode}>) {
+    for (let i = 0; i < busLines.length; i++) {
+      const { line: busLine, node: lineElement, segmentIndex } = busLines[i];
 
       // Use absoluteTransform to calculate transformed positions
       // absoluteTransform is a 2x3 matrix: [[a, b, tx], [c, d, ty]]
@@ -243,7 +213,7 @@ export class StationRenderer {
       }
 
       // Store the connection point with segment index
-      const key = `${station.id}-${busLine.line.id}-${busLine.segmentIndex}`;
+      const key = `${station.id}-${busLine.id}-${segmentIndex}`;
       this.lineConnectionPoints.set(key, { head, tail });
     }
   }

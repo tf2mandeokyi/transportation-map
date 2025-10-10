@@ -1,33 +1,78 @@
 import React, { useState, useEffect } from 'react';
 import { LineAtStationData } from '../../common/messages';
-import { LineId, StationOrientation } from '../../common/types';
+import { LineId, StationId, StationOrientation } from '../../common/types';
+import { postMessageToPlugin } from '../figma';
+import { FigmaPluginMessageManager } from '../events';
 
 interface Props {
-  stationId: string | null;
-  stationName: string | null;
-  stationOrientation: StationOrientation | null;
-  stationHidden: boolean | null;
-  linesAtStation: LineAtStationData[];
-  onToggleStopsAt: (lineId: LineId, stopsAt: boolean) => void;
-  onRemoveLine: (lineId: LineId) => void;
-  onUpdateStation: (name: string, orientation: StationOrientation, hidden: boolean) => void;
-  onClose: () => void;
+  messageManagerRef: React.RefObject<FigmaPluginMessageManager>;
 }
 
-const EditStationSection: React.FC<Props> = ({
-  stationId,
-  stationName,
-  stationOrientation,
-  stationHidden,
-  linesAtStation,
-  onToggleStopsAt,
-  onRemoveLine,
-  onUpdateStation,
-  onClose
-}) => {
+const EditStationSection: React.FC<Props> = ({ messageManagerRef }) => {
+  const [stationId, setStationId] = useState<StationId | null>(null);
+  const [stationName, setStationName] = useState<string | null>(null);
+  const [stationOrientation, setStationOrientation] = useState<StationOrientation | null>(null);
+  const [stationHidden, setStationHidden] = useState<boolean | null>(null);
+  const [linesAtStation, setLinesAtStation] = useState<Array<LineAtStationData>>([]);
+
   const [name, setName] = useState('');
   const [orientation, setOrientation] = useState<StationOrientation>('RIGHT');
   const [hidden, setHidden] = useState(false);
+
+  messageManagerRef.current.onMessage('station-info', msg => {
+    setStationId(msg.stationId);
+    setStationName(msg.stationName);
+    setStationOrientation(msg.orientation);
+    setStationHidden(msg.hidden);
+    setLinesAtStation(msg.lines);
+  });
+
+  messageManagerRef.current.onMessage('toggle-stops-at', msg => {
+    setLinesAtStation(prev => prev.map(line =>
+      line.id === msg.lineId ? { ...line, stopsAt: msg.stopsAt } : line
+    ));
+  });
+
+  const onClose = () => {
+    setStationId(null);
+    setStationName(null);
+    setStationOrientation(null);
+    setStationHidden(null);
+    setLinesAtStation([]);
+  };
+  
+  const onToggleStopsAt = (lineId: LineId, currentStopsAt: boolean) => {
+    if (!stationId) return;
+
+    postMessageToPlugin({
+      type: 'set-line-stops-at-station',
+      lineId,
+      stationId,
+      stopsAt: !currentStopsAt
+    });
+  };
+
+  const onRemoveLine = (lineId: LineId) => {
+    if (!stationId) return;
+
+    postMessageToPlugin({
+      type: 'remove-line-from-station',
+      stationId,
+      lineId: lineId
+    });
+  };
+
+  const onUpdateStation = (name: string, orientation: StationOrientation, hidden: boolean) => {
+    if (!stationId) return;
+
+    postMessageToPlugin({
+      type: 'update-station',
+      stationId,
+      name,
+      orientation,
+      hidden
+    });
+  };
 
   // Update local state when station data changes
   useEffect(() => {
