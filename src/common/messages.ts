@@ -12,7 +12,8 @@ export type UIToPluginMessage =
   | { type: 'stop-adding-stations-mode' }
   | { type: 'get-line-path'; lineId: LineId }
   | { type: 'remove-station-from-line'; lineId: LineId; stationId: StationId }
-  | { type: 'set-line-stops-at-station'; lineId: LineId; stationId: StationId; stopsAt: boolean };
+  | { type: 'set-line-stops-at-station'; lineId: LineId; stationId: StationId; stopsAt: boolean }
+  | { type: 'clear-plugin-data' };
 
 // Messages from Plugin to UI
 export type PluginToUIMessage =

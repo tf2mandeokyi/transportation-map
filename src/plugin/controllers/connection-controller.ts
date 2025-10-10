@@ -1,5 +1,5 @@
 import { LineId, StationId } from "../../common/types";
-import { FigmaApi } from "../figma";
+import { postMessageToUI } from "../figma";
 import { Station } from "../structures";
 import { BaseController } from "./base-controller";
 
@@ -28,7 +28,7 @@ export class ConnectionController extends BaseController {
     await this.refresh();
 
     // Notify UI of success
-    FigmaApi.postMessage({ type: 'stations-connected' });
+    postMessageToUI({ type: 'stations-connected' });
   }
 
   public async handleStartAddingStationsMode(lineId: LineId): Promise<void> {
@@ -65,7 +65,7 @@ export class ConnectionController extends BaseController {
     }
 
     // Send path data to UI
-    FigmaApi.postMessage({
+    postMessageToUI({
       type: 'line-path-data',
       lineId,
       stationIds,
@@ -81,7 +81,7 @@ export class ConnectionController extends BaseController {
     await this.refresh();
 
     // Notify UI
-    FigmaApi.postMessage({
+    postMessageToUI({
       type: 'station-removed-from-line'
     });
   }
@@ -110,7 +110,7 @@ export class ConnectionController extends BaseController {
       const station = this.findStationFromNode(selection[0]);
       if (station) {
         // Send station click to UI
-        FigmaApi.postMessage({
+        postMessageToUI({
           type: 'station-clicked',
           stationId: station.id,
           stationName: station.name

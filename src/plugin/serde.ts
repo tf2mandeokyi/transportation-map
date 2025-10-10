@@ -17,6 +17,7 @@ interface SerializedLine {
   n: string;              // name
   c: RGB;                 // color
   p: string[];            // path (stationIds)
+  g: string | null;       // figmaGroupId
 }
 
 interface SerializedMapState {
@@ -41,7 +42,8 @@ export function serializeMapState(state: MapState, rightHandTraffic: boolean): s
     i: line.id,
     n: line.name,
     c: line.color,
-    p: line.path
+    p: line.path,
+    g: line.figmaGroupId
   }));
 
   const serialized: SerializedMapState = {
@@ -84,7 +86,8 @@ export function deserializeMapState(json: string): { state: MapState; rightHandT
         id: l.i as LineId,
         name: l.n,
         color: l.c,
-        path: l.p as StationId[]
+        path: l.p as StationId[],
+        figmaGroupId: l.g ?? null
       });
     }
 

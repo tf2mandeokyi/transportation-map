@@ -1,15 +1,22 @@
 import React, { useState } from 'react';
+import { postMessageToPlugin } from '../figma';
 
 const SettingsSection: React.FC = () => {
   const [rightHandTraffic, setRightHandTraffic] = useState(true);
 
   const handleRenderMap = () => {
-    parent.postMessage({
-      pluginMessage: {
-        type: 'render-map',
-        rightHandTraffic
-      }
-    }, '*');
+    postMessageToPlugin({
+      type: 'render-map',
+      rightHandTraffic
+    });
+  };
+
+  const handleClearData = () => {
+    if (confirm('Are you sure you want to clear all saved data? This will reload the plugin.')) {
+      postMessageToPlugin({
+        type: 'clear-plugin-data'
+      });
+    }
   };
 
   return (
@@ -31,6 +38,15 @@ const SettingsSection: React.FC = () => {
         <button className="button button--secondary full-width" onClick={handleRenderMap}>
           Render Map
         </button>
+      </div>
+
+      <div className="section">
+        <h3>Development</h3>
+        <div className="button-container">
+          <button className="button button--secondary-destructive full-width" onClick={handleClearData}>
+            Clear Saved Data
+          </button>
+        </div>
       </div>
     </>
   );

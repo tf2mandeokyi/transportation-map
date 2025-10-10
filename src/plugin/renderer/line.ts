@@ -1,8 +1,8 @@
 import { createLineSegmentId, LineSegmentId, StationId, StationOrientation } from "../../common/types";
 import { Line, Station } from "../structures";
-import { StationRenderer } from "./station-renderer";
+import { StationRenderer } from "./station";
 
-export class LineSegmentRenderer {
+export class LineRenderer {
   private figmaLineSegmentMap: Map<LineSegmentId, SceneNode> = new Map();
   private stationRenderer: StationRenderer;
 

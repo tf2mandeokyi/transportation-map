@@ -1,6 +1,6 @@
 
 import { StationId, StationOrientation } from "../../common/types";
-import { FigmaApi } from "../figma";
+import { postMessageToUI } from "../figma";
 import { BaseController } from "./base-controller";
 
 export class StationController extends BaseController {
@@ -19,7 +19,7 @@ export class StationController extends BaseController {
     this.createStation(name, position, hidden, orientation);
     await this.refresh();
 
-    FigmaApi.postMessage({ type: 'stop-added' });
+    postMessageToUI({ type: 'stop-added' });
   }
 
   public createStation(name: string, position: Vector, hidden: boolean = false, orientation: StationOrientation = 'RIGHT'): StationId {

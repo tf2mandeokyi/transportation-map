@@ -1,6 +1,6 @@
 
 import { LineId } from "../../common/types";
-import { FigmaApi } from "../figma";
+import { postMessageToUI } from "../figma";
 import { BaseController } from "./base-controller";
 
 export class LineController extends BaseController {
@@ -13,7 +13,7 @@ export class LineController extends BaseController {
     await this.refresh();
 
     // Send the line ID back to the UI so it can store it
-    FigmaApi.postMessage({
+    postMessageToUI({
       type: 'line-added', lineId, name, color
     });
   }
@@ -36,7 +36,7 @@ export class LineController extends BaseController {
     const state = this.model.getState();
     for (const line of state.lines.values()) {
       const hexColor = this.rgbToHex(line.color);
-      FigmaApi.postMessage({
+      postMessageToUI({
         type: 'line-added',
         lineId: line.id,
         name: line.name,

@@ -84,9 +84,9 @@ export class Model {
     if (station) station.orientation = orientation;
   }
 
-  public addLine(line: Omit<Line, 'id'>): LineId {
+  public addLine(line: Omit<Line, 'id' | 'figmaGroupId'>): LineId {
     const id = generateUniqueId(this.state.lines);
-    this.state.lines.set(id, { ...line, id });
+    this.state.lines.set(id, { ...line, id, figmaGroupId: null });
     if (!this.state.lineStackingOrder.includes(id)) {
       this.state.lineStackingOrder.push(id);
     }
@@ -143,6 +143,11 @@ export class Model {
 
   public updateLineStackingOrder(newOrder: LineId[]): void {
     this.state.lineStackingOrder = [...newOrder];
+  }
+
+  public updateLineFigmaGroupId(id: LineId, figmaGroupId: string): void {
+    const line = this.state.lines.get(id);
+    if (line) line.figmaGroupId = figmaGroupId;
   }
 
   public findStationByFigmaId(figmaNodeId: string): Station | null {

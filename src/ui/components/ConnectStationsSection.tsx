@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { LineId, StationId } from '../../common/types';
 import { LineData } from '../types';
+import { postMessageToPlugin } from '../figma';
 
 interface Props {
   lines: LineData[];
@@ -29,12 +30,10 @@ const ConnectStationsSection: React.FC<Props> = ({
     setStationPath([]);
     setStationPathNames([]);
 
-    parent.postMessage({
-      pluginMessage: {
-        type: 'start-adding-stations-mode',
-        lineId: selectedLineId
-      }
-    }, '*');
+    postMessageToPlugin({
+      type: 'start-adding-stations-mode',
+      lineId: selectedLineId
+    });
   };
 
   const handleFinish = () => {
@@ -42,24 +41,20 @@ const ConnectStationsSection: React.FC<Props> = ({
       return;
     }
 
-    parent.postMessage({
-      pluginMessage: {
-        type: 'connect-stations-to-line',
-        lineId: selectedLineId,
-        stationIds: stationPath,
-        stopsAt
-      }
-    }, '*');
+    postMessageToPlugin({
+      type: 'connect-stations-to-line',
+      lineId: selectedLineId,
+      stationIds: stationPath,
+      stopsAt
+    });
 
     setIsAddingStations(false);
     setStationPath([]);
     setStationPathNames([]);
 
-    parent.postMessage({
-      pluginMessage: {
-        type: 'stop-adding-stations-mode'
-      }
-    }, '*');
+    postMessageToPlugin({
+      type: 'stop-adding-stations-mode'
+    });
   };
 
   const handleClearPath = () => {
@@ -72,11 +67,9 @@ const ConnectStationsSection: React.FC<Props> = ({
       setIsAddingStations(false);
       setStationPath([]);
       setStationPathNames([]);
-      parent.postMessage({
-        pluginMessage: {
-          type: 'stop-adding-stations-mode'
-        }
-      }, '*');
+      postMessageToPlugin({
+        type: 'stop-adding-stations-mode'
+      });
     }
     setSelectedLineId(newLineId);
   };

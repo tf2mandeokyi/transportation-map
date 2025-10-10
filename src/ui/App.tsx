@@ -7,6 +7,7 @@ import SettingsSection from './components/SettingsSection';
 import { PluginToUIMessage } from '../common/messages';
 import { LineId, StationId } from '../common/types';
 import { LineData } from './types';
+import { postMessageToPlugin } from './figma';
 
 const App: React.FC = () => {
   const [lines, setLines] = useState<LineData[]>([]);
@@ -43,12 +44,10 @@ const App: React.FC = () => {
         case 'station-removed-from-line':
           // Refresh the current line path if we're editing
           if (currentEditingLineId) {
-            parent.postMessage({
-              pluginMessage: {
-                type: 'get-line-path',
-                lineId: currentEditingLineId
-              }
-            }, '*');
+            postMessageToPlugin({
+              type: 'get-line-path',
+              lineId: currentEditingLineId
+            });
           }
           break;
 

@@ -1,16 +1,16 @@
 import { MapState } from "./structures";
 import { Model } from "./model";
-import { StationRenderer } from "./renderer/station-renderer";
-import { LineSegmentRenderer } from "./renderer/line-segment-renderer";
+import { StationRenderer } from "./renderer/station";
+import { LineRenderer } from "./renderer/line";
 import { ErrorChain } from "./error";
 
 export class View {
   private stationRenderer: StationRenderer;
-  private lineSegmentRenderer: LineSegmentRenderer;
+  private lineSegmentRenderer: LineRenderer;
 
   constructor() {
     this.stationRenderer = new StationRenderer();
-    this.lineSegmentRenderer = new LineSegmentRenderer(this.stationRenderer);
+    this.lineSegmentRenderer = new LineRenderer(this.stationRenderer);
   }
 
   public setModel(model: Model): void {

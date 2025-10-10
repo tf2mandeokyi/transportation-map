@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { LineId } from '../../common/types';
 import { LineData } from '../types';
+import { postMessageToPlugin } from '../figma';
 
 interface Props {
   lines: LineData[];
@@ -18,33 +19,27 @@ const BusLinesSection: React.FC<Props> = ({ lines, onRemoveLine }) => {
       color: lineColor
     };
 
-    parent.postMessage({
-      pluginMessage: {
-        type: 'add-line',
-        line: lineData
-      }
-    }, '*');
+    postMessageToPlugin({
+      type: 'add-line',
+      line: lineData
+    });
 
     setLineName('');
     setLineCounter(prev => prev + 1);
   };
 
   const handleEditLine = (lineId: LineId) => {
-    parent.postMessage({
-      pluginMessage: {
-        type: 'edit-line',
-        lineId
-      }
-    }, '*');
+    postMessageToPlugin({
+      type: 'edit-line',
+      lineId
+    });
   };
 
   const handleRemoveLine = (lineId: LineId) => {
-    parent.postMessage({
-      pluginMessage: {
-        type: 'remove-line',
-        lineId
-      }
-    }, '*');
+    postMessageToPlugin({
+      type: 'remove-line',
+      lineId
+    });
 
     onRemoveLine(lineId);
   };

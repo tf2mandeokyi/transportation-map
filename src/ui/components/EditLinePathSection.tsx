@@ -1,6 +1,7 @@
 import React from 'react';
 import { LineId, StationId } from '../../common/types';
 import { LineData } from '../types';
+import { postMessageToPlugin } from '../figma';
 
 interface Props {
   lines: LineData[];
@@ -18,36 +19,30 @@ const EditLinePathSection: React.FC<Props> = ({
   const handleLineChange = (lineId: LineId) => {
     if (lineId) {
       setCurrentEditingLineId(lineId);
-      parent.postMessage({
-        pluginMessage: {
-          type: 'get-line-path',
-          lineId
-        }
-      }, '*');
+      postMessageToPlugin({
+        type: 'get-line-path',
+        lineId
+      });
     } else {
       setCurrentEditingLineId(null);
     }
   };
 
   const handleRemoveStation = (lineId: LineId, stationId: StationId) => {
-    parent.postMessage({
-      pluginMessage: {
-        type: 'remove-station-from-line',
-        lineId,
-        stationId
-      }
-    }, '*');
+    postMessageToPlugin({
+      type: 'remove-station-from-line',
+      lineId,
+      stationId
+    });
   };
 
   const handleToggleStopsAt = (lineId: LineId, stationId: StationId, currentStopsAt: boolean) => {
-    parent.postMessage({
-      pluginMessage: {
-        type: 'set-line-stops-at-station',
-        lineId,
-        stationId,
-        stopsAt: !currentStopsAt
-      }
-    }, '*');
+    postMessageToPlugin({
+      type: 'set-line-stops-at-station',
+      lineId,
+      stationId,
+      stopsAt: !currentStopsAt
+    });
   };
 
   const showPath = currentEditingLineId && linePathData && linePathData.lineId === currentEditingLineId;

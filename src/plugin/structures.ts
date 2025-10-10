@@ -24,6 +24,8 @@ export interface Line {
   color: RGB; // Figma's native color format
   // An ordered list of NodeIds that defines the line's path
   path: StationId[];
+  // The Figma group ID that contains all visual elements for this line
+  figmaGroupId: string | null;
 }
 
 // The single source of truth for the entire map's state

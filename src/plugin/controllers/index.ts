@@ -1,6 +1,6 @@
 import { UIToPluginMessage } from "../../common/messages";
 import { LineId, StationId } from "../../common/types";
-import { FigmaApi } from "../figma";
+import { setUIMessageHandler } from "../figma";
 import { Model } from "../model";
 import { View } from "../view";
 import { ConnectionController } from "./connection-controller";
@@ -45,7 +45,7 @@ export class Controller {
     console.log("Controller initialized. Listening for user actions.");
 
     // Listen for UI messages
-    FigmaApi.setMessageHandler(async (msg) => {
+    setUIMessageHandler(async (msg) => {
       try {
         await this.handleUIMessage(msg);
       } catch (error) {
@@ -80,7 +80,13 @@ export class Controller {
       case 'get-line-path': return this.connectionController.handleGetLinePath(msg.lineId);
       case 'remove-station-from-line': return this.connectionController.handleRemoveStationFromLine(msg.lineId, msg.stationId);
       case 'set-line-stops-at-station': return this.connectionController.handleSetLineStopsAtStation(msg.lineId, msg.stationId, msg.stopsAt);
+      case 'clear-plugin-data': return this.handleClearPluginData();
     }
+  }
+
+  private async handleClearPluginData(): Promise<void> {
+    figma.root.setPluginData('mapState', '');
+    figma.closePlugin('Plugin data cleared. Please reopen the plugin.');
   }
 
   // Public API for creating stations (used by demo map)

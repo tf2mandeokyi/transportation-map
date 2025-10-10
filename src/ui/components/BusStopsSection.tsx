@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { StationOrientation } from '../../common/types';
+import { postMessageToPlugin } from '../figma';
 
 const BusStopsSection: React.FC = () => {
   const [stopName, setStopName] = useState('');
@@ -13,12 +14,10 @@ const BusStopsSection: React.FC = () => {
       hidden
     };
 
-    parent.postMessage({
-      pluginMessage: {
-        type: 'add-stop',
-        stop: stopData
-      }
-    }, '*');
+    postMessageToPlugin({
+      type: 'add-stop',
+      stop: stopData
+    });
 
     setStopName('');
     setHidden(false);
