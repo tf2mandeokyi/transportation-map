@@ -9,7 +9,7 @@ const StationsSection: React.FC = () => {
 
   const handleAddStation = () => {
     const stationData = {
-      name: stationName || `Station_${Date.now()}`,
+      name: stationName,
       hidden
     };
 
