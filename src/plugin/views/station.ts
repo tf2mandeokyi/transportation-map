@@ -1,5 +1,5 @@
-import { Line, MapState, Station } from "../structures";
-import { Model } from "../model";
+import { Line, MapState, Station } from "../models/structures";
+import { Model } from "../models";
 import { renderStation, renderStationLine } from "../figmls";
 import { ErrorChain } from "../error";
 import { LineId, StationId, StationOrientation } from "../../common/types";

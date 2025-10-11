@@ -1,4 +1,4 @@
-import { LineId, StationId, StationOrientation } from "../common/types";
+import { LineId, StationId, StationOrientation } from "../../common/types";
 
 // Information about a specific line at a specific node
 export interface LineStopInfo {

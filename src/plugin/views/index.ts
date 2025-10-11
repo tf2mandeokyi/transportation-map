@@ -1,8 +1,8 @@
-import { MapState } from "./structures";
-import { Model } from "./model";
-import { StationRenderer } from "./renderer/station";
-import { LineRenderer } from "./renderer/line";
-import { ErrorChain } from "./error";
+import { MapState } from "../models/structures";
+import { Model } from "../models";
+import { StationRenderer } from "./station";
+import { LineRenderer } from "./line";
+import { ErrorChain } from "../error";
 
 export class View {
   private stationRenderer: StationRenderer;

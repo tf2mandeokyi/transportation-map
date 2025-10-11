@@ -1,5 +1,5 @@
-import { Model } from "../model";
-import { View } from "../view";
+import { Model } from "../models";
+import { View } from "../views";
 
 export abstract class BaseController {
   protected model: Model;

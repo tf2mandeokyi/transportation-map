@@ -1,6 +1,6 @@
 import { Line, MapState, Station } from "./structures";
-import { deserializeMapState, serializeMapState } from "./serde";
-import { LineId, StationId, StationOrientation } from "../common/types";
+import { deserializeMapState, serializeMapState } from "../serde";
+import { LineId, StationId, StationOrientation } from "../../common/types";
 
 function generateBase62(length: number): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';

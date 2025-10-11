@@ -1,6 +1,6 @@
 import { Controller } from "./controllers";
-import { Model } from "./model";
-import { View } from "./view";
+import { Model } from "./models";
+import { View } from "./views";
 
 async function main() {
   // Enable performance optimizations

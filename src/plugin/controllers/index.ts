@@ -1,8 +1,8 @@
 import { UIToPluginMessage } from "../../common/messages";
 import { LineId, StationId } from "../../common/types";
 import { setUIMessageHandler } from "../figma";
-import { Model } from "../model";
-import { View } from "../view";
+import { Model } from "../models";
+import { View } from "../views";
 import { ConnectionController } from "./connection";
 import { LineController } from "./line";
 import { RenderController } from "./render";

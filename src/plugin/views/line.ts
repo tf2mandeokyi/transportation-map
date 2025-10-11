@@ -1,6 +1,6 @@
 import { StationId, StationOrientation } from "../../common/types";
-import { Line, Station } from "../structures";
-import { Model } from "../model";
+import { Line, Station } from "../models/structures";
+import { Model } from "../models";
 import { StationRenderer } from "./station";
 
 interface BezierSegment {
