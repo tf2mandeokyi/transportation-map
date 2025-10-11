@@ -22,7 +22,7 @@ export abstract class BaseController {
 
   // Re-render and save
   protected async refresh(): Promise<void> {
-    await this.render();
+    // await this.render(); // Removed redundant render call
     await this.save();
   }
 

@@ -3,7 +3,8 @@ import { BaseController } from "./base";
 export class RenderController extends BaseController {
   public async handleRenderMap(rightHandTraffic: boolean): Promise<void> {
     this.model.setTrafficDirection(rightHandTraffic);
-    await this.refresh();
+    await this.render();
+    await this.save();
   }
 
   public async handleDocumentChange(event: DocumentChangeEvent): Promise<void> {
