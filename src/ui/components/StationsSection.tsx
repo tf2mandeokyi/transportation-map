@@ -4,21 +4,33 @@ import { postMessageToPlugin } from '../figma';
 
 const StationsSection: React.FC = () => {
   const [stationName, setStationName] = useState('');
-  const [orientation, setOrientation] = useState<StationOrientation>('RIGHT');
+  const [orientation, setOrientation] = useState<StationOrientation | 'UP,DOWN' | 'LEFT,RIGHT'>('RIGHT');
   const [hidden, setHidden] = useState(false);
 
   const handleAddStation = () => {
     const stationData = {
       name: stationName || `Station_${Date.now()}`,
-      orientation,
       hidden
     };
 
-    postMessageToPlugin({
-      type: 'add-station',
-      station: stationData
-    });
+    const sendAddStationMessage = (orientation: StationOrientation) => {
+      postMessageToPlugin({
+        type: 'add-station',
+        station: { ...stationData, orientation }
+      });
+    }
 
+    if (orientation === 'UP,DOWN') {
+      sendAddStationMessage('UP');
+      sendAddStationMessage('DOWN');
+      return;
+    }
+    else if (orientation === 'LEFT,RIGHT') {
+      sendAddStationMessage('LEFT');
+      sendAddStationMessage('RIGHT');
+      return;
+    }
+    sendAddStationMessage(orientation);
     setStationName('');
     setHidden(false);
   };
@@ -51,6 +63,8 @@ const StationsSection: React.FC = () => {
               <option value="LEFT">Left</option>
               <option value="UP">Up</option>
               <option value="DOWN">Down</option>
+              <option value="UP,DOWN">Up and Down</option>
+              <option value="LEFT,RIGHT">Left and Right</option>
             </select>
           </div>
         </div>
