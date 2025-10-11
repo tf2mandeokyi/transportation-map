@@ -17,8 +17,9 @@ export class StationController extends BaseController {
       position = { x: node.x + 200, y: node.y };
     }
 
-    this.createStation(name, position, hidden, orientation);
-    await this.refresh();
+    const id = this.createStation(name, position, hidden, orientation);
+    this.view.stationRenderer.renderStation({ id, name, figmaNodeId: null, position, hidden, orientation, lines: new Map() }, this.model.getState());
+    await this.save();
 
     postMessageToUI({ type: 'station-added' });
   }
@@ -74,7 +75,7 @@ export class StationController extends BaseController {
     station.orientation = orientation;
     station.hidden = hidden;
 
-    await this.refresh();
+    await this.save();
 
     // Send updated station info back to UI
     await this.handleGetStationInfo(stationId);
@@ -98,7 +99,7 @@ export class StationController extends BaseController {
     // Remove the station from the model (also removes from all lines)
     this.model.removeStation(stationId);
 
-    await this.refresh();
+    await this.save();
   }
 
   public async handleRemoveLineFromStation(stationId: StationId, lineId: string): Promise<void> {
@@ -119,7 +120,7 @@ export class StationController extends BaseController {
       line.path = line.path.filter(sid => sid !== stationId);
     }
 
-    await this.refresh();
+    await this.save();
 
     // Send updated station info back to UI
     await this.handleGetStationInfo(stationId);

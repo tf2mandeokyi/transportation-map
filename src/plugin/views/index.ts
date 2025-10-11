@@ -5,8 +5,8 @@ import { LineRenderer } from "./line";
 import { ErrorChain } from "../error";
 
 export class View {
-  private stationRenderer: StationRenderer;
-  private lineSegmentRenderer: LineRenderer;
+  readonly stationRenderer: StationRenderer;
+  readonly lineSegmentRenderer: LineRenderer;
 
   constructor() {
     this.stationRenderer = new StationRenderer();

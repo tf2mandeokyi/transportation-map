@@ -20,12 +20,6 @@ export abstract class BaseController {
     await this.model.save();
   }
 
-  // Re-render and save
-  protected async refresh(): Promise<void> {
-    // await this.render(); // Removed redundant render call
-    await this.save();
-  }
-
   // Helper to convert hex to RGB
   protected hexToRgb(hex: string): RGB {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);

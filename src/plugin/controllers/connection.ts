@@ -64,7 +64,7 @@ export class ConnectionController extends BaseController {
     }
 
     // Re-render the map
-    await this.refresh();
+    await this.save();
 
     // Notify UI
     postMessageToUI({
@@ -97,7 +97,7 @@ export class ConnectionController extends BaseController {
     }
 
     // Re-render the map
-    await this.refresh();
+    await this.save();
 
     // Send toggle confirmation message with updated state
     postMessageToUI({
@@ -140,7 +140,7 @@ export class ConnectionController extends BaseController {
     }
 
     // Re-render the map with updated connections
-    await this.refresh();
+    await this.save();
   }
 
   public connectStationsWithLine(lineId: LineId, startStationId: StationId, endStationId: StationId, stopsAtStart: boolean = true, stopsAtEnd: boolean = true): void {

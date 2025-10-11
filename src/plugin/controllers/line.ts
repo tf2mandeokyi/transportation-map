@@ -10,7 +10,7 @@ export class LineController extends BaseController {
     const rgb = this.hexToRgb(color);
 
     const lineId = this.model.addLine({ name, color: rgb, path: [] });
-    await this.refresh();
+    await this.save();
 
     // Send the line ID back to the UI so it can store it
     postMessageToUI({
@@ -20,12 +20,12 @@ export class LineController extends BaseController {
 
   public async handleRemoveLine(lineId: LineId): Promise<void> {
     this.model.removeLine(lineId);
-    await this.refresh();
+    await this.save();
   }
 
   public async handleUpdateLineName(lineId: LineId, name: string): Promise<void> {
     this.model.updateLineName(lineId, name);
-    await this.refresh();
+    await this.save();
 
     // Send updated line data to UI
     const line = this.model.getState().lines.get(lineId);
@@ -42,7 +42,7 @@ export class LineController extends BaseController {
   public async handleUpdateLineColor(lineId: LineId, color: string): Promise<void> {
     const rgb = this.hexToRgb(color);
     this.model.updateLineColor(lineId, rgb);
-    await this.refresh();
+    await this.save();
 
     // Send updated line data to UI
     const line = this.model.getState().lines.get(lineId);
@@ -58,7 +58,7 @@ export class LineController extends BaseController {
 
   public async handleUpdateLineStackingOrder(lineIds: LineId[]): Promise<void> {
     this.model.updateLineStackingOrder(lineIds);
-    await this.refresh();
+    await this.save();
   }
 
   public syncLinesToUI(): void {
