@@ -3,6 +3,7 @@ import { Model } from "../models";
 import { renderStation, renderStationLine } from "../figmls";
 import { ErrorChain } from "../error";
 import { LineId, StationId, StationOrientation } from "../../common/types";
+import { getStationAnchorPoint } from "../utils/anchor";
 
 export interface ConnectionPoints {
   head: Vector,
@@ -49,10 +50,12 @@ export class StationRenderer {
     // Use figml template to render the station
     const children = await this.renderStationWithTemplate(frame, station, state);
 
-    // Position frame so that station.position is at the center
+    // Position frame based on anchor point determined by orientation
     // IMPORTANT: This must happen AFTER rendering content, when frame has correct width/height
-    frame.x = station.position.x - frame.width / 2;
-    frame.y = station.position.y - frame.height / 2;
+    const isRightHandTraffic = this.model?.isRightHandTraffic() || true;
+    const anchor = getStationAnchorPoint(station.orientation, isRightHandTraffic);
+    frame.x = station.position.x - frame.width * anchor.x;
+    frame.y = station.position.y - frame.height * anchor.y;
 
     const maxWidth = children.reduce((max, c) => Math.max(max, c.node.width), 0);
 

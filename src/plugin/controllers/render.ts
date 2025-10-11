@@ -1,4 +1,5 @@
 import { BaseController } from "./base";
+import { getStationAnchorPoint } from "../utils/anchor";
 
 export class RenderController extends BaseController {
   public async handleRenderMap(rightHandTraffic: boolean): Promise<void> {
@@ -18,10 +19,13 @@ export class RenderController extends BaseController {
             // Find the station using the figma node ID
             const station = this.model.findStationByFigmaId(change.id);
             if (station) {
-              // Calculate the center position from the frame's top-left corner
-              const centerX = figmaNode.x + figmaNode.width / 2;
-              const centerY = figmaNode.y + figmaNode.height / 2;
-              this.model.updateStationPosition(station.id, { x: centerX, y: centerY });
+              // Calculate the anchor position from the frame's top-left corner
+              // The anchor point depends on the station's orientation
+              const isRightHandTraffic = this.model.isRightHandTraffic();
+              const anchor = getStationAnchorPoint(station.orientation, isRightHandTraffic);
+              const anchorX = figmaNode.x + figmaNode.width * anchor.x;
+              const anchorY = figmaNode.y + figmaNode.height * anchor.y;
+              this.model.updateStationPosition(station.id, { x: anchorX, y: anchorY });
             }
           }
         } catch (error) {
