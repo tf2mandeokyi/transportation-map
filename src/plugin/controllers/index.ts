@@ -69,22 +69,32 @@ export class Controller {
 
   private handleUIMessage(msg: UIToPluginMessage): Promise<void> {
     switch (msg.type) {
+      // Station actions
       case 'add-station': return this.stationController.handleAddStation(msg.station);
+      case 'update-station': return this.stationController.handleUpdateStation(msg.stationId, msg.name, msg.orientation, msg.hidden);
+      case 'delete-station': return this.stationController.handleDeleteStation(msg.stationId);
+      case 'remove-line-from-station': return this.stationController.handleRemoveLineFromStation(msg.stationId, msg.lineId);
+      case 'select-station': return this.stationController.handleSelectStation(msg.stationId);
+
+      // Line actions
       case 'add-line': return this.lineController.handleAddLine(msg.line);
       case 'remove-line': return this.lineController.handleRemoveLine(msg.lineId);
       case 'update-line-name': return this.lineController.handleUpdateLineName(msg.lineId, msg.name);
       case 'update-line-color': return this.lineController.handleUpdateLineColor(msg.lineId, msg.color);
       case 'update-line-stacking-order': return this.lineController.handleUpdateLineStackingOrder(msg.lineIds);
-      case 'render-map': return this.renderController.handleRenderMap(msg.rightHandTraffic);
+
+      // Connection actions
       case 'start-adding-stations-mode': return this.connectionController.handleStartAddingStationsMode(msg.lineId);
       case 'stop-adding-stations-mode': return this.connectionController.handleStopAddingStationsMode();
       case 'get-line-path': return this.connectionController.handleGetLinePath(msg.lineId);
       case 'remove-station-from-line': return this.connectionController.handleRemoveStationFromLine(msg.lineId, msg.stationId, msg.lineIndex);
       case 'set-line-stops-at-station': return this.connectionController.handleSetLineStopsAtStation(msg.lineId, msg.stationId, msg.lineIndex, msg.stopsAt);
       case 'update-line-path': return this.connectionController.handleUpdateLinePath(msg.lineId, msg.stationIds, msg.stopsAt);
-      case 'update-station': return this.stationController.handleUpdateStation(msg.stationId, msg.name, msg.orientation, msg.hidden);
-      case 'delete-station': return this.stationController.handleDeleteStation(msg.stationId);
-      case 'remove-line-from-station': return this.stationController.handleRemoveLineFromStation(msg.stationId, msg.lineId);
+
+      // Render actions
+      case 'render-map': return this.renderController.handleRenderMap(msg.rightHandTraffic);
+
+      // Misc actions
       case 'clear-plugin-data': return this.handleClearPluginData();
       case 'request-initial-data': return this.handleRequestInitialData();
     }

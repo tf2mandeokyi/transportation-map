@@ -22,8 +22,22 @@ const StationPathItem: React.FC<{
   stopsAt: boolean;
   onToggleStopsAt: () => void;
   onRemove: () => void;
-}> = ({ name, index, stopsAt, onToggleStopsAt, onRemove }) => (
-  <div className="station-path-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+  onSelect?: () => void;
+  isHighlighted?: boolean;
+}> = ({ name, index, stopsAt, onToggleStopsAt, onRemove, onSelect, isHighlighted }) => (
+  <div
+    className="station-path-item"
+    style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      backgroundColor: isHighlighted ? '#e3f2fd' : 'transparent',
+      border: isHighlighted ? '2px solid #18a0fb' : '2px solid transparent',
+      borderRadius: '4px',
+      padding: '2px 4px',
+      transition: 'all 0.2s ease'
+    }}
+  >
     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
       <span className="station-number" style={{ paddingLeft: '4px', paddingRight: '4px' }}>{index + 1}</span>
       <input
@@ -34,7 +48,15 @@ const StationPathItem: React.FC<{
         width={16} height={16}
       />
     </div>
-    <span style={{ opacity: stopsAt ? 1 : 0.6 }}>
+    <span
+      style={{
+        opacity: stopsAt ? 1 : 0.6,
+        cursor: onSelect ? 'pointer' : 'default',
+        flex: 1
+      }}
+      onClick={onSelect}
+      title={onSelect ? "Click to select on canvas" : undefined}
+    >
       {name}
     </span>
     <button
@@ -65,6 +87,9 @@ const EditLinePathSection: React.FC<Props> = ({
   const [isAddingStations, setIsAddingStations] = useState(false);
   const [insertionIndex, setInsertionIndex] = useState<number | null>(null);
   const [stationPath, setStationPath] = useState<{ id: StationId, name: string, stopsAt: boolean }[]>([]);
+
+  // Highlighted station state (when clicked from canvas)
+  const [highlightedStationId, setHighlightedStationId] = useState<StationId | null>(null);
 
   // Use refs to track current state in event handlers
   const isAddingStationsRef = useRef(isAddingStations);
@@ -109,6 +134,9 @@ const EditLinePathSection: React.FC<Props> = ({
         // Allow adding the same station multiple times for circular routes
         // Default to stops at this station
         setStationPath(prev => [...prev, { id: msg.stationId, name: msg.stationName, stopsAt: true }]);
+      } else if (currentEditingLineIdRef.current) {
+        // When not in adding mode but editing a line, highlight the station
+        setHighlightedStationId(msg.stationId);
       }
     });
 
@@ -248,6 +276,14 @@ const EditLinePathSection: React.FC<Props> = ({
     }
   };
 
+  const handleSelectStation = (stationId: StationId) => {
+    postMessageToPlugin({
+      type: 'select-station',
+      stationId
+    });
+    setHighlightedStationId(stationId);
+  };
+
   const currentLine = lines.find(line => line.id === currentEditingLineId);
   const showPath = currentEditingLineId && linePathData && linePathData.lineId === currentEditingLineId;
 
@@ -301,18 +337,26 @@ const EditLinePathSection: React.FC<Props> = ({
                   No stations in path
                 </p>
               ) : (
-                linePathData.stationIds.map((stationId, index) => (
-                  <React.Fragment key={`${stationId}-${index}`}>
-                    <StationPathItem
-                      name={linePathData.stationNames[index]}
-                      index={index}
-                      stopsAt={linePathData.stopsAt[index]}
-                      onToggleStopsAt={() => handleToggleStopsAt(linePathData.lineId, stationId, index, linePathData.stopsAt[index])}
-                      onRemove={() => handleRemoveStation(linePathData.lineId, stationId, index)}
-                    />
-                    <AddStationsHereButton onClick={() => handleStartInsertion(index + 1)} />
-                  </React.Fragment>
-                ))
+                linePathData.stationIds.map((stationId, index) => {
+                  // Highlight the first occurrence of the station in the path
+                  const isFirstOccurrence = linePathData.stationIds.indexOf(stationId) === index;
+                  const isHighlighted = isFirstOccurrence && highlightedStationId === stationId;
+
+                  return (
+                    <React.Fragment key={`${stationId}-${index}`}>
+                      <StationPathItem
+                        name={linePathData.stationNames[index]}
+                        index={index}
+                        stopsAt={linePathData.stopsAt[index]}
+                        onToggleStopsAt={() => handleToggleStopsAt(linePathData.lineId, stationId, index, linePathData.stopsAt[index])}
+                        onRemove={() => handleRemoveStation(linePathData.lineId, stationId, index)}
+                        onSelect={() => handleSelectStation(stationId)}
+                        isHighlighted={isHighlighted}
+                      />
+                      <AddStationsHereButton onClick={() => handleStartInsertion(index + 1)} />
+                    </React.Fragment>
+                  );
+                })
               )}
             </div>
           </div>

@@ -5,6 +5,7 @@ export type UIToPluginMessage =
   | { type: 'add-station'; station: { name: string; orientation: StationOrientation; hidden: boolean } }
   | { type: 'update-station'; stationId: StationId; name: string; orientation: StationOrientation; hidden: boolean }
   | { type: 'delete-station'; stationId: StationId }
+  | { type: 'select-station'; stationId: StationId }
   | { type: 'add-line'; line: { name: string; color: string } }
   | { type: 'remove-line'; lineId: LineId }
   | { type: 'update-line-name'; lineId: LineId; name: string }
@@ -19,7 +20,7 @@ export type UIToPluginMessage =
   | { type: 'remove-line-from-station'; stationId: StationId; lineId: LineId }
   | { type: 'update-line-stacking-order'; lineIds: LineId[] }
   | { type: 'clear-plugin-data' }
-  | { type: 'request-initial-data' };
+  | { type: 'request-initial-data' }
 
 export type LineData = { id: LineId; name: string; color: string };
 export type LineAtStationData = LineData & { stopsAt: boolean };
@@ -27,8 +28,8 @@ export type LineAtStationData = LineData & { stopsAt: boolean };
 // Messages from Plugin to UI
 export type PluginToUIMessage =
   | { type: 'station-added' }
+  | { type: 'station-clicked'; stationId: StationId; stationName: string; orientation: StationOrientation; hidden: boolean; lines: Array<LineAtStationData> }
   | { type: 'line-added' } & LineData
   | { type: 'line-path-data'; lineId: LineId; stationIds: StationId[]; stationNames: string[]; stopsAt: boolean[] }
   | { type: 'toggle-stops-at'; lineId: LineId; stationId: StationId; stopsAt: boolean }
   | { type: 'station-removed-from-line' }
-  | { type: 'station-clicked'; stationId: StationId; stationName: string; orientation: StationOrientation; hidden: boolean; lines: Array<LineAtStationData> };

@@ -125,4 +125,26 @@ export class StationController extends BaseController {
     // Send updated station info back to UI
     await this.handleGetStationInfo(stationId);
   }
+
+  public async handleSelectStation(stationId: StationId): Promise<void> {
+    const station = this.model.getState().stations.get(stationId);
+    if (!station) {
+      console.warn(`Station ${stationId} not found`);
+      return;
+    }
+
+    // Get the station's Figma node and select it
+    if (station.figmaNodeId) {
+      try {
+        const node = await figma.getNodeByIdAsync(station.figmaNodeId);
+        if (node && !node.removed) {
+          figma.currentPage.selection = [node as SceneNode];
+          // Scroll to the selected node
+          figma.viewport.scrollAndZoomIntoView([node as SceneNode]);
+        }
+      } catch (error) {
+        console.warn(`Could not select station ${stationId}:`, error);
+      }
+    }
+  }
 }
