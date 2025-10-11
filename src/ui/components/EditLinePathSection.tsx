@@ -68,6 +68,192 @@ const StationPathItem: React.FC<{
   </div>
 );
 
+const InsertionUI: React.FC<{
+  insertionIndex: number;
+  stationPath: Array<{ id: StationId, name: string, stopsAt: boolean }>;
+  onToggleStopsAt: (index: number) => void;
+  onRemoveStation: (index: number) => void;
+  onFinish: () => void;
+  onClear: () => void;
+  onCancel: () => void;
+}> = ({ insertionIndex, stationPath, onToggleStopsAt, onRemoveStation, onFinish, onClear, onCancel }) => (
+  <div style={{ margin: '8px 0', padding: '12px', background: '#f5f5f5', borderRadius: '4px', border: '2px solid #18a0fb' }}>
+    <p style={{ fontSize: '11px', color: '#666', margin: '0 0 8px 0' }}>
+      <strong>Inserting at position {insertionIndex + 1}</strong><br />
+      1. Click stations on canvas in order<br />
+      2. Toggle "stops at" for each station if needed<br />
+      3. Click "Finish" when done
+    </p>
+    <div style={{ marginBottom: '8px' }}>
+      <label style={{ fontSize: '11px', fontWeight: 'bold' }}>New stations (☑ = stops, ☐ = passes by)</label>
+      <div style={{ padding: '8px', background: '#fff', borderRadius: '4px', marginTop: '4px' }}>
+        {stationPath.length === 0 ? (
+          <p style={{ color: '#666', fontSize: '11px', margin: 0 }}>
+            No stations selected yet
+          </p>
+        ) : (
+          stationPath.map((station, idx) => (
+            <StationPathItem
+              key={`${station.id}-${idx}`}
+              name={station.name}
+              index={idx}
+              stopsAt={station.stopsAt}
+              onToggleStopsAt={() => onToggleStopsAt(idx)}
+              onRemove={() => onRemoveStation(idx)}
+            />
+          ))
+        )}
+      </div>
+    </div>
+    <div className="two-column" style={{ marginBottom: '4px' }}>
+      <button
+        className="button button--primary"
+        onClick={onFinish}
+        disabled={stationPath.length === 0}
+      >
+        Finish
+      </button>
+      <button
+        className="button button--secondary"
+        onClick={onClear}
+        disabled={stationPath.length === 0}
+      >
+        Clear
+      </button>
+    </div>
+    <button
+      className="button button--secondary full-width"
+      onClick={onCancel}
+    >
+      Cancel
+    </button>
+  </div>
+);
+
+const LineInfoEditor: React.FC<{
+  line: LineData;
+  onUpdateName: (name: string) => void;
+  onUpdateColor: (color: string) => void;
+}> = ({ line, onUpdateName, onUpdateColor }) => (
+  <div className="grid">
+    <div className="two-column">
+      <div>
+        <label htmlFor="edit-line-name">Line Name</label>
+        <input
+          className="input"
+          id="edit-line-name"
+          type="text"
+          value={line.name}
+          onChange={(e) => onUpdateName(e.target.value)}
+        />
+      </div>
+      <div>
+        <label htmlFor="edit-line-color">Color</label>
+        <input
+          className="input"
+          id="edit-line-color"
+          type="color"
+          value={line.color}
+          onChange={(e) => onUpdateColor(e.target.value)}
+        />
+      </div>
+    </div>
+  </div>
+);
+
+const StationPathList: React.FC<{
+  linePathData: { lineId: LineId; stationIds: StationId[]; stationNames: string[]; stopsAt: boolean[] };
+  isAddingStations: boolean;
+  insertionIndex: number | null;
+  stationPath: Array<{ id: StationId, name: string, stopsAt: boolean }>;
+  highlightedStationId: StationId | null;
+  onToggleStopsAt: (lineId: LineId, stationId: StationId, index: number, currentStopsAt: boolean) => void;
+  onRemoveStation: (lineId: LineId, stationId: StationId, index: number) => void;
+  onSelectStation: (stationId: StationId) => void;
+  onStartInsertion: (index: number) => void;
+  onToggleStationStopsAt: (index: number) => void;
+  onRemoveFromPath: (index: number) => void;
+  onFinishInsertion: () => void;
+  onClearPath: () => void;
+  onCancelInsertion: () => void;
+}> = ({
+  linePathData,
+  isAddingStations,
+  insertionIndex,
+  stationPath,
+  highlightedStationId,
+  onToggleStopsAt,
+  onRemoveStation,
+  onSelectStation,
+  onStartInsertion,
+  onToggleStationStopsAt,
+  onRemoveFromPath,
+  onFinishInsertion,
+  onClearPath,
+  onCancelInsertion
+}) => (
+  <div>
+    <label>Current Path (☑ = stops, ☐ = passes by)</label>
+    <div>
+      {/* Add stations button or insertion UI at position 0 */}
+      {isAddingStations && insertionIndex === 0 ? (
+        <InsertionUI
+          insertionIndex={insertionIndex}
+          stationPath={stationPath}
+          onToggleStopsAt={onToggleStationStopsAt}
+          onRemoveStation={onRemoveFromPath}
+          onFinish={onFinishInsertion}
+          onClear={onClearPath}
+          onCancel={onCancelInsertion}
+        />
+      ) : (
+        !isAddingStations && <AddStationsHereButton onClick={() => onStartInsertion(0)} />
+      )}
+
+      {linePathData.stationIds.length === 0 ? (
+        <p style={{ color: '#666', fontSize: '11px', padding: '8px' }}>
+          No stations in path
+        </p>
+      ) : (
+        linePathData.stationIds.map((stationId, index) => {
+          // Highlight the first occurrence of the station in the path
+          const isFirstOccurrence = linePathData.stationIds.indexOf(stationId) === index;
+          const isHighlighted = isFirstOccurrence && highlightedStationId === stationId;
+
+          return (
+            <React.Fragment key={`${stationId}-${index}`}>
+              <StationPathItem
+                name={linePathData.stationNames[index]}
+                index={index}
+                stopsAt={linePathData.stopsAt[index]}
+                onToggleStopsAt={() => onToggleStopsAt(linePathData.lineId, stationId, index, linePathData.stopsAt[index])}
+                onRemove={() => onRemoveStation(linePathData.lineId, stationId, index)}
+                onSelect={() => onSelectStation(stationId)}
+                isHighlighted={isHighlighted}
+              />
+
+              {/* Add stations button or insertion UI at position index + 1 */}
+              {isAddingStations && insertionIndex === index + 1 ? (
+                <InsertionUI
+                  insertionIndex={insertionIndex}
+                  stationPath={stationPath}
+                  onToggleStopsAt={onToggleStationStopsAt}
+                  onRemoveStation={onRemoveFromPath}
+                  onFinish={onFinishInsertion}
+                  onClear={onClearPath}
+                  onCancel={onCancelInsertion}
+                />
+              ) : (
+                !isAddingStations && <AddStationsHereButton onClick={() => onStartInsertion(index + 1)} />
+              )}
+            </React.Fragment>
+          );
+        })
+      )}
+    </div>
+  </div>
+);
+
 interface Props {
   lines: LineData[];
   messageManagerRef: React.RefObject<FigmaPluginMessageManager>;
@@ -299,124 +485,33 @@ const EditLinePathSection: React.FC<Props> = ({
         </button>
         <h3 style={{ margin: 0, flex: 1 }}>Edit Line Path</h3>
       </div>
+
       {currentLine && (
-        <div className="grid">
-          <div className="two-column">
-            <div>
-              <label htmlFor="edit-line-name">Line Name</label>
-              <input
-                className="input"
-                id="edit-line-name"
-                type="text"
-                value={currentLine.name}
-                onChange={(e) => handleUpdateLineName(e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor="edit-line-color">Color</label>
-              <input
-                className="input"
-                id="edit-line-color"
-                type="color"
-                value={currentLine.color}
-                onChange={(e) => handleUpdateLineColor(e.target.value)}
-              />
-            </div>
-          </div>
-        </div>
+        <LineInfoEditor
+          line={currentLine}
+          onUpdateName={handleUpdateLineName}
+          onUpdateColor={handleUpdateLineColor}
+        />
       )}
+
       <div className="grid">
-        {showPath && !isAddingStations && (
-          <div>
-            <label>Current Path (☑ = stops, ☐ = passes by)</label>
-            <div>
-              <AddStationsHereButton onClick={() => handleStartInsertion(0)} />
-
-              {linePathData.stationIds.length === 0 ? (
-                <p style={{ color: '#666', fontSize: '11px', padding: '8px' }}>
-                  No stations in path
-                </p>
-              ) : (
-                linePathData.stationIds.map((stationId, index) => {
-                  // Highlight the first occurrence of the station in the path
-                  const isFirstOccurrence = linePathData.stationIds.indexOf(stationId) === index;
-                  const isHighlighted = isFirstOccurrence && highlightedStationId === stationId;
-
-                  return (
-                    <React.Fragment key={`${stationId}-${index}`}>
-                      <StationPathItem
-                        name={linePathData.stationNames[index]}
-                        index={index}
-                        stopsAt={linePathData.stopsAt[index]}
-                        onToggleStopsAt={() => handleToggleStopsAt(linePathData.lineId, stationId, index, linePathData.stopsAt[index])}
-                        onRemove={() => handleRemoveStation(linePathData.lineId, stationId, index)}
-                        onSelect={() => handleSelectStation(stationId)}
-                        isHighlighted={isHighlighted}
-                      />
-                      <AddStationsHereButton onClick={() => handleStartInsertion(index + 1)} />
-                    </React.Fragment>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Station insertion mode UI */}
-        {showPath && isAddingStations && (
-          <>
-            <div>
-              <p style={{ fontSize: '11px', color: '#666', margin: 0 }}>
-                <strong>Inserting at position {insertionIndex! + 1}</strong><br />
-                1. Click stations on canvas in order<br />
-                2. Toggle "stops at" for each station if needed<br />
-                3. Click "Finish" when done
-              </p>
-            </div>
-            <div>
-              <label>New stations (☑ = stops, ☐ = passes by)</label>
-              <div style={{ padding: '8px', background: '#f5f5f5', borderRadius: '4px' }}>
-                {stationPath.length === 0 ? (
-                  <p style={{ color: '#666', fontSize: '11px', margin: 0 }}>
-                    No stations selected yet
-                  </p>
-                ) : (
-                  stationPath.map((station, index) => (
-                    <StationPathItem
-                      key={`${station.id}-${index}`}
-                      name={station.name}
-                      index={index}
-                      stopsAt={station.stopsAt}
-                      onToggleStopsAt={() => handleToggleStationStopsAt(index)}
-                      onRemove={() => setStationPath(prev => prev.filter((_, i) => i !== index))}
-                    />
-                  ))
-                )}
-              </div>
-            </div>
-            <div className="two-column">
-              <button
-                className="button button--primary"
-                onClick={handleFinishInsertion}
-                disabled={stationPath.length === 0}
-              >
-                Finish
-              </button>
-              <button
-                className="button button--secondary"
-                onClick={handleCancelInsertion}
-              >
-                Cancel
-              </button>
-            </div>
-            <button
-              className="button button--secondary full-width"
-              onClick={handleClearPath}
-              disabled={stationPath.length === 0}
-            >
-              Clear Path
-            </button>
-          </>
+        {showPath && (
+          <StationPathList
+            linePathData={linePathData}
+            isAddingStations={isAddingStations}
+            insertionIndex={insertionIndex}
+            stationPath={stationPath}
+            highlightedStationId={highlightedStationId}
+            onToggleStopsAt={handleToggleStopsAt}
+            onRemoveStation={handleRemoveStation}
+            onSelectStation={handleSelectStation}
+            onStartInsertion={handleStartInsertion}
+            onToggleStationStopsAt={handleToggleStationStopsAt}
+            onRemoveFromPath={(idx) => setStationPath(prev => prev.filter((_, i) => i !== idx))}
+            onFinishInsertion={handleFinishInsertion}
+            onClearPath={handleClearPath}
+            onCancelInsertion={handleCancelInsertion}
+          />
         )}
       </div>
     </div>
