@@ -86,7 +86,8 @@ const EditStationSection: React.FC<Props> = ({ messageManagerRef }) => {
   const onDeleteStation = () => {
     if (!stationId) return;
 
-    if (confirm(`Are you sure you want to delete "${stationName}"? This action cannot be undone.`)) {
+    const displayName = stationName || '(unnamed station)';
+    if (confirm(`Are you sure you want to delete "${displayName}"? This action cannot be undone.`)) {
       postMessageToPlugin({
         type: 'delete-station',
         stationId
@@ -97,12 +98,12 @@ const EditStationSection: React.FC<Props> = ({ messageManagerRef }) => {
 
   // Update local state when station data changes
   useEffect(() => {
-    if (stationName) setName(stationName);
+    if (stationName !== null) setName(stationName);
     if (stationOrientation) setOrientation(stationOrientation);
     if (stationHidden !== null) setHidden(stationHidden);
   }, [stationName, stationOrientation, stationHidden]);
 
-  if (!stationId || !stationName) {
+  if (!stationId || stationName === null) {
     return (
       <div className="section">
         <h3>Edit Station</h3>
@@ -135,6 +136,7 @@ const EditStationSection: React.FC<Props> = ({ messageManagerRef }) => {
             id="edit-station-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            placeholder="(Leave empty for crossroad/shaping point)"
             rows={2}
           />
         </div>
