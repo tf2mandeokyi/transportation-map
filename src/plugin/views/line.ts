@@ -130,7 +130,7 @@ export class LineRenderer {
       return null;
     }
 
-    const pathData = this.createBezierPath(stationPoints.tail, stationPoints.head);
+    const pathData = this.createBezierPath(stationPoints.alignStart, stationPoints.alignEnd);
     return this.bezierPathToSegments(pathData, line.color);
   }
 

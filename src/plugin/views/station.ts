@@ -6,7 +6,9 @@ import { LineId, StationId, StationOrientation } from "../../common/types";
 
 export interface ConnectionPoints {
   head: Vector,
-  tail: Vector
+  tail: Vector,
+  alignStart: Vector,
+  alignEnd: Vector
 }
 
 export class StationRenderer {
@@ -176,49 +178,40 @@ export class StationRenderer {
       // absoluteTransform is a 2x3 matrix: [[a, b, tx], [c, d, ty]]
       // where (tx, ty) is the top-left corner position
       const transform = node.absoluteTransform;
+      const width = node.width;
       const height = node.height;
 
       // Calculate the four corners of the element in absolute coordinates
-      const topLeft = {
-        x: transform[0][2],
-        y: transform[1][2]
-      };
-      const topRight = {
-        x: transform[0][2] + transform[0][0] * maxWidth,
-        y: transform[1][2] + transform[1][0] * maxWidth
-      };
-      const bottomLeft = {
-        x: transform[0][2] + transform[0][1] * height,
-        y: transform[1][2] + transform[1][1] * height
-      };
-      const bottomRight = {
-        x: transform[0][2] + transform[0][0] * maxWidth + transform[0][1] * height,
-        y: transform[1][2] + transform[1][0] * maxWidth + transform[1][1] * height
-      };
+      const centerLeft = this.applyTransform(transform, { x: 0, y: height / 2 });
+      const centerRight = this.applyTransform(transform, { x: width, y: height / 2 });
 
-      // Calculate center of left, right, top, and bottom edges
-      const centerLeft = {
-        x: (topLeft.x + bottomLeft.x) / 2,
-        y: (topLeft.y + bottomLeft.y) / 2
-      };
-      const centerRight = {
-        x: (topRight.x + bottomRight.x) / 2,
-        y: (topRight.y + bottomRight.y) / 2
-      };
-
-      let head: Vector;
-      let tail: Vector;
+      let head: Vector, tail: Vector, alignStart: Vector, alignEnd: Vector;
       switch (station.orientation) {
-        case 'LEFT': head = centerLeft; tail = centerRight; break;
-        case 'RIGHT': head = centerRight; tail = centerLeft; break;
-        case 'UP': head = centerRight; tail = centerLeft; break;
-        case 'DOWN': head = centerLeft; tail = centerRight; break;
+        case 'LEFT':
+        case 'DOWN':
+          head = centerLeft;
+          tail = alignEnd = this.applyTransform(transform, { x: maxWidth, y: height / 2 });
+          alignStart = centerRight;
+          break;
+        case 'RIGHT':
+        case 'UP':
+          head = centerRight;
+          tail = alignStart = this.applyTransform(transform, { x: width - maxWidth, y: height / 2 });
+          alignEnd = centerLeft;
+          break;
       }
 
       // Store the connection point with segment index
       const key = `${station.id}-${line.id}-${segmentIndex}`;
-      this.lineConnectionPoints.set(key, { head, tail });
+      this.lineConnectionPoints.set(key, { head, tail, alignStart, alignEnd });
     }
+  }
+
+  private applyTransform(transform: Transform, point: Vector): Vector {
+    return {
+      x: transform[0][0] * point.x + transform[0][1] * point.y + transform[0][2],
+      y: transform[1][0] * point.x + transform[1][1] * point.y + transform[1][2]
+    };
   }
 
   public getConnectionPoint(stationId: StationId, lineId: LineId, segmentIndex: number): ConnectionPoints | undefined {
