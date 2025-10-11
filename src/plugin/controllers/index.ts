@@ -25,6 +25,9 @@ export class Controller {
     this.lineController = new LineController(model, view);
     this.connectionController = new ConnectionController(model, view);
     this.renderController = new RenderController(model, view);
+
+    // Provide lineController reference to other controllers
+    this.stationController.setConnectionController(this.connectionController);
   }
 
   public async render(): Promise<void> {
@@ -73,6 +76,7 @@ export class Controller {
       case 'add-station': return this.stationController.handleAddStation(msg.station);
       case 'update-station': return this.stationController.handleUpdateStation(msg.stationId, msg.name, msg.orientation, msg.hidden);
       case 'delete-station': return this.stationController.handleDeleteStation(msg.stationId);
+      case 'copy-station': return this.stationController.handleCopyStation(msg.stationId, msg.direction);
       case 'remove-line-from-station': return this.stationController.handleRemoveLineFromStation(msg.stationId, msg.lineId);
       case 'select-station': return this.stationController.handleSelectStation(msg.stationId);
 

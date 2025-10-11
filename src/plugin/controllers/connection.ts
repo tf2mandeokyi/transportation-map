@@ -108,6 +108,41 @@ export class ConnectionController extends BaseController {
     });
   }
 
+  /**
+   * Insert a station into a line's path relative to another station
+   * @param lineId The line to modify
+   * @param newStationId The station to insert
+   * @param relativeToStationId The reference station
+   * @param insertAfter If true, insert after the reference station; if false, insert before
+   * @param stopsAt Whether the line stops at the new station
+   * @returns true if insertion was successful, false otherwise
+   */
+  public insertStationIntoLine(
+    lineId: LineId,
+    newStationId: StationId,
+    relativeToStationId: StationId,
+    insertAfter: boolean,
+    stopsAt: boolean
+  ): boolean {
+    const line = this.model.getState().lines.get(lineId);
+    const newStation = this.model.getState().stations.get(newStationId);
+
+    if (!line || !newStation) return false;
+
+    // Find the index of the reference station
+    const refIndex = line.path.indexOf(relativeToStationId);
+    if (refIndex === -1) return false;
+
+    // Insert new station at the appropriate position
+    const insertIndex = insertAfter ? refIndex + 1 : refIndex;
+    line.path.splice(insertIndex, 0, newStationId);
+
+    // Add this line to the new station's lines map
+    newStation.lines.set(lineId, { stopsAt });
+
+    return true;
+  }
+
   public async handleUpdateLinePath(lineId: LineId, stationIds: StationId[], stopsAt: boolean[]): Promise<void> {
     const line = this.model.getState().lines.get(lineId);
 

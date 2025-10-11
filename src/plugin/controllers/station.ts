@@ -126,6 +126,72 @@ export class StationController extends BaseController {
     await this.handleGetStationInfo(stationId);
   }
 
+  public async handleCopyStation(stationId: StationId, direction: 'forwards' | 'backwards'): Promise<void> {
+    const station = this.model.getState().stations.get(stationId);
+    if (!station) {
+      console.warn(`Station ${stationId} not found`);
+      return;
+    }
+
+    // Calculate offset based on orientation and direction
+    const offset = 100; // pixels
+    const { dx, dy } = this.calculateCopyOffset(station.orientation, direction, offset);
+
+    // Create new station at offset position
+    const newPosition = {
+      x: station.position.x + dx,
+      y: station.position.y + dy
+    };
+
+    const newStationId = this.createStation(station.name, newPosition, station.hidden, station.orientation);
+    const newStation = this.model.getState().stations.get(newStationId)!;
+
+    // Copy line connections using ConnectionController
+    if (this.connectionController) {
+      const insertAfter = direction === 'forwards';
+      for (const [lineId, lineStopInfo] of station.lines.entries()) {
+        this.connectionController.insertStationIntoLine(
+          lineId,
+          newStationId,
+          stationId,
+          insertAfter,
+          lineStopInfo.stopsAt
+        );
+      }
+    }
+
+    // Render the new station
+    await this.view.stationRenderer.renderStation(newStation, this.model.getState());
+    await this.save();
+    await this.handleSelectStation(newStationId);
+  }
+
+  private calculateCopyOffset(
+    orientation: StationOrientation,
+    direction: 'forwards' | 'backwards',
+    offset: number
+  ): { dx: number; dy: number } {
+    let dx = 0, dy = 0;
+
+    if (direction === 'forwards') {
+      switch (orientation) {
+        case 'RIGHT': dx = offset; break;
+        case 'LEFT': dx = -offset; break;
+        case 'UP': dy = -offset; break;
+        case 'DOWN': dy = offset; break;
+      }
+    } else { // backwards
+      switch (orientation) {
+        case 'RIGHT': dx = -offset; break;
+        case 'LEFT': dx = offset; break;
+        case 'UP': dy = offset; break;
+        case 'DOWN': dy = -offset; break;
+      }
+    }
+
+    return { dx, dy };
+  }
+
   public async handleSelectStation(stationId: StationId): Promise<void> {
     const station = this.model.getState().stations.get(stationId);
     if (!station) {

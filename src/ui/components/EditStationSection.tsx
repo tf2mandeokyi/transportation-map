@@ -90,6 +90,22 @@ const EditStationSection: React.FC<Props> = ({ messageManagerRef }) => {
     });
   };
 
+  const onCopyStationForwards = () => {
+    postMessageToPlugin({
+      type: 'copy-station',
+      stationId: stationId!,
+      direction: 'forwards'
+    });
+  };
+
+  const onCopyStationBackwards = () => {
+    postMessageToPlugin({
+      type: 'copy-station',
+      stationId: stationId!,
+      direction: 'backwards'
+    });
+  };
+
   const onDeleteStation = () => {
     if (!stationId) return;
 
@@ -208,6 +224,14 @@ const EditStationSection: React.FC<Props> = ({ messageManagerRef }) => {
             onChange={(e) => setHidden(e.target.checked)}
           />
           <label htmlFor="edit-station-hidden">Hidden (shaping point)</label>
+        </div>
+        <div className="two-column" style={{ marginBottom: '8px' }}>
+          <button className="button button--secondary" onClick={onCopyStationForwards}>
+            Copy Forwards
+          </button>
+          <button className="button button--secondary" onClick={onCopyStationBackwards}>
+            Copy Backwards
+          </button>
         </div>
         <button className="button button--secondary full-width" onClick={onDeleteStation} style={{ color: '#F24822' }}>
           Delete Station

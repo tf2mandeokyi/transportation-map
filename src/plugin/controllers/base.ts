@@ -1,13 +1,20 @@
 import { Model } from "../models";
 import { View } from "../views";
+import { ConnectionController } from "./connection";
 
 export abstract class BaseController {
   protected model: Model;
   protected view: View;
+  protected connectionController?: ConnectionController;
 
   constructor(model: Model, view: View) {
     this.model = model;
     this.view = view;
+  }
+
+  // Allow setting connectionController after construction to avoid circular dependencies
+  public setConnectionController(connectionController: ConnectionController): void {
+    this.connectionController = connectionController;
   }
 
   // Re-render the view
