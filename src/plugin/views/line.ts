@@ -44,9 +44,7 @@ export class LineRenderer {
     await this.cleanupOldLineGroup(line);
 
     // Collect all segment nodes first
-    // const segmentNodes: SceneNode[] = [];
-    const outlineNodes: VectorNode[] = [];
-    const mainNodes: VectorNode[] = [];
+    const segmentNodes: SceneNode[] = [];
 
     // Draw bezier curve segments between consecutive nodes in the line's path
     for (let i = 0; i < line.path.length - 1; i++) {
@@ -57,6 +55,8 @@ export class LineRenderer {
       const endStation = stations.get(endStationId);
 
       if (!startStation || !endStation) continue;
+      const outlineNodes: VectorNode[] = [];
+      const mainNodes: VectorNode[] = [];
 
       const segmentGroup = this.renderLineSegment(line, i, startStation, endStation);
       if (segmentGroup) {
@@ -72,13 +72,15 @@ export class LineRenderer {
           mainNodes.push(middleSegment.main);
         }
       }
+
+      const outlineGroup = figma.group(outlineNodes, figma.currentPage);
+      const mainGroup = figma.group(mainNodes, figma.currentPage);
+      segmentNodes.push(outlineGroup, mainGroup);
     }
 
     // Create parent group for this line only if we have segments
-    if (outlineNodes.length > 0 && mainNodes.length > 0) {
-      const outlineGroup = figma.group(outlineNodes, figma.currentPage);
-      const mainGroup = figma.group(mainNodes, figma.currentPage);
-      const lineGroup = figma.group([outlineGroup, mainGroup], figma.currentPage);
+    if (segmentNodes.length > 0) {
+      const lineGroup = figma.group(segmentNodes, figma.currentPage);
       lineGroup.name = `Line: ${line.name}`;
       lineGroup.locked = true; // Prevent accidental movement
 
