@@ -13,6 +13,8 @@ export class TextRenderer extends BaseRenderer {
       let content = node.content || node.attributes.text;
       if (!content) throw new Error("Text node must have content or text attribute");
       text.characters = content.interpolate(props);
+    }, () => {
+      BaseRenderer.applyVisibilityAttribute(text, node.attributes, props);
     });
   }
 

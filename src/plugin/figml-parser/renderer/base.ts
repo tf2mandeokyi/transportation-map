@@ -37,14 +37,6 @@ export abstract class BaseRenderer {
       }
     }
 
-    if (attributes.visible) {
-      const visible = attributes.visible.interpolate(props);
-      if (visible !== 'true' && visible !== 'false') {
-        throw Error(`Invalid value for visible attribute: ${visible}. Expected 'true' or 'false'.`);
-      }
-      node.visible = visible === 'true';
-    }
-
     if (attributes.name) {
       const name = attributes.name.interpolate(props);
       node.name = name;
@@ -63,6 +55,16 @@ export abstract class BaseRenderer {
         throw Error(`Invalid value for locked attribute: ${locked}. Expected 'true' or 'false'.`);
       }
       node.locked = locked === 'true';
+    }
+  }
+
+  protected static applyVisibilityAttribute(node: SceneNode, attributes: Record<string, StringTemplate | undefined>, props: FigmlProps) {
+    if (attributes.visible) {
+      const visible = attributes.visible.interpolate(props);
+      if (visible !== 'true' && visible !== 'false') {
+        throw Error(`Invalid value for visible attribute: ${visible}. Expected 'true' or 'false'.`);
+      }
+      node.visible = visible === 'true';
     }
   }
 

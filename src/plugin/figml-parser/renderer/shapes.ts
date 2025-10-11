@@ -9,6 +9,8 @@ export class RectangleRenderer extends BaseRenderer {
     return RenderResult.newNode(rect, () => {
       BaseRenderer.applyCommonAttributes(rect, node.attributes, props);
       this.applyShapeAttributes(rect, node.attributes, props);
+    }, () => {
+      BaseRenderer.applyVisibilityAttribute(rect, node.attributes, props);
     });
   }
 
@@ -44,6 +46,8 @@ export class EllipseRenderer extends BaseRenderer {
     return RenderResult.newNode(ellipse, () => {
       BaseRenderer.applyCommonAttributes(ellipse, node.attributes, props);
       this.applyShapeAttributes(ellipse, node.attributes, props);
+    }, () => {
+      BaseRenderer.applyVisibilityAttribute(ellipse, node.attributes, props);
     });
   }
 
@@ -71,20 +75,24 @@ export class EllipseRenderer extends BaseRenderer {
 export class PolygonRenderer extends BaseRenderer {
   render(node: FigmlNode, props: FigmlProps): RenderResult {
     const shapeResult = this.createShape(node, props);
+    let render: () => void | Promise<void>;
     if (shapeResult.type === 'vector') {
       const { shape, vectorNetwork } = shapeResult;
-      return RenderResult.newNode(shape, async () => {
+      render = async () => {
         await shape.setVectorNetworkAsync(vectorNetwork);
         BaseRenderer.applyCommonAttributes(shape, node.attributes, props);
         this.applyShapeAttributes(shape, node.attributes, props);
-      });
+      };
     } else {
       const { shape } = shapeResult;
-      return RenderResult.newNode(shape, () => {
+      render = () => {
         BaseRenderer.applyCommonAttributes(shape, node.attributes, props);
         this.applyShapeAttributes(shape, node.attributes, props);
-      });
+      };
     }
+    return RenderResult.newNode(shapeResult.shape, render, () => {
+      BaseRenderer.applyVisibilityAttribute(shapeResult.shape, node.attributes, props);
+    });
   }
 
   private createShape(node: FigmlNode, props: FigmlProps): {

@@ -33,6 +33,8 @@ export class FrameRenderer extends BaseRenderer {
     return RenderResult.newFrameNode(frame, children, () => {
       this.applyFrameAttributes(frame, node.attributes, props);
       BaseRenderer.applyCommonAttributes(frame, node.attributes, props);
+    }, () => {
+      BaseRenderer.applyVisibilityAttribute(frame, node.attributes, props);
     });
   }
 
