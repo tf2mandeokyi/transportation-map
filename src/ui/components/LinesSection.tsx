@@ -5,7 +5,6 @@ import { LineData } from '../../common/messages';
 
 interface LineItemProps {
   line: LineData;
-  isSelected: boolean;
   onRemove: (lineId: LineId) => void;
   onEdit: (lineId: LineId) => void;
   onDragStart: (e: React.DragEvent, index: number) => void;
@@ -14,7 +13,7 @@ interface LineItemProps {
   index: number;
 }
 
-const LineItem: React.FC<LineItemProps> = ({ line, isSelected, onRemove, onEdit, onDragStart, onDragOver, onDrop, index }) => {
+const LineItem: React.FC<LineItemProps> = ({ line, onRemove, onEdit, onDragStart, onDragOver, onDrop, index }) => {
   return (
     <div
       key={line.id}
@@ -25,10 +24,7 @@ const LineItem: React.FC<LineItemProps> = ({ line, isSelected, onRemove, onEdit,
       onDrop={onDrop}
       onClick={() => onEdit(line.id)}
       style={{
-        cursor: 'grab',
-        backgroundColor: isSelected ? '#e3f2fd' : 'transparent',
-        border: isSelected ? '2px solid #18a0fb' : '2px solid transparent',
-        transition: 'all 0.2s ease'
+        cursor: 'grab'
       }}
     >
       <div
@@ -56,13 +52,12 @@ const LineItem: React.FC<LineItemProps> = ({ line, isSelected, onRemove, onEdit,
 
 interface Props {
   lines: LineData[];
-  currentEditingLineId: LineId | null;
   onRemoveLine: (lineId: LineId) => void;
   onEditLine: (lineId: LineId) => void;
   onReorderLines: (lines: LineData[]) => void;
 }
 
-const LinesSection: React.FC<Props> = ({ lines, currentEditingLineId, onRemoveLine, onEditLine, onReorderLines }) => {
+const LinesSection: React.FC<Props> = ({ lines, onRemoveLine, onEditLine, onReorderLines }) => {
   const [lineName, setLineName] = useState('');
   const [lineColor, setLineColor] = useState('#ff0000');
   const [lineCounter, setLineCounter] = useState(0);
@@ -168,7 +163,6 @@ const LinesSection: React.FC<Props> = ({ lines, currentEditingLineId, onRemoveLi
           <LineItem
             key={line.id}
             line={line}
-            isSelected={line.id === currentEditingLineId}
             index={index}
             onRemove={handleRemoveLine}
             onEdit={onEditLine}

@@ -50,12 +50,14 @@ interface Props {
   lines: LineData[];
   messageManagerRef: React.RefObject<FigmaPluginMessageManager>;
   currentEditingLineId: LineId | null;
+  onBack: () => void;
 }
 
 const EditLinePathSection: React.FC<Props> = ({
   lines,
   messageManagerRef,
-  currentEditingLineId
+  currentEditingLineId,
+  onBack
 }) => {
   const [linePathData, setLinePathData] = useState<{ lineId: LineId; stationIds: StationId[]; stationNames: string[]; stopsAt: boolean[] } | null>(null);
 
@@ -251,12 +253,16 @@ const EditLinePathSection: React.FC<Props> = ({
 
   return (
     <div className="section">
-      <h3>Edit Line Path</h3>
-      {!currentEditingLineId && (
-        <p style={{ color: '#666', fontSize: '12px', padding: '8px', textAlign: 'center' }}>
-          Click a line above to edit its path
-        </p>
-      )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+        <button
+          className="button button--secondary"
+          onClick={onBack}
+          style={{ padding: '8px 12px' }}
+        >
+          &lt; Back
+        </button>
+        <h3 style={{ margin: 0, flex: 1 }}>Edit Line Path</h3>
+      </div>
       {currentLine && (
         <div className="grid">
           <div className="two-column">
@@ -287,7 +293,7 @@ const EditLinePathSection: React.FC<Props> = ({
         {showPath && !isAddingStations && (
           <div>
             <label>Current Path (☑ = stops, ☐ = passes by)</label>
-            <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+            <div>
               <AddStationsHereButton onClick={() => handleStartInsertion(0)} />
 
               {linePathData.stationIds.length === 0 ? (
@@ -325,7 +331,7 @@ const EditLinePathSection: React.FC<Props> = ({
             </div>
             <div>
               <label>New stations (☑ = stops, ☐ = passes by)</label>
-              <div style={{ maxHeight: '150px', overflowY: 'auto', padding: '8px', background: '#f5f5f5', borderRadius: '4px' }}>
+              <div style={{ padding: '8px', background: '#f5f5f5', borderRadius: '4px' }}>
                 {stationPath.length === 0 ? (
                   <p style={{ color: '#666', fontSize: '11px', margin: 0 }}>
                     No stations selected yet

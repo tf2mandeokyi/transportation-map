@@ -132,18 +132,21 @@ const App: React.FC = () => {
 
       {activeTab === 'lines' && (
         <div>
-          <LinesSection
-            lines={lines}
-            currentEditingLineId={currentEditingLineId}
-            onRemoveLine={handleRemoveLine}
-            onEditLine={handleEditLine}
-            onReorderLines={handleReorderLines}
-          />
-          <EditLinePathSection
-            lines={lines}
-            messageManagerRef={messageManagerRef}
-            currentEditingLineId={currentEditingLineId}
-          />
+          {!currentEditingLineId ? (
+            <LinesSection
+              lines={lines}
+              onRemoveLine={handleRemoveLine}
+              onEditLine={handleEditLine}
+              onReorderLines={handleReorderLines}
+            />
+          ) : (
+            <EditLinePathSection
+              lines={lines}
+              messageManagerRef={messageManagerRef}
+              currentEditingLineId={currentEditingLineId}
+              onBack={() => setCurrentEditingLineId(null)}
+            />
+          )}
         </div>
       )}
 
