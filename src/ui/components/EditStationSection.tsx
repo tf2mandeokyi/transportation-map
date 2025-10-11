@@ -19,6 +19,9 @@ const EditStationSection: React.FC<Props> = ({ messageManagerRef }) => {
   const [orientation, setOrientation] = useState<StationOrientation>('RIGHT');
   const [hidden, setHidden] = useState(false);
 
+  // Debounce timer for name updates
+  const nameUpdateTimerRef = React.useRef<number | null>(null);
+
   // Set up message listeners once on mount
   useEffect(() => {
     const unsubscribe1 = messageManagerRef.current.onMessage('station-clicked', msg => {
@@ -39,6 +42,10 @@ const EditStationSection: React.FC<Props> = ({ messageManagerRef }) => {
     return () => {
       unsubscribe1();
       unsubscribe2();
+      // Clear any pending name update timer
+      if (nameUpdateTimerRef.current) {
+        clearTimeout(nameUpdateTimerRef.current);
+      }
     };
   }, []);
 
@@ -103,6 +110,49 @@ const EditStationSection: React.FC<Props> = ({ messageManagerRef }) => {
     if (stationHidden !== null) setHidden(stationHidden);
   }, [stationName, stationOrientation, stationHidden]);
 
+  // Auto-update name with debounce (wait 500ms after user stops typing)
+  useEffect(() => {
+    if (!stationId || stationName === null) return;
+
+    // Clear existing timer
+    if (nameUpdateTimerRef.current) {
+      clearTimeout(nameUpdateTimerRef.current);
+    }
+
+    // Only update if name has changed from original
+    if (name !== stationName) {
+      nameUpdateTimerRef.current = setTimeout(() => {
+        onUpdateStation(name, orientation, hidden);
+      }, 500);
+    }
+
+    return () => {
+      if (nameUpdateTimerRef.current) {
+        clearTimeout(nameUpdateTimerRef.current);
+      }
+    };
+  }, [name]);
+
+  // Auto-update orientation immediately
+  useEffect(() => {
+    if (!stationId || stationOrientation === null) return;
+
+    // Only update if orientation has changed from original
+    if (orientation !== stationOrientation) {
+      onUpdateStation(name, orientation, hidden);
+    }
+  }, [orientation]);
+
+  // Auto-update hidden immediately
+  useEffect(() => {
+    if (!stationId || stationHidden === null) return;
+
+    // Only update if hidden has changed from original
+    if (hidden !== stationHidden) {
+      onUpdateStation(name, orientation, hidden);
+    }
+  }, [hidden]);
+
   if (!stationId || stationName === null) {
     return (
       <div className="section">
@@ -113,10 +163,6 @@ const EditStationSection: React.FC<Props> = ({ messageManagerRef }) => {
       </div>
     );
   }
-
-  const handleUpdate = () => {
-    onUpdateStation(name, orientation, hidden);
-  };
 
   return (
     <div className="section">
@@ -163,14 +209,9 @@ const EditStationSection: React.FC<Props> = ({ messageManagerRef }) => {
           />
           <label htmlFor="edit-station-hidden">Hidden (shaping point)</label>
         </div>
-        <div className="two-column">
-          <button className="button button--primary" onClick={handleUpdate}>
-            Update Station
-          </button>
-          <button className="button button--secondary" onClick={onDeleteStation} style={{ color: '#F24822' }}>
-            Delete Station
-          </button>
-        </div>
+        <button className="button button--secondary full-width" onClick={onDeleteStation} style={{ color: '#F24822' }}>
+          Delete Station
+        </button>
       </div>
 
       {/* Lines Section */}
