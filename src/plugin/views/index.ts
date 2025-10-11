@@ -19,8 +19,7 @@ export class View {
   }
 
   public async render(state: Readonly<MapState>): Promise<void> {
-    // Clear old line segments and connection points
-    await this.lineSegmentRenderer.clearAllSegments();
+    // Clear connection points to recalculate them
     this.stationRenderer.clearConnectionPoints();
 
     // First render all stations to calculate and store connection points
@@ -30,6 +29,7 @@ export class View {
     ));
 
     // Then render ALL lines using the stored connection points (with bezier curves)
+    // Each line will clean up its own old group before rendering
     await Promise.all([...state.lines.values()].map(line =>
       this.lineSegmentRenderer.renderLine(line, state.stations)
         .catch(ErrorChain.thrower(`Error rendering line ${line.name}`))

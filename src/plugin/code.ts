@@ -31,10 +31,14 @@ async function main() {
   if (!hasExistingData) {
     console.log("Creating demo map");
     await createDemoMap(controller, model);
+    // Render the demo map once
+    await controller.refresh();
+    figma.viewport.scrollAndZoomIntoView(figma.currentPage.children);
+  } else {
+    console.log("Existing map data found, skipping initial render");
+    // Just sync the UI without rendering the map
+    controller.syncLinesToUI();
   }
-  controller.refresh();
-
-  figma.viewport.scrollAndZoomIntoView(figma.currentPage.children);
 }
 
 async function createDemoMap(controller: Controller, model: Model) {
