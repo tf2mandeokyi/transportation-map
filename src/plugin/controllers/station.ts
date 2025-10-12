@@ -192,6 +192,45 @@ export class StationController extends BaseController {
     return { dx, dy };
   }
 
+  public async handleCombineStations(sourceStationId: StationId, targetStationId: StationId): Promise<void> {
+    const sourceStation = this.model.getState().stations.get(sourceStationId);
+    const targetStation = this.model.getState().stations.get(targetStationId);
+
+    if (!sourceStation || !targetStation) {
+      console.warn(`Station not found: ${sourceStationId} or ${targetStationId}`);
+      return;
+    }
+
+    // Transfer all lines from source to target
+    for (const [lineId, lineStopInfo] of sourceStation.lines.entries()) {
+      const line = this.model.getState().lines.get(lineId);
+      if (!line) continue;
+
+      // Replace all occurrences of source station with target station in the line's path
+      line.path = line.path.map(stationId =>
+        stationId === sourceStationId ? targetStationId : stationId
+      );
+
+      // If target doesn't have this line, add it
+      if (!targetStation.lines.has(lineId)) {
+        targetStation.lines.set(lineId, { stopsAt: lineStopInfo.stopsAt });
+      }
+    }
+
+    // Delete the source station's Figma node
+    if (sourceStation.figmaNodeId) {
+      const node = await figma.getNodeByIdAsync(sourceStation.figmaNodeId);
+      if (node) {
+        node.remove();
+      }
+    }
+
+    // Remove the source station from the model
+    this.model.removeStation(sourceStationId);
+
+    await this.save();
+  }
+
   public async handleSelectStation(stationId: StationId): Promise<void> {
     const station = this.model.getState().stations.get(stationId);
     if (!station) {

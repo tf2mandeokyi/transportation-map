@@ -18,6 +18,7 @@ const EditStationSection: React.FC<Props> = ({ messageManagerRef }) => {
   const [name, setName] = useState('');
   const [orientation, setOrientation] = useState<StationOrientation>('RIGHT');
   const [hidden, setHidden] = useState(false);
+  const [isCombiningMode, setIsCombiningMode] = useState(false);
 
   // Debounce timer for name updates
   const nameUpdateTimerRef = React.useRef<number | null>(null);
@@ -25,11 +26,23 @@ const EditStationSection: React.FC<Props> = ({ messageManagerRef }) => {
   // Set up message listeners once on mount
   useEffect(() => {
     const unsubscribe1 = messageManagerRef.current.onMessage('station-clicked', msg => {
-      setStationId(msg.stationId);
-      setStationName(msg.stationName);
-      setStationOrientation(msg.orientation);
-      setStationHidden(msg.hidden);
-      setLinesAtStation(msg.lines);
+      // If in combining mode, combine with the clicked station
+      if (isCombiningMode && stationId && msg.stationId !== stationId) {
+        postMessageToPlugin({
+          type: 'combine-stations',
+          sourceStationId: stationId,
+          targetStationId: msg.stationId
+        });
+        setIsCombiningMode(false);
+        onClose();
+      } else {
+        setStationId(msg.stationId);
+        setStationName(msg.stationName);
+        setStationOrientation(msg.orientation);
+        setStationHidden(msg.hidden);
+        setLinesAtStation(msg.lines);
+        setIsCombiningMode(false);
+      }
     });
 
     const unsubscribe2 = messageManagerRef.current.onMessage('toggle-stops-at', msg => {
@@ -137,6 +150,14 @@ const EditStationSection: React.FC<Props> = ({ messageManagerRef }) => {
         });
       }
     });
+  };
+
+  const onStartCombineMode = () => {
+    setIsCombiningMode(true);
+  };
+
+  const onCancelCombineMode = () => {
+    setIsCombiningMode(false);
   };
 
   // Update local state when station data changes
@@ -253,6 +274,23 @@ const EditStationSection: React.FC<Props> = ({ messageManagerRef }) => {
             Copy Backwards
           </button>
         </div>
+        {isCombiningMode ? (
+          <div style={{ padding: '12px', background: '#fff3cd', borderRadius: '4px', marginBottom: '8px', border: '1px solid #ffc107' }}>
+            <p style={{ fontSize: '11px', color: '#856404', margin: '0 0 8px 0', fontWeight: 'bold' }}>
+              Combining mode active
+            </p>
+            <p style={{ fontSize: '11px', color: '#856404', margin: '0 0 8px 0' }}>
+              Click another station on the canvas to combine this station with it. All lines will be transferred.
+            </p>
+            <button className="button button--secondary full-width" onClick={onCancelCombineMode}>
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button className="button button--secondary full-width" onClick={onStartCombineMode} style={{ marginBottom: '8px' }}>
+            Combine with Another Station
+          </button>
+        )}
         <button className="button button--secondary full-width" onClick={onDeleteStation} style={{ color: '#F24822' }}>
           Delete Station
         </button>

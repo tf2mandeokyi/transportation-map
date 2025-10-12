@@ -77,6 +77,7 @@ export class Controller {
       case 'update-station': return this.stationController.handleUpdateStation(msg.stationId, msg.name, msg.orientation, msg.hidden);
       case 'delete-station': return this.stationController.handleDeleteStation(msg.stationId);
       case 'copy-station': return this.stationController.handleCopyStation(msg.stationId, msg.direction);
+      case 'combine-stations': return this.stationController.handleCombineStations(msg.sourceStationId, msg.targetStationId);
       case 'remove-line-from-station': return this.stationController.handleRemoveLineFromStation(msg.stationId, msg.lineId);
       case 'select-station': return this.stationController.handleSelectStation(msg.stationId);
 

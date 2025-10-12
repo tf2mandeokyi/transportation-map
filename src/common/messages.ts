@@ -6,6 +6,7 @@ export type UIToPluginMessage =
   | { type: 'update-station'; stationId: StationId; name: string; orientation: StationOrientation; hidden: boolean }
   | { type: 'delete-station'; stationId: StationId }
   | { type: 'copy-station'; stationId: StationId; direction: 'forwards' | 'backwards' }
+  | { type: 'combine-stations'; sourceStationId: StationId; targetStationId: StationId }
   | { type: 'select-station'; stationId: StationId }
   | { type: 'add-line'; line: { name: string; color: string } }
   | { type: 'remove-line'; lineId: LineId }
