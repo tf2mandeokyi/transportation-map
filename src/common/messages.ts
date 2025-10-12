@@ -18,6 +18,7 @@ export type UIToPluginMessage =
   | { type: 'remove-station-from-line'; lineId: LineId; stationId: StationId; lineIndex: number }
   | { type: 'set-line-stops-at-station'; lineId: LineId; stationId: StationId; lineIndex?: number; stopsAt: boolean }
   | { type: 'update-line-path'; lineId: LineId; stationIds: StationId[]; stopsAt: boolean[] }
+  | { type: 'rotate-line-path'; lineId: LineId; steps: number }
   | { type: 'remove-line-from-station'; stationId: StationId; lineId: LineId }
   | { type: 'update-line-stacking-order'; lineIds: LineId[] }
   | { type: 'clear-plugin-data' }

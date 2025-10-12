@@ -4,15 +4,29 @@ import { postMessageToPlugin } from '../figma';
 import { LineData } from '../../common/messages';
 import { FigmaPluginMessageManager } from '../events';
 
-const AddStationsHereButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
-  <div style={{ textAlign: 'center', margin: '4px 0' }}>
+const InBetweenStationButtons: React.FC<{
+  onAdd: () => void,
+  onRotate?: () => void
+}> = ({ onAdd, onRotate }) => (
+  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '4px' }}>
     <button
       className="button button--secondary"
-      onClick={onClick}
-      style={{ fontSize: '11px', padding: '4px 8px' }}
+      onClick={onAdd}
+      style={{ fontSize: '14px', padding: '2px 10px', minWidth: '30px', lineHeight: '1' }}
+      title="Add stations here"
     >
-      + Add stations here
+      +
     </button>
+    {onRotate && (
+      <button
+        className="button button--secondary"
+        onClick={onRotate}
+        style={{ fontSize: '14px', padding: '2px 10px', minWidth: '30px', lineHeight: '1' }}
+        title="Rotate line path (move next station to start)"
+      >
+        ↻
+      </button>
+    )}
   </div>
 );
 
@@ -34,7 +48,6 @@ const StationPathItem: React.FC<{
       backgroundColor: isHighlighted ? '#e3f2fd' : 'transparent',
       border: isHighlighted ? '2px solid #18a0fb' : '2px solid transparent',
       borderRadius: '4px',
-      padding: '2px 4px',
       transition: 'all 0.2s ease'
     }}
   >
@@ -167,92 +180,124 @@ const StationPathList: React.FC<{
   insertionIndex: number | null;
   stationPath: Array<{ id: StationId, name: string, stopsAt: boolean }>;
   highlightedStationId: StationId | null;
-  onToggleStopsAt: (lineId: LineId, stationId: StationId, index: number, currentStopsAt: boolean) => void;
-  onRemoveStation: (lineId: LineId, stationId: StationId, index: number) => void;
-  onSelectStation: (stationId: StationId) => void;
   onStartInsertion: (index: number) => void;
   onToggleStationStopsAt: (index: number) => void;
   onRemoveFromPath: (index: number) => void;
   onFinishInsertion: () => void;
   onClearPath: () => void;
   onCancelInsertion: () => void;
+  onRotatePath: (steps: number) => void;
 }> = ({
   linePathData,
   isAddingStations,
   insertionIndex,
   stationPath,
   highlightedStationId,
-  onToggleStopsAt,
-  onRemoveStation,
-  onSelectStation,
   onStartInsertion,
   onToggleStationStopsAt,
   onRemoveFromPath,
   onFinishInsertion,
   onClearPath,
-  onCancelInsertion
-}) => (
-  <div>
-    <label>Current Path (☑ = stops, ☐ = passes by)</label>
+  onCancelInsertion,
+  onRotatePath
+}) => {
+  // Define message-sending functions locally
+  const handleToggleStopsAt = (lineId: LineId, stationId: StationId, lineIndex: number, currentStopsAt: boolean) => {
+    postMessageToPlugin({
+      type: 'set-line-stops-at-station',
+      lineId,
+      stationId,
+      lineIndex,
+      stopsAt: !currentStopsAt
+    });
+  };
+
+  const handleRemoveStation = (lineId: LineId, stationId: StationId, lineIndex: number) => {
+    postMessageToPlugin({
+      type: 'remove-station-from-line',
+      lineId,
+      stationId,
+      lineIndex
+    });
+  };
+
+  const handleSelectStation = (stationId: StationId) => {
+    postMessageToPlugin({
+      type: 'select-station',
+      stationId
+    });
+  };
+
+  return (
     <div>
-      {/* Add stations button or insertion UI at position 0 */}
-      {isAddingStations && insertionIndex === 0 ? (
-        <InsertionUI
-          insertionIndex={insertionIndex}
-          stationPath={stationPath}
-          onToggleStopsAt={onToggleStationStopsAt}
-          onRemoveStation={onRemoveFromPath}
-          onFinish={onFinishInsertion}
-          onClear={onClearPath}
-          onCancel={onCancelInsertion}
-        />
-      ) : (
-        !isAddingStations && <AddStationsHereButton onClick={() => onStartInsertion(0)} />
-      )}
+      <label>Current Path (☑ = stops, ☐ = passes by)</label>
+      <div>
+        {/* Add stations button or insertion UI at position 0 */}
+        {isAddingStations && insertionIndex === 0 ? (
+          <InsertionUI
+            insertionIndex={insertionIndex}
+            stationPath={stationPath}
+            onToggleStopsAt={onToggleStationStopsAt}
+            onRemoveStation={onRemoveFromPath}
+            onFinish={onFinishInsertion}
+            onClear={onClearPath}
+            onCancel={onCancelInsertion}
+          />
+        ) : (
+          !isAddingStations && <InBetweenStationButtons onAdd={() => onStartInsertion(0)} />
+        )}
 
-      {linePathData.stationIds.length === 0 ? (
-        <p style={{ color: '#666', fontSize: '11px', padding: '8px' }}>
-          No stations in path
-        </p>
-      ) : (
-        linePathData.stationIds.map((stationId, index) => {
-          // Highlight the first occurrence of the station in the path
-          const isFirstOccurrence = linePathData.stationIds.indexOf(stationId) === index;
-          const isHighlighted = isFirstOccurrence && highlightedStationId === stationId;
+        {linePathData.stationIds.length === 0 ? (
+          <p style={{ color: '#666', fontSize: '11px', padding: '8px' }}>
+            No stations in path
+          </p>
+        ) : (
+          linePathData.stationIds.map((stationId, index) => {
+            // Highlight the first occurrence of the station in the path
+            const isFirstOccurrence = linePathData.stationIds.indexOf(stationId) === index;
+            const isHighlighted = isFirstOccurrence && highlightedStationId === stationId;
 
-          return (
-            <React.Fragment key={`${stationId}-${index}`}>
-              <StationPathItem
-                name={linePathData.stationNames[index]}
-                index={index}
-                stopsAt={linePathData.stopsAt[index]}
-                onToggleStopsAt={() => onToggleStopsAt(linePathData.lineId, stationId, index, linePathData.stopsAt[index])}
-                onRemove={() => onRemoveStation(linePathData.lineId, stationId, index)}
-                onSelect={() => onSelectStation(stationId)}
-                isHighlighted={isHighlighted}
-              />
-
-              {/* Add stations button or insertion UI at position index + 1 */}
-              {isAddingStations && insertionIndex === index + 1 ? (
-                <InsertionUI
-                  insertionIndex={insertionIndex}
-                  stationPath={stationPath}
-                  onToggleStopsAt={onToggleStationStopsAt}
-                  onRemoveStation={onRemoveFromPath}
-                  onFinish={onFinishInsertion}
-                  onClear={onClearPath}
-                  onCancel={onCancelInsertion}
+            return (
+              <React.Fragment key={`${stationId}-${index}`}>
+                <StationPathItem
+                  name={linePathData.stationNames[index]}
+                  index={index}
+                  stopsAt={linePathData.stopsAt[index]}
+                  onToggleStopsAt={() => handleToggleStopsAt(linePathData.lineId, stationId, index, linePathData.stopsAt[index])}
+                  onRemove={() => handleRemoveStation(linePathData.lineId, stationId, index)}
+                  onSelect={() => handleSelectStation(stationId)}
+                  isHighlighted={isHighlighted}
                 />
-              ) : (
-                !isAddingStations && <AddStationsHereButton onClick={() => onStartInsertion(index + 1)} />
-              )}
-            </React.Fragment>
-          );
-        })
-      )}
+
+                {/* Add stations button, rotate button, or insertion UI at position index + 1 */}
+                {isAddingStations && insertionIndex === index + 1 ? (
+                  <InsertionUI
+                    insertionIndex={insertionIndex}
+                    stationPath={stationPath}
+                    onToggleStopsAt={onToggleStationStopsAt}
+                    onRemoveStation={onRemoveFromPath}
+                    onFinish={onFinishInsertion}
+                    onClear={onClearPath}
+                    onCancel={onCancelInsertion}
+                  />
+                ) : (
+                  !isAddingStations && (
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'row', gap: '4px' }}>
+                      <InBetweenStationButtons
+                        onAdd={() => onStartInsertion(index + 1)}
+                        onRotate={index < linePathData.stationIds.length - 1 ? () => onRotatePath(index + 1) : undefined}
+                      />
+                    </div>
+                  )
+                )}
+              </React.Fragment>
+            );
+          })
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 interface Props {
   lines: LineData[];
@@ -344,25 +389,6 @@ const EditLinePathSection: React.FC<Props> = ({
       });
     }
   }, [currentEditingLineId]);
-
-  const handleRemoveStation = (lineId: LineId, stationId: StationId, lineIndex: number) => {
-    postMessageToPlugin({
-      type: 'remove-station-from-line',
-      lineId,
-      stationId,
-      lineIndex
-    });
-  };
-
-  const handleToggleStopsAt = (lineId: LineId, stationId: StationId, lineIndex: number, currentStopsAt: boolean) => {
-    postMessageToPlugin({
-      type: 'set-line-stops-at-station',
-      lineId,
-      stationId,
-      lineIndex,
-      stopsAt: !currentStopsAt
-    });
-  };
 
   const handleStartInsertion = (index: number) => {
     setIsAddingStations(true);
@@ -462,12 +488,20 @@ const EditLinePathSection: React.FC<Props> = ({
     }
   };
 
-  const handleSelectStation = (stationId: StationId) => {
+  const handleRotatePath = (steps: number) => {
+    if (!currentEditingLineId) return;
+
     postMessageToPlugin({
-      type: 'select-station',
-      stationId
+      type: 'rotate-line-path',
+      lineId: currentEditingLineId,
+      steps
     });
-    setHighlightedStationId(stationId);
+
+    // Refresh the line path data
+    postMessageToPlugin({
+      type: 'get-line-path',
+      lineId: currentEditingLineId
+    });
   };
 
   const currentLine = lines.find(line => line.id === currentEditingLineId);
@@ -502,15 +536,13 @@ const EditLinePathSection: React.FC<Props> = ({
             insertionIndex={insertionIndex}
             stationPath={stationPath}
             highlightedStationId={highlightedStationId}
-            onToggleStopsAt={handleToggleStopsAt}
-            onRemoveStation={handleRemoveStation}
-            onSelectStation={handleSelectStation}
             onStartInsertion={handleStartInsertion}
             onToggleStationStopsAt={handleToggleStationStopsAt}
             onRemoveFromPath={(idx) => setStationPath(prev => prev.filter((_, i) => i !== idx))}
             onFinishInsertion={handleFinishInsertion}
             onClearPath={handleClearPath}
             onCancelInsertion={handleCancelInsertion}
+            onRotatePath={handleRotatePath}
           />
         )}
       </div>

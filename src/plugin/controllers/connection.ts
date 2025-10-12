@@ -178,6 +178,38 @@ export class ConnectionController extends BaseController {
     await this.save();
   }
 
+  public async handleRotateLinePath(lineId: LineId, steps: number): Promise<void> {
+    const line = this.model.getState().lines.get(lineId);
+
+    if (!line) {
+      console.error("Line not found:", lineId);
+      return;
+    }
+
+    if (line.path.length === 0) {
+      console.warn("Cannot rotate empty path");
+      return;
+    }
+
+    // Normalize steps to be within the range of the path length
+    const normalizedSteps = ((steps % line.path.length) + line.path.length) % line.path.length;
+
+    if (normalizedSteps === 0) {
+      return; // No rotation needed
+    }
+
+    // Rotate the path: move first 'steps' elements to the end
+    const rotatedPath = [
+      ...line.path.slice(normalizedSteps),
+      ...line.path.slice(0, normalizedSteps)
+    ];
+
+    line.path = rotatedPath;
+
+    // Re-render the map with updated connections
+    await this.save();
+  }
+
   public connectStationsWithLine(lineId: LineId, startStationId: StationId, endStationId: StationId, stopsAtStart: boolean = true, stopsAtEnd: boolean = true): void {
     // Add stations to the line
     this.model.addStationToLine(lineId, startStationId, stopsAtStart);

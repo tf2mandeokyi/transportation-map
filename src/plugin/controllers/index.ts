@@ -94,6 +94,7 @@ export class Controller {
       case 'remove-station-from-line': return this.connectionController.handleRemoveStationFromLine(msg.lineId, msg.stationId, msg.lineIndex);
       case 'set-line-stops-at-station': return this.connectionController.handleSetLineStopsAtStation(msg.lineId, msg.stationId, msg.lineIndex, msg.stopsAt);
       case 'update-line-path': return this.connectionController.handleUpdateLinePath(msg.lineId, msg.stationIds, msg.stopsAt);
+      case 'rotate-line-path': return this.connectionController.handleRotateLinePath(msg.lineId, msg.steps);
 
       // Render actions
       case 'render-map': return this.renderController.handleRenderMap(msg.rightHandTraffic);
