@@ -1,5 +1,5 @@
 export class ErrorChain extends Error {
-  static thrower<T>(message: string): (cause: Error) => T {
+  static thrower(message: string): (cause: Error) => never {
     return (cause: Error) => {
       throw new ErrorChain(message, cause);
     };

@@ -82,7 +82,7 @@ export class StationRenderer {
           facing: stopLineFacing
         })
         .intoNode()
-        .catch(ErrorChain.thrower<SceneNode>(`Error rendering line ${line.name} at station ${station.name}`));
+        .catch(ErrorChain.thrower(`Error rendering line ${line.name} at station ${station.name}`));
       return { line, segmentIndex, node };
     }));
 
