@@ -119,6 +119,26 @@ const EditStationSection: React.FC<Props> = ({ messageManagerRef }) => {
     }
   };
 
+  const onToggleAllLines = () => {
+    if (!stationId) return;
+
+    // Check if all lines are currently stopping
+    const allChecked = linesAtStation.every(line => line.stopsAt);
+    const newValue = !allChecked;
+
+    // Toggle all lines to the new value
+    linesAtStation.forEach(lineInfo => {
+      if (lineInfo.stopsAt !== newValue) {
+        postMessageToPlugin({
+          type: 'set-line-stops-at-station',
+          lineId: lineInfo.id,
+          stationId,
+          stopsAt: newValue
+        });
+      }
+    });
+  };
+
   // Update local state when station data changes
   useEffect(() => {
     if (stationName !== null) setName(stationName);
@@ -246,6 +266,22 @@ const EditStationSection: React.FC<Props> = ({ messageManagerRef }) => {
       ) : (
         <div>
           <label>Lines at this station (☑ = stops, ☐ = passes by)</label>
+          <div className="checkbox-container" style={{ marginBottom: '8px', marginTop: '8px' }}>
+            <input
+              type="checkbox"
+              id="toggle-all-lines"
+              checked={linesAtStation.every(line => line.stopsAt)}
+              ref={(el) => {
+                if (el) {
+                  const allChecked = linesAtStation.every(line => line.stopsAt);
+                  const noneChecked = linesAtStation.every(line => !line.stopsAt);
+                  el.indeterminate = !allChecked && !noneChecked;
+                }
+              }}
+              onChange={onToggleAllLines}
+            />
+            <label htmlFor="toggle-all-lines">Toggle all lines</label>
+          </div>
           <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
             {linesAtStation.map((lineInfo) => (
               <div key={lineInfo.id} className="station-path-item" style={{ alignItems: 'center' }}>
