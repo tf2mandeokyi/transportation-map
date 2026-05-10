@@ -20,13 +20,11 @@ export class Controller {
     this.model = model;
     this.view = view;
 
-    // Initialize sub-controllers
     this.stationController = new StationController(model, view);
     this.lineController = new LineController(model, view);
     this.connectionController = new ConnectionController(model, view);
     this.renderController = new RenderController(model, view);
 
-    // Provide lineController reference to other controllers
     this.stationController.setConnectionController(this.connectionController);
   }
 
@@ -47,7 +45,6 @@ export class Controller {
   public async initialize(): Promise<void> {
     console.log("Controller initialized. Listening for user actions.");
 
-    // Listen for UI messages
     setUIMessageHandler(async (msg) => {
       try {
         await this.handleUIMessage(msg);
@@ -56,7 +53,6 @@ export class Controller {
       }
     });
 
-    // Load all pages before setting up document change handler
     try {
       await figma.loadAllPagesAsync();
       figma.on('documentchange', (event) =>
@@ -66,7 +62,6 @@ export class Controller {
       console.warn("Could not load all pages or set up document change handler:", error);
     }
 
-    // Listen for Figma events
     figma.on('selectionchange', () => this.connectionController.handleSelectionChange());
   }
 
@@ -74,12 +69,19 @@ export class Controller {
     switch (msg.type) {
       // Station actions
       case 'add-station': return this.stationController.handleAddStation(msg.station);
-      case 'update-station': return this.stationController.handleUpdateStation(msg.stationId, msg.name, msg.orientation, msg.hidden);
+      case 'update-station': return this.stationController.handleUpdateStation(msg.stationId, msg.name, msg.textAlign);
       case 'delete-station': return this.stationController.handleDeleteStation(msg.stationId);
       case 'copy-station': return this.stationController.handleCopyStation(msg.stationId, msg.direction);
       case 'combine-stations': return this.stationController.handleCombineStations(msg.sourceStationId, msg.targetStationId);
-      case 'remove-line-from-station': return this.stationController.handleRemoveLineFromStation(msg.stationId, msg.lineId);
       case 'select-station': return this.stationController.handleSelectStation(msg.stationId);
+
+      // Road network actions
+      case 'add-node': return this.handleAddNode(msg);
+      case 'remove-node': return this.handleRemoveNode(msg.nodeId);
+      case 'add-road': return this.handleAddRoad(msg);
+      case 'remove-road': return this.handleRemoveRoad(msg.roadId);
+      case 'add-road-section': return this.handleAddRoadSection(msg);
+      case 'remove-road-section': return this.handleRemoveRoadSection(msg);
 
       // Line actions
       case 'add-line': return this.lineController.handleAddLine(msg.line);
@@ -92,18 +94,53 @@ export class Controller {
       case 'start-adding-stations-mode': return this.connectionController.handleStartAddingStationsMode(msg.lineId);
       case 'stop-adding-stations-mode': return this.connectionController.handleStopAddingStationsMode();
       case 'get-line-path': return this.connectionController.handleGetLinePath(msg.lineId);
-      case 'remove-station-from-line': return this.connectionController.handleRemoveStationFromLine(msg.lineId, msg.stationId, msg.lineIndex);
-      case 'set-line-stops-at-station': return this.connectionController.handleSetLineStopsAtStation(msg.lineId, msg.stationId, msg.lineIndex, msg.stopsAt);
-      case 'update-line-path': return this.connectionController.handleUpdateLinePath(msg.lineId, msg.stationIds, msg.stopsAt);
+      case 'remove-station-from-line': return this.connectionController.handleRemoveStationFromLine(msg.lineId, msg.pathIndex);
+      case 'update-line-path': return this.connectionController.handleUpdateLinePath(msg.lineId, msg.paths);
       case 'rotate-line-path': return this.connectionController.handleRotateLinePath(msg.lineId, msg.steps);
 
       // Render actions
-      case 'render-map': return this.renderController.handleRenderMap(msg.rightHandTraffic);
+      case 'render-map': return this.renderController.handleRenderMap();
 
-      // Misc actions
+      // Misc
       case 'clear-plugin-data': return this.handleClearPluginData();
       case 'request-initial-data': return this.handleRequestInitialData();
     }
+  }
+
+  private async handleAddNode(msg: Extract<UIToPluginMessage, { type: 'add-node' }>): Promise<void> {
+    this.model.addNode({ name: msg.node.name, pos: msg.node.pos, roadConnections: [] });
+    await this.model.save();
+  }
+
+  private async handleRemoveNode(nodeId: import("../../common/types").NodeId): Promise<void> {
+    this.model.removeNode(nodeId);
+    await this.model.save();
+  }
+
+  private async handleAddRoad(msg: Extract<UIToPluginMessage, { type: 'add-road' }>): Promise<void> {
+    this.model.addRoad({
+      name: msg.road.name,
+      startNodeId: msg.road.startNodeId,
+      endNodeId: msg.road.endNodeId,
+      endpoints: msg.road.endpoints,
+      sections: new Map()
+    });
+    await this.model.save();
+  }
+
+  private async handleRemoveRoad(roadId: import("../../common/types").RoadId): Promise<void> {
+    this.model.removeRoad(roadId);
+    await this.model.save();
+  }
+
+  private async handleAddRoadSection(msg: Extract<UIToPluginMessage, { type: 'add-road-section' }>): Promise<void> {
+    this.model.addRoadSection(msg.roadId, { ...msg.section, stationIds: [] });
+    await this.model.save();
+  }
+
+  private async handleRemoveRoadSection(msg: Extract<UIToPluginMessage, { type: 'remove-road-section' }>): Promise<void> {
+    this.model.removeRoadSection(msg.roadId, msg.sectionId);
+    await this.model.save();
   }
 
   private async handleClearPluginData(): Promise<void> {
@@ -112,21 +149,18 @@ export class Controller {
   }
 
   private async handleRequestInitialData(): Promise<void> {
-    // Send all existing lines to the UI
     this.syncLinesToUI();
   }
 
-  // Public API for creating stations (used by demo map)
-  public createStation(name: string, position: { x: number; y: number }, hidden: boolean = false, orientation: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT' = 'RIGHT'): StationId {
-    return this.stationController.createStation(name, position, hidden, orientation);
+  // Public API for demo map / external use
+  public createStation(name: string, textAlign: import("../../common/types").HVAlign = 'right'): StationId {
+    return this.stationController.createStation(name, textAlign);
   }
 
-  // Public API for connecting stations (used by demo map)
-  public connectStationsWithLine(lineId: LineId, startStationId: StationId, endStationId: StationId, stopsAtStart: boolean = true, stopsAtEnd: boolean = true): void {
-    this.connectionController.connectStationsWithLine(lineId, startStationId, endStationId, stopsAtStart, stopsAtEnd);
+  public connectStationsWithLine(lineId: LineId, startStationId: StationId, endStationId: StationId): void {
+    this.connectionController.connectStationsWithLine(lineId, startStationId, endStationId);
   }
 
-  // Public API for syncing lines to UI (used on load)
   public syncLinesToUI(): void {
     this.lineController.syncLinesToUI();
   }

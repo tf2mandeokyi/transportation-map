@@ -37,48 +37,32 @@ const App: React.FC = () => {
   const [lines, setLines] = useState<LineData[]>([]);
   const [currentEditingLineId, setCurrentEditingLineId] = useState<LineId | null>(null);
 
-  // State for station editing
-
   const messageManagerRef = useRef(new FigmaPluginMessageManager());
-  const rightHandTraffic = useRef(true);
 
   useEffect(() => {
-    // Set up message listeners
     const unsubscribe1 = messageManagerRef.current.onMessage('line-added', msg => {
       setLines(prev => {
-        // Check if line already exists to avoid duplicates
         const exists = prev.some(line => line.id === msg.id);
         if (exists) {
-          // Update existing line data
           return prev.map(line =>
-            line.id === msg.id
-              ? { id: msg.id, name: msg.name, color: msg.color }
-              : line
+            line.id === msg.id ? { id: msg.id, name: msg.name, color: msg.color } : line
           );
         }
         return [...prev, msg];
       });
     });
 
-    const unsubscribe2 = messageManagerRef.current.onMessage('station-added', () => {
-      // Stop was successfully added
-    });
+    const unsubscribe2 = messageManagerRef.current.onMessage('station-added', () => {});
 
-    // Listen for messages from the plugin
     window.onmessage = (event) => {
       const msg: PluginToUIMessage = event.data.pluginMessage;
       messageManagerRef.current.handleMessage(msg);
     };
 
-    // Request initial line data when UI is ready
     postMessageToPlugin({ type: 'request-initial-data' });
 
-    // Cleanup
-    return () => {
-      unsubscribe1();
-      unsubscribe2();
-    };
-  }, []); // Empty dependency array - only run once on mount
+    return () => { unsubscribe1(); unsubscribe2(); };
+  }, []);
 
   const handleRemoveLine = (lineId: LineId) => {
     setLines(prev => prev.filter(line => line.id !== lineId));
@@ -88,15 +72,8 @@ const App: React.FC = () => {
     setLines(newLines);
   };
 
-  const handleEditLine = (lineId: LineId) => {
-    setCurrentEditingLineId(lineId);
-  };
-
   const handleRenderMap = () => {
-    postMessageToPlugin({
-      type: 'render-map',
-      rightHandTraffic: rightHandTraffic.current
-    });
+    postMessageToPlugin({ type: 'render-map' });
   };
 
   return (
@@ -107,7 +84,6 @@ const App: React.FC = () => {
         </button>
       </div>
 
-      {/* Tab Navigation */}
       <div style={{ display: 'flex', borderBottom: '1px solid #e0e0e0', marginBottom: '16px' }}>
         <NavButton active={activeTab === 'stations'} onClick={() => setActiveTab('stations')}>
           Stations
@@ -120,13 +96,10 @@ const App: React.FC = () => {
         </NavButton>
       </div>
 
-      {/* Tab Content */}
       {activeTab === 'stations' && (
         <div>
           <StationsSection />
-          <EditStationSection
-            messageManagerRef={messageManagerRef}
-          />
+          <EditStationSection messageManagerRef={messageManagerRef} />
         </div>
       )}
 
@@ -136,7 +109,7 @@ const App: React.FC = () => {
             <LinesSection
               lines={lines}
               onRemoveLine={handleRemoveLine}
-              onEditLine={handleEditLine}
+              onEditLine={(lineId) => setCurrentEditingLineId(lineId)}
               onReorderLines={handleReorderLines}
             />
           ) : (
@@ -150,11 +123,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {activeTab === 'settings' && (
-        <div>
-          <SettingsSection rightHandTraffic={rightHandTraffic} />
-        </div>
-      )}
+      {activeTab === 'settings' && <SettingsSection />}
     </div>
   );
 };

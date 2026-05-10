@@ -31,7 +31,7 @@ export class View {
     // Then render ALL lines using the stored connection points (with bezier curves)
     // Each line will clean up its own old group before rendering
     await Promise.all([...state.lines.values()].map(line =>
-      this.lineSegmentRenderer.renderLine(line, state.stations)
+      this.lineSegmentRenderer.renderLine(line, state)
         .catch(ErrorChain.thrower(`Error rendering line ${line.name}`))
     ));
 

@@ -23,16 +23,25 @@ export function resolveImport(filename: string): string {
   return importContent;
 }
 
+function hexToRgb(hex: string): RGB {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? {
+    r: parseInt(result[1], 16) / 255,
+    g: parseInt(result[2], 16) / 255,
+    b: parseInt(result[3], 16) / 255
+  } : { r: 1, g: 0, b: 0 };
+}
+
 const STATION_LINE_TEMPLATE = FigmlParser.parseComponent(stationLineFigml);
 interface StationLineProps {
   text: string,
-  color: RGB,
+  color: string, // hex color
   stops: boolean,
   visible: boolean,
   facing: 'left' | 'right'
 }
 export function renderStationLine({ text, color, stops, visible, facing }: StationLineProps): RenderResult {
-  return STATION_LINE_TEMPLATE.render({ text, color, stops, visible }, { facing });
+  return STATION_LINE_TEMPLATE.render({ text, color: hexToRgb(color), stops, visible }, { facing });
 }
 
 const STATION_TEMPLATE = FigmlParser.parseComponent(stationFigml);
