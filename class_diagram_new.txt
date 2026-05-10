@@ -1,0 +1,109 @@
+classDiagram
+    %% ─── Graph Topology ───
+    class Node {
+        id: string
+        name?: string
+        pos: Vec2d
+    }
+
+    class Road {
+        id: string
+        name?: string
+    }
+
+    class Connection {
+        bezierDisplacement: Vec2d
+        bezierDirection: Vec2d
+        groupNumber: integer %% purpose uncertain; possibly for parallel road rendering at nodes
+    }
+
+    %% bezierDisplacement: offset from Node.pos to the bezier control point
+    %% bezierDirection: direction vector calculated relative from bezierDisplacement (not from Node.pos)
+
+    %% Connection is a bridge/join entity between a Road endpoint and a Node.
+    %% A Road holds exactly 2 Connection references (index 0 = start, index 1 = end).
+    %% A Node holds a list of Connection references (one per Road attached to it).
+    %% The SAME Connection object appears in both — it is not duplicated.
+
+    Road "1" --> "2" Connection : endpoints[0..1]
+    Node "1" --> "0..n" Connection : connections
+
+    %% ─── Road Sections (parallel tracks) ───
+    class RoadSection {
+        id: string
+        name?: string
+        index: integer
+        isReverseDirection: boolean
+    }
+
+    %% index = lateral ordering, 0 = leftmost when facing Connection[1]
+    %% isReverseDirection = track runs Connection[1]→Connection[0] instead of canonical direction
+    %% each RoadSection spans the full length of the Road
+
+    Road "1" *-- "1..n" RoadSection
+
+    %% ─── Stations ───
+    class Station {
+        id: string
+        name: string
+        textAlign: HVAlign
+        interpT: float
+    }
+
+    %% interpT: 0 = Connection[0] end, 1 = Connection[1] end (unaffected by isReverseDirection)
+
+    RoadSection "1" *-- "0..n" Station
+
+    %% ─── Lines ───
+    class Line {
+        id: string
+        name: string
+        color: string
+        isCircular: boolean
+    }
+
+    class LinePath {
+        index: integer
+    }
+
+    Line "1" *-- "0..n" LinePath
+
+    class StationStop {
+        stationId: StationId
+    }
+
+    class RoadSectionEnter {
+        roadSectionId: RoadSectionId
+    }
+
+    LinePath <|-- StationStop
+    LinePath <|-- RoadSectionEnter
+
+    %% StationStop.stationId → which Station this stop is at
+    %% RoadSectionEnter.roadSectionId → which RoadSection this entry is for
+    %% The reverse compositions below let Station/RoadSection look up their Line memberships
+
+    Station "1" *-- "0..n" StationStop
+    RoadSection "1" *-- "0..n" RoadSectionEnter
+
+    %% ─── Map State (global) ───
+    class MapState {
+        <<interface>>
+        nodes: Map~NodeId, Node~
+        roads: Map~RoadId, Road~
+        stations: Map~StationId, Station~
+        lines: Map~LineId, Line~
+        lineStackingOrder: LineId[]
+    }
+
+    %% rightHandTraffic dropped — replaced by RoadSection.isReverseDirection (per-section)
+
+    %% ─── Removed from old model ───
+    %% Station.position (Vector)       → replaced by interpT on RoadSection
+    %% Station.orientation             → replaced by textAlign: HVAlign
+    %% Station.hidden                  → dropped
+    %% Station.lines (Map<LineId,...>) → replaced by StationStop composition
+    %% Line.path (StationId[])         → replaced by LinePath / StationStop / RoadSectionEnter
+    %% Line.color (RGB)                → changed to string (hex)
+    %% LineStopInfo.stopsAt            → replaced by StationStop (presence implies stop)
+    %% MapState.rightHandTraffic       → replaced by RoadSection.isReverseDirection

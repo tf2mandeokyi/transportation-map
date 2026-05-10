@@ -1,0 +1,56 @@
+class Road {
+    id: string
+    name?: string
+}
+
+class Connection {
+    displacementBezier: Vec2d
+    groupNumber: integer # or number
+}
+
+class Node {
+    id: string
+    name?: string
+    pos: Vec2d
+}
+
+Road 1 <#>-- 2 Connection
+Node 1 <#>-- 0:n Connection
+
+class RoadSection {
+    name?: string
+    index: integer
+}
+
+Road 1 <#>-- 1:n RoadSection
+
+class Station {
+    id: string
+    name: string
+    textAlign: HVAlign
+    interpT: float # or number; from 0 to 1
+}
+
+RoadSection 1 <#>-- 0:n Station
+
+class Line {
+    id: string
+    name: string
+    color: string
+    isCircular: boolean
+}
+
+class LinePath {
+    index: int
+}
+
+Line 1 <#>-- 0:n LinePath
+
+class StationStop {}
+class RoadSectionEnter {}
+
+LinePath <|-- StationStop
+LinePath <|-- RoadSectionEnter
+
+Station 1 <#>-- 0:n StationStop
+RoadSection 1 <#>-- 0:n RoadSectionEnter

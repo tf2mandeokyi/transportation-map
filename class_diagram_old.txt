@@ -1,0 +1,217 @@
+classDiagram
+    %% ─── Entry Point ───
+    class code_main {
+        <<function>>
+        main()
+        createDemoMap()
+    }
+
+    %% ─── MVC Core ───
+    class Model {
+        -state: MapState
+        +addStation(id, station)
+        +removeStation(id)
+        +updateStationPosition(id, pos)
+        +setStationHidden(id, hidden)
+        +addLine(id, line)
+        +removeLine(id)
+        +addStationToLine(stationId, lineId)
+        +setLineStopsAtStation(stationId, lineId, stops)
+        +getStackingPosition(stationId, lineId)
+        +getLineStackingOrderForStation(stationId)
+        +isRightHandTraffic() bool
+        +setTrafficDirection(rht)
+        +save()
+        +load()$ Model
+    }
+
+    class View {
+        -stationRenderer: StationRenderer
+        -lineRenderer: LineRenderer
+        +render(state: MapState)
+    }
+
+    class StationRenderer {
+        +renderStation(station, state)
+        +getConnectionPoint(stationId, lineId) Vector
+    }
+
+    class LineRenderer {
+        +renderLine(line, state)
+        -createBezierPath(points) VectorPath
+    }
+
+    %% ─── Controllers ───
+    class Controller {
+        -model: Model
+        -view: View
+        -stationController: StationController
+        -lineController: LineController
+        -connectionController: ConnectionController
+        -renderController: RenderController
+        +initialize()
+        -handleUIMessage(msg: UIToPluginMessage)
+    }
+
+    class BaseController {
+        <<abstract>>
+        #model: Model
+        #view: View
+        #connectionController: ConnectionController
+        #render()
+        #save()
+        #hexToRgb(hex) RGB
+    }
+
+    class StationController {
+        +handleAddStation(msg)
+        +handleUpdateStation(msg)
+        +handleDeleteStation(msg)
+        +handleCopyStation(msg)
+        +handleCombineStations(msg)
+        +handleSelectStation(msg)
+        -createStation(props) StationId
+    }
+
+    class LineController {
+        +handleAddLine(msg)
+        +handleRemoveLine(msg)
+        +handleUpdateLineName(msg)
+        +handleUpdateLineColor(msg)
+        +handleUpdateLineStackingOrder(msg)
+    }
+
+    class ConnectionController {
+        +handleStartAddingStationsMode(msg)
+        +handleStopAddingStationsMode(msg)
+        +handleGetLinePath(msg)
+        +handleRemoveStationFromLine(msg)
+        +handleSetLineStopsAtStation(msg)
+        +handleUpdateLinePath(msg)
+        +handleRotateLinePath(msg)
+        +insertStationIntoLine(stationId, lineId, pos)
+        +connectStationsWithLine(stationId, lineId)
+    }
+
+    class RenderController {
+        +handleDocumentChange(event)
+        +handleRenderMap(msg)
+    }
+
+    %% ─── FIGML System ───
+    class FigmlParser {
+        +parse(xml: string) FigmlComponent
+    }
+
+    class StringTemplate {
+        -parts: Part[]
+        +interpolate(props: FigmlProps) string
+        +onlyHasChildrenTemplate() bool
+        +parse(raw: string)$ StringTemplate
+    }
+
+    class RenderResult {
+        -node: SceneNode
+        +intoNode() SceneNode
+    }
+
+    class BaseRenderer {
+        <<abstract>>
+        +render(node: FigmlNode, props: FigmlProps) RenderResult
+    }
+
+    class FrameRenderer {
+        +render(node, props) RenderResult
+    }
+
+    class TextRenderer {
+        +render(node, props) RenderResult
+    }
+
+    class ShapeRenderers {
+        <<RectangleRenderer / EllipseRenderer / PolygonRenderer>>
+        +render(node, props) RenderResult
+    }
+
+    class ImportRenderer {
+        +render(node, props) RenderResult
+    }
+
+    %% ─── Data Types ───
+    class MapState {
+        <<interface>>
+        stations: Map~StationId, Station~
+        lines: Map~LineId, Line~
+        lineStackingOrder: LineId[]
+        rightHandTraffic: bool
+    }
+
+    class Station {
+        <<interface>>
+        id: StationId
+        name: string
+        position: Vector
+        orientation: StationOrientation
+        hidden: bool
+        lines: Map~LineId, LineStopInfo~
+    }
+
+    class Line {
+        <<interface>>
+        id: LineId
+        name: string
+        color: RGB
+        path: StationId[]
+    }
+
+    class LineStopInfo {
+        <<interface>>
+        stopsAt: bool
+    }
+
+    class ErrorChain {
+        +cause: Error
+        +thrower()$
+    }
+
+    %% ─── Relationships ───
+    code_main --> Model
+    code_main --> View
+    code_main --> Controller
+
+    Controller --> Model
+    Controller --> View
+    Controller --> StationController
+    Controller --> LineController
+    Controller --> ConnectionController
+    Controller --> RenderController
+
+    BaseController <|-- StationController
+    BaseController <|-- LineController
+    BaseController <|-- ConnectionController
+    BaseController <|-- RenderController
+
+    BaseController --> Model
+    BaseController --> View
+    StationController --> ConnectionController
+
+    View --> StationRenderer
+    View --> LineRenderer
+    View --> MapState
+
+    StationRenderer --> FigmlParser
+    StationRenderer --> RenderResult
+
+    FigmlParser --> StringTemplate
+    FigmlParser --> FigmlComponent
+
+    BaseRenderer <|-- FrameRenderer
+    BaseRenderer <|-- TextRenderer
+    BaseRenderer <|-- ShapeRenderers
+    BaseRenderer <|-- ImportRenderer
+    BaseRenderer --> RenderResult
+
+    Model --> MapState
+    MapState --> Station
+    MapState --> Line
+    Station --> LineStopInfo
