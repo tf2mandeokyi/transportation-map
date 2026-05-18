@@ -22,6 +22,17 @@ module.exports = (env, argv) => {
             exclude: /node_modules/,
           },
           {
+            test: /\.(js|cjs)$/,
+            include: /node_modules/,
+            use: {
+              loader: 'babel-loader',
+              options: {
+                presets: [['@babel/preset-env', { targets: { esmodules: false }, modules: false }]],
+                comments: false,
+              },
+            },
+          },
+          {
             test: /\.figml$/,
             type: 'asset/source',
           },
@@ -29,6 +40,12 @@ module.exports = (env, argv) => {
       },
       resolve: {
         extensions: ['.ts', '.tsx', '.js'],
+        alias: {
+          '@': path.resolve(__dirname, 'src'),
+        },
+      },
+      optimization: {
+        minimize: true,
       },
       output: {
         filename: '[name].js',
@@ -58,6 +75,9 @@ module.exports = (env, argv) => {
       },
       resolve: {
         extensions: ['.tsx', '.ts', '.js'],
+        alias: {
+          '@': path.resolve(__dirname, 'src'),
+        },
       },
       output: {
         filename: '[name].js',

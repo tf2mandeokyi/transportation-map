@@ -1,40 +1,63 @@
-Below are the steps to get your plugin running. You can also find instructions at:
+# Transportation Map
 
-  https://www.figma.com/plugin-docs/plugin-quickstart-guide/
+A Figma plugin for creating and visualizing transit/transportation network maps. Build stations, lines, and connections directly inside Figma.
 
-This plugin template uses Typescript and NPM, two standard tools in creating JavaScript applications.
+## Prerequisites
 
-First, download Node.js which comes with NPM. This will allow you to install TypeScript and other
-libraries. You can find the download link here:
+- [Node.js](https://nodejs.org/) (includes npm)
+- Figma desktop app
 
-  https://nodejs.org/en/download/
+## Setup
 
-Next, install TypeScript using the command:
+```sh
+npm install
+```
 
-  npm install -g typescript
+## Development
 
-Finally, in the directory of your plugin, get the latest type definitions for the plugin API by running:
+```sh
+npm run watch
+```
 
-  npm install --save-dev @figma/plugin-typings
+Webpack will rebuild automatically on file changes. Output goes to `dist/`.
 
-If you are familiar with JavaScript, TypeScript will look very familiar. In fact, valid JavaScript code
-is already valid Typescript code.
+To load the plugin in Figma:
+1. Open Figma desktop
+2. Go to **Plugins > Development > Import plugin from manifest...**
+3. Select `manifest.json` from this directory
 
-TypeScript adds type annotations to variables. This allows code editors such as Visual Studio Code
-to provide information about the Figma API while you are writing code, as well as help catch bugs
-you previously didn't notice.
+## Build
 
-For more information, visit https://www.typescriptlang.org/
+```sh
+npm run build
+```
 
-Using TypeScript requires a compiler to convert TypeScript (code.ts) into JavaScript (code.js)
-for the browser to run.
+Produces two bundles in `dist/`:
+- `code.js` — plugin logic (runs in Figma document context)
+- `ui.html` — plugin panel UI (React, inlined into a single HTML file)
 
-We recommend writing TypeScript code using Visual Studio code:
+## Lint
 
-1. Download Visual Studio Code if you haven't already: https://code.visualstudio.com/.
-2. Open this directory in Visual Studio Code.
-3. Compile TypeScript to JavaScript: Run the "Terminal > Run Build Task..." menu item,
-    then select "npm: watch". You will have to do this again every time
-    you reopen Visual Studio Code.
+```sh
+npm run lint        # check
+npm run lint:fix    # auto-fix
+```
 
-That's it! Visual Studio Code will regenerate the JavaScript file every time you save.
+## Project Structure
+
+```
+src/
+├── common/       # Shared types and plugin↔UI message definitions
+├── plugin/       # Plugin code (Figma API, MVC architecture)
+│   ├── models/   # Data structures (stations, lines, roads)
+│   ├── views/    # Figma node rendering
+│   ├── controllers/  # Business logic
+│   └── figmls/   # .figml templates for station visuals
+└── ui/           # React UI (plugin panel)
+```
+
+Import boundaries are enforced by ESLint: `plugin/` and `ui/` code cannot import from each other; both may import from `common/`.
+
+## Path Alias
+
+`@/` resolves to `src/` in both TypeScript and Webpack.
