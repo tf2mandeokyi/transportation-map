@@ -1,5 +1,5 @@
-import { LineId, StationId } from "../../common/types";
-import { LinePathInput } from "../../common/messages";
+import { LineId, StationId } from "@/common/types";
+import { LinePathInput } from "@/common/messages";
 import { postMessageToUI } from "../figma";
 import { BaseController } from "./base";
 

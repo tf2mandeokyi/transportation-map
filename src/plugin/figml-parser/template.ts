@@ -11,7 +11,7 @@ export class StringTemplate {
   }
 
   static parseDollarTemplates(input: string): StringTemplate {
-    const propValueArray = input.split('$$').map(s => s.replace('$\\$', '$$'));
+    const propValueArray = input.split('$$').map(s => s.replace(String.raw`$\$`, '$$'));
     for (let i = 1; i < propValueArray.length; i += 2) {
       const str = propValueArray[i];
       if (!str.startsWith('prop:')) {
@@ -56,10 +56,9 @@ export class StringTemplate {
         return String(propValue);
       }
       if (isRgbObject(propValue)) {
-        const rgb = propValue as RGB;
-        const r = Math.round(rgb.r * 255).toString(16).padStart(2, '0');
-        const g = Math.round(rgb.g * 255).toString(16).padStart(2, '0');
-        const b = Math.round(rgb.b * 255).toString(16).padStart(2, '0');
+        const r = Math.round(propValue.r * 255).toString(16).padStart(2, '0');
+        const g = Math.round(propValue.g * 255).toString(16).padStart(2, '0');
+        const b = Math.round(propValue.b * 255).toString(16).padStart(2, '0');
         return `#${r}${g}${b}`;
       }
       console.warn(`Property "${template}" has unsupported type: `, propValue);

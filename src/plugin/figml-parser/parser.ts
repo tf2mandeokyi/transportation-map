@@ -104,7 +104,7 @@ export class FigmlParser {
     const attributes: Record<string, StringTemplate> = {};
     for (const [key, value] of Object.entries(xmlNode)) {
       if (typeof value !== 'string' || key === '#text') { continue }
-      attributes[key] = StringTemplate.parseDollarTemplates(value as string);
+      attributes[key] = StringTemplate.parseDollarTemplates(value);
     }
 
     const result: FigmlNode = {

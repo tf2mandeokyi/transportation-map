@@ -49,7 +49,7 @@ export class FrameRenderer extends BaseRenderer {
     if (attributes.clip) {
       const clip = attributes.clip.interpolate(props);
       if (clip !== 'true' && clip !== 'false') {
-        throw Error(`Invalid value for clip attribute: ${clip}. Expected 'true' or 'false'.`);
+        throw new Error(`Invalid value for clip attribute: ${clip}. Expected 'true' or 'false'.`);
       }
       frame.clipsContent = (clip === 'true');
     }
@@ -67,7 +67,7 @@ export class FrameRenderer extends BaseRenderer {
     // Handle layout gap
     if (attributes.gap) {
       const gap = Number(attributes.gap.interpolate(props));
-      if (!isNaN(gap) && frame.layoutMode !== 'NONE') {
+      if (!Number.isNaN(gap) && frame.layoutMode !== 'NONE') {
         frame.itemSpacing = gap;
       }
     }
@@ -125,7 +125,7 @@ export class FrameRenderer extends BaseRenderer {
     for (const part of parts) {
       const [key, value] = part.trim().split('=');
       const parsed = Number(value) || 0;
-      if (isNaN(parsed)) continue;
+      if (Number.isNaN(parsed)) continue;
       if (key === 'h') values.l = values.r = parsed;
       if (key === 'v') values.t = values.b = parsed;
       if (key === 'l') values.l = parsed;

@@ -1,5 +1,5 @@
-import { UIToPluginMessage } from "../../common/messages";
-import { LineId, StationId } from "../../common/types";
+import { UIToPluginMessage } from "@/common/messages";
+import { LineId, StationId } from "@/common/types";
 import { setUIMessageHandler } from "../figma";
 import { Model } from "../models";
 import { View } from "../views";
@@ -9,12 +9,12 @@ import { RenderController } from "./render";
 import { StationController } from "./station";
 
 export class Controller {
-  private model: Model;
-  private view: View;
-  private stationController: StationController;
-  private lineController: LineController;
-  private connectionController: ConnectionController;
-  private renderController: RenderController;
+  private readonly model: Model;
+  private readonly view: View;
+  private readonly stationController: StationController;
+  private readonly lineController: LineController;
+  private readonly connectionController: ConnectionController;
+  private readonly renderController: RenderController;
 
   constructor(model: Model, view: View) {
     this.model = model;

@@ -116,8 +116,8 @@ export class PolygonRenderer extends BaseRenderer {
       const vertices: VectorVertex[] = [];
       const segments: VectorSegment[] = [];
 
-      for (let i = 0; i < coordinates.length; i++) {
-        const [x, y] = coordinates[i].split(',').map(Number);
+      for (const element of coordinates) {
+        const [x, y] = element.split(',').map(Number);
         vertices.push({ x: x, y: y });
       }
 
@@ -131,7 +131,7 @@ export class PolygonRenderer extends BaseRenderer {
         segments: segments,
         regions: [{
           windingRule: "NONZERO",
-          loops: [[...Array(segments.length).keys()]]
+          loops: [[...new Array(segments.length).keys()]]
         }]
       };
     } catch (error) {

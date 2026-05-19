@@ -1,5 +1,5 @@
 import { HVAlign, LineId, NodeId, RoadId, RoadSectionId, StationId } from "./types";
-import { Connection, LinePath, RoadSection } from "../plugin/models/structures";
+import { Connection, LinePath, RoadSection } from "@/plugin/models/structures";
 
 export type LinePathInput = { kind: 'station-stop'; stationId: StationId } | { kind: 'road-section-enter'; roadSectionId: RoadSectionId };
 
