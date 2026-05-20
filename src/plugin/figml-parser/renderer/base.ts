@@ -5,8 +5,13 @@ import { FigmlNode, FigmlProps } from '../types';
 
 export abstract class BaseRenderer {
   protected static applyCommonAttributes(node: SceneNode, attributes: Record<string, StringTemplate | undefined>, props: FigmlProps) {
-    if (attributes.width) {
-      const width = attributes.width.interpolate(props);
+    const width = attributes.width?.interpolate(props);
+    const height = attributes.height?.interpolate(props);
+    const name = attributes.name?.interpolate(props);
+    const rotation = attributes.rotation?.interpolate(props);
+    const locked = attributes.locked?.interpolate(props);
+
+    if (width) {
       try {
         if (width === 'hug') {
           if ('layoutSizingHorizontal' in node) node.layoutSizingHorizontal = 'HUG';
@@ -21,8 +26,7 @@ export abstract class BaseRenderer {
       }
     }
 
-    if (attributes.height) {
-      const height = attributes.height.interpolate(props);
+    if (height) {
       try {
         if (height === 'hug') {
           if ('layoutSizingVertical' in node) node.layoutSizingVertical = 'HUG';
@@ -37,20 +41,17 @@ export abstract class BaseRenderer {
       }
     }
 
-    if (attributes.name) {
-      const name = attributes.name.interpolate(props);
+    if (name) {
       node.name = name;
     }
 
-    if (attributes.rotation && 'rotation' in node) {
-      const rotation = attributes.rotation.interpolate(props);
+    if (rotation && 'rotation' in node) {
       if (!Number.isNaN(Number(rotation))) {
         (node as any).rotation = Number(rotation);
       }
     }
 
-    if (attributes.locked) {
-      const locked = attributes.locked.interpolate(props);
+    if (locked) {
       if (locked !== 'true' && locked !== 'false') {
         throw new Error(`Invalid value for locked attribute: ${locked}. Expected 'true' or 'false'.`);
       }
@@ -59,22 +60,14 @@ export abstract class BaseRenderer {
   }
 
   protected static applyVisibilityAttribute(node: SceneNode, attributes: Record<string, StringTemplate | undefined>, props: FigmlProps) {
-    if (attributes.visible) {
-      const visible = attributes.visible.interpolate(props);
+    const visible = attributes.visible?.interpolate(props);
+
+    if (visible) {
       if (visible !== 'true' && visible !== 'false') {
         throw new Error(`Invalid value for visible attribute: ${visible}. Expected 'true' or 'false'.`);
       }
       node.visible = visible === 'true';
     }
-  }
-
-  protected static hexToRgb(hex: string): RGB {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ? {
-      r: Number.parseInt(result[1], 16) / 255,
-      g: Number.parseInt(result[2], 16) / 255,
-      b: Number.parseInt(result[3], 16) / 255
-    } : { r: 0, g: 0, b: 0 };
   }
 
   abstract render(node: FigmlNode, props: FigmlProps): RenderResult;

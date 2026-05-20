@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { LineId } from '../../common/types';
+import { LineId } from '@/common/types';
 import { postMessageToPlugin } from '../figma';
-import { LineData } from '../../common/messages';
+import { LineData } from '@/common/messages';
 
 interface LineItemProps {
   line: LineData;
@@ -60,21 +60,22 @@ interface Props {
 const LinesSection: React.FC<Props> = ({ lines, onRemoveLine, onEditLine, onReorderLines }) => {
   const [lineName, setLineName] = useState('');
   const [lineColor, setLineColor] = useState('#ff0000');
+  const [lineIsCircular, setLineIsCircular] = useState(false);
   const [lineCounter, setLineCounter] = useState(0);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
   const handleAddLine = () => {
-    const lineData = {
-      name: lineName || `Line_${lineCounter}`,
-      color: lineColor
-    };
-
     postMessageToPlugin({
       type: 'add-line',
-      line: lineData
+      line: {
+        name: lineName || `Line_${lineCounter}`,
+        color: lineColor,
+        isCircular: lineIsCircular
+      }
     });
 
     setLineName('');
+    setLineIsCircular(false);
     setLineCounter(prev => prev + 1);
   };
 
@@ -153,6 +154,14 @@ const LinesSection: React.FC<Props> = ({ lines, onRemoveLine, onEditLine, onReor
             />
           </div>
         </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={lineIsCircular}
+            onChange={(e) => setLineIsCircular(e.target.checked)}
+          />
+          Circular line
+        </label>
         <button className="button button--primary" onClick={handleAddLine}>
           Add Line
         </button>

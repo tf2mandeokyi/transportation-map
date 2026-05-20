@@ -1,4 +1,4 @@
-import { Line, LinePath, MapState, Node, Road, RoadSection, Station } from "./structures";
+import { Line, MapState, Node, Road, RoadSection, Station } from "./structures";
 import { deserializeMapState, serializeMapState } from "./serde";
 import { LineId, NodeId, RoadId, RoadSectionId, StationId } from "../../common/types";
 
@@ -21,7 +21,7 @@ function generateUniqueId<T extends string>(map: Map<T, any>): T {
 }
 
 export class Model {
-  private state: MapState;
+  private readonly state: MapState;
 
   constructor(initialState?: Partial<MapState>) {
     this.state = {
@@ -49,6 +49,11 @@ export class Model {
     this.state.nodes.delete(id);
   }
 
+  public updateNodePosition(id: NodeId, pos: { x: number; y: number }): void {
+    const node = this.state.nodes.get(id);
+    if (node) node.pos = pos;
+  }
+
   // ─── Road ───
 
   public addRoad(road: Omit<Road, 'id'>): RoadId {
@@ -62,6 +67,11 @@ export class Model {
     if (endNode) endNode.roadConnections.push({ roadId: id, endpointIndex: 1 });
 
     return id;
+  }
+
+  public updateRoadEndpoints(id: RoadId, endpoints: [import('./structures').Connection, import('./structures').Connection]): void {
+    const road = this.state.roads.get(id);
+    if (road) road.endpoints = endpoints;
   }
 
   public removeRoad(id: RoadId): void {
@@ -219,7 +229,7 @@ export class Model {
     const line = this.state.lines.get(lineId);
     if (!line) return;
     const index = line.paths.length;
-    line.paths.push({ ...path, index } as LinePath);
+    line.paths.push({ ...path, index });
   }
 
   public removeLinePath(lineId: LineId, pathIndex: number): void {
@@ -232,7 +242,7 @@ export class Model {
   public replaceLinePaths(lineId: LineId, paths: import("../../common/messages").LinePathInput[]): void {
     const line = this.state.lines.get(lineId);
     if (!line) return;
-    line.paths = paths.map((p, i) => ({ ...p, index: i } as LinePath));
+    line.paths = paths.map((p, i) => ({ ...p, index: i }));
   }
 
   private _reindexLinePaths(line: Line): void {

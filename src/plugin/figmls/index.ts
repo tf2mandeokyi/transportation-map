@@ -7,6 +7,7 @@ import stationLineTextFigml from "./station-line-text.figml";
 import { RenderResult } from "../figml-parser/result";
 import { FigmlParser } from "../figml-parser";
 import { FigmlAlignment } from "../figml-parser/types";
+import { hexToRgb } from "@/common/utils/color";
 
 const FIGML_IMPORTS = {
   'station.figml': stationFigml,
@@ -21,15 +22,6 @@ export function resolveImport(filename: string): string {
   const importContent = FIGML_IMPORTS[filename as keyof typeof FIGML_IMPORTS];
   if (!importContent) throw new Error(`Unknown import path: ${filename}`);
   return importContent;
-}
-
-function hexToRgb(hex: string): RGB {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return result ? {
-    r: parseInt(result[1], 16) / 255,
-    g: parseInt(result[2], 16) / 255,
-    b: parseInt(result[3], 16) / 255
-  } : { r: 1, g: 0, b: 0 };
 }
 
 const STATION_LINE_TEMPLATE = FigmlParser.parseComponent(stationLineFigml);

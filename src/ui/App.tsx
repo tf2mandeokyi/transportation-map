@@ -4,8 +4,10 @@ import LinesSection from './components/LinesSection';
 import EditLinePathSection from './components/EditLinePathSection';
 import EditStationSection from './components/EditStationSection';
 import SettingsSection from './components/SettingsSection';
-import { LineData, PluginToUIMessage } from '../common/messages';
-import { LineId } from '../common/types';
+import NetworkSection from './components/NetworkSection';
+import { LineData, NetworkFocusedElement, NodeData, PluginToUIMessage, RoadData } from '@/common/messages';
+import { NodeId } from '@/common/types';
+import { LineId } from '@/common/types';
 import { postMessageToPlugin } from './figma';
 import { FigmaPluginMessageManager } from './events';
 
@@ -33,9 +35,14 @@ const NavButton: React.FC<NavButtonProps> = ({ active, onClick, children }) => (
 );
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'stations' | 'lines' | 'settings'>('stations');
+  const [activeTab, setActiveTab] = useState<'stations' | 'lines' | 'network' | 'settings'>('stations');
   const [lines, setLines] = useState<LineData[]>([]);
   const [currentEditingLineId, setCurrentEditingLineId] = useState<LineId | null>(null);
+  const [nodes, setNodes] = useState<NodeData[]>([]);
+  const [roads, setRoads] = useState<RoadData[]>([]);
+  const [networkFocus, setNetworkFocus] = useState<NetworkFocusedElement | null>(null);
+  const [roadCreationStep, setRoadCreationStep] = useState<'idle' | 'first' | 'second'>('idle');
+  const [roadCreationFirstNode, setRoadCreationFirstNode] = useState<{ id: NodeId; name?: string } | null>(null);
 
   const messageManagerRef = useRef(new FigmaPluginMessageManager());
 
@@ -54,6 +61,30 @@ const App: React.FC = () => {
 
     const unsubscribe2 = messageManagerRef.current.onMessage('station-added', () => {});
 
+    const unsubscribe3 = messageManagerRef.current.onMessage('network-data', msg => {
+      setNodes(msg.nodes);
+      setRoads(msg.roads);
+    });
+
+    const unsubscribe4 = messageManagerRef.current.onMessage('network-element-focused', msg => {
+      setNetworkFocus(msg.element);
+      setActiveTab('network');
+    });
+
+    const unsubscribe5 = messageManagerRef.current.onMessage('network-selection-cleared', () => {
+      setNetworkFocus(null);
+    });
+
+    const unsubscribe6 = messageManagerRef.current.onMessage('road-creation-first-node', msg => {
+      setRoadCreationFirstNode({ id: msg.nodeId, name: msg.name });
+      setRoadCreationStep('second');
+    });
+
+    const unsubscribe7 = messageManagerRef.current.onMessage('road-creation-exited', () => {
+      setRoadCreationStep('idle');
+      setRoadCreationFirstNode(null);
+    });
+
     window.onmessage = (event) => {
       const msg: PluginToUIMessage = event.data.pluginMessage;
       messageManagerRef.current.handleMessage(msg);
@@ -61,7 +92,7 @@ const App: React.FC = () => {
 
     postMessageToPlugin({ type: 'request-initial-data' });
 
-    return () => { unsubscribe1(); unsubscribe2(); };
+    return () => { unsubscribe1(); unsubscribe2(); unsubscribe3(); unsubscribe4(); unsubscribe5(); unsubscribe6(); unsubscribe7(); };
   }, []);
 
   const handleRemoveLine = (lineId: LineId) => {
@@ -70,6 +101,18 @@ const App: React.FC = () => {
 
   const handleReorderLines = (newLines: LineData[]) => {
     setLines(newLines);
+  };
+
+  const handleStartRoadCreation = () => {
+    setRoadCreationStep('first');
+    setRoadCreationFirstNode(null);
+    postMessageToPlugin({ type: 'start-adding-road-mode' });
+  };
+
+  const handleCancelRoadCreation = () => {
+    setRoadCreationStep('idle');
+    setRoadCreationFirstNode(null);
+    postMessageToPlugin({ type: 'cancel-adding-road-mode' });
   };
 
   const handleRenderMap = () => {
@@ -91,6 +134,9 @@ const App: React.FC = () => {
         <NavButton active={activeTab === 'lines'} onClick={() => setActiveTab('lines')}>
           Lines
         </NavButton>
+        <NavButton active={activeTab === 'network'} onClick={() => setActiveTab('network')}>
+          Network
+        </NavButton>
         <NavButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')}>
           Settings
         </NavButton>
@@ -98,7 +144,7 @@ const App: React.FC = () => {
 
       {activeTab === 'stations' && (
         <div>
-          <StationsSection />
+          <StationsSection roads={roads} />
           <EditStationSection messageManagerRef={messageManagerRef} />
         </div>
       )}
@@ -115,12 +161,24 @@ const App: React.FC = () => {
           ) : (
             <EditLinePathSection
               lines={lines}
+              roads={roads}
               messageManagerRef={messageManagerRef}
               currentEditingLineId={currentEditingLineId}
               onBack={() => setCurrentEditingLineId(null)}
             />
           )}
         </div>
+      )}
+
+      {activeTab === 'network' && (
+        <NetworkSection
+          nodes={nodes}
+          focusedElement={networkFocus}
+          roadCreationStep={roadCreationStep}
+          roadCreationFirstNode={roadCreationFirstNode}
+          onStartRoadCreation={handleStartRoadCreation}
+          onCancelRoadCreation={handleCancelRoadCreation}
+        />
       )}
 
       {activeTab === 'settings' && <SettingsSection />}

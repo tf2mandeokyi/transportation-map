@@ -2,8 +2,15 @@ import { Line, MapState, Road, Station } from "../models/structures";
 import { Model } from "../models";
 import { renderStation, renderStationLine } from "../figmls";
 import { ErrorChain } from "../error";
-import { HVAlign, LineId, StationId } from "../../common/types";
+import { HVAlign, LineId, RoadSectionId, StationId } from "../../common/types";
 import { getStationAnchorPoint } from "../utils/anchor";
+import {
+  evalCubicBezier,
+  evalCubicBezierTangent,
+  offsetBezier,
+  TRACK_SPACING,
+  BezierPoints,
+} from "../utils/bezier";
 
 export interface ConnectionPoints {
   head: Vector;
@@ -12,53 +19,66 @@ export interface ConnectionPoints {
   alignEnd: Vector;
 }
 
-/**
- * Evaluates a cubic bezier curve at parameter t (0..1).
- * P0 = start, P1 = start control, P2 = end control, P3 = end.
- */
-function evalCubicBezier(p0: Vector, p1: Vector, p2: Vector, p3: Vector, t: number): Vector {
-  const u = 1 - t;
-  return {
-    x: u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x,
-    y: u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y,
-  };
-}
-
-function computeRoadBezier(road: Road, state: Readonly<MapState>): { p0: Vector; p1: Vector; p2: Vector; p3: Vector } | null {
+function computeRoadBezier(road: Road, state: Readonly<MapState>): BezierPoints | null {
   const startNode = state.nodes.get(road.startNodeId);
   const endNode = state.nodes.get(road.endNodeId);
   if (!startNode || !endNode) return null;
 
-  const conn0 = road.endpoints[0];
-  const conn1 = road.endpoints[1];
-
   const p0 = startNode.pos;
-  const p1 = { x: p0.x + conn0.bezierDisplacement.x, y: p0.y + conn0.bezierDisplacement.y };
+  const p1 = { x: p0.x + road.endpoints[0].bezierDisplacement.x, y: p0.y + road.endpoints[0].bezierDisplacement.y };
   const p3 = endNode.pos;
-  const p2 = { x: p3.x + conn1.bezierDisplacement.x, y: p3.y + conn1.bezierDisplacement.y };
+  const p2 = { x: p3.x + road.endpoints[1].bezierDisplacement.x, y: p3.y + road.endpoints[1].bezierDisplacement.y };
 
   return { p0, p1, p2, p3 };
 }
 
+function computeSectionBezier(road: Road, sectionId: RoadSectionId, state: Readonly<MapState>): BezierPoints | null {
+  const base = computeRoadBezier(road, state);
+  if (!base) return null;
+
+  const section = road.sections.get(sectionId);
+  if (!section) return null;
+
+  const sections = Array.from(road.sections.values());
+  const center = (sections.length - 1) / 2;
+  const offset = (section.index - center) * TRACK_SPACING;
+
+  return offset === 0 ? base : offsetBezier(base.p0, base.p1, base.p2, base.p3, offset);
+}
+
+function findRoadForSection(sectionId: RoadSectionId, state: Readonly<MapState>): Road | null {
+  for (const road of state.roads.values()) {
+    if (road.sections.has(sectionId)) return road;
+  }
+  return null;
+}
+
 function computeStationPosition(station: Station, state: Readonly<MapState>): Vector {
   if (!station.roadSectionId) return { x: 0, y: 0 };
+  const road = findRoadForSection(station.roadSectionId, state);
+  if (!road) return { x: 0, y: 0 };
 
-  for (const road of state.roads.values()) {
-    if (road.sections.has(station.roadSectionId)) {
-      const bezier = computeRoadBezier(road, state);
-      if (!bezier) return { x: 0, y: 0 };
+  const bezier = computeSectionBezier(road, station.roadSectionId, state);
+  if (!bezier) return { x: 0, y: 0 };
 
-      const t = station.interpT;
-      return evalCubicBezier(bezier.p0, bezier.p1, bezier.p2, bezier.p3, t);
-    }
-  }
+  return evalCubicBezier(bezier.p0, bezier.p1, bezier.p2, bezier.p3, station.interpT);
+}
 
-  return { x: 0, y: 0 };
+function computeStationTangentAngle(station: Station, state: Readonly<MapState>): number {
+  if (!station.roadSectionId) return 0;
+  const road = findRoadForSection(station.roadSectionId, state);
+  if (!road) return 0;
+
+  const base = computeRoadBezier(road, state);
+  if (!base) return 0;
+
+  const tangent = evalCubicBezierTangent(base.p0, base.p1, base.p2, base.p3, station.interpT);
+  return Math.atan2(tangent.y, tangent.x) * 180 / Math.PI;
 }
 
 export class StationRenderer {
-  private figmaStationMap: Map<StationId, SceneNode> = new Map();
-  private lineConnectionPoints: Map<string, ConnectionPoints> = new Map();
+  private readonly figmaStationMap: Map<StationId, SceneNode> = new Map();
+  private readonly lineConnectionPoints: Map<string, ConnectionPoints> = new Map();
   private model?: Model;
 
   public setModel(model: Model): void {
@@ -68,7 +88,7 @@ export class StationRenderer {
   public async renderStation(station: Station, state: Readonly<MapState>): Promise<void> {
     let frame: FrameNode | null = null;
     if (station.figmaNodeId) {
-      try { frame = await figma.getNodeByIdAsync(station.figmaNodeId) as FrameNode | null; }
+      try { frame = await figma.getNodeByIdAsync(station.figmaNodeId) as FrameNode; }
       catch {}
     }
     if (!frame) {
@@ -90,9 +110,26 @@ export class StationRenderer {
     const children = await this.renderStationWithTemplate(frame, station, state);
 
     const position = computeStationPosition(station, state);
+    const tangentAngle = computeStationTangentAngle(station, state);
     const anchor = getStationAnchorPoint(station.textAlign);
-    frame.x = position.x - frame.width * anchor.x;
-    frame.y = position.y - frame.height * anchor.y;
+
+    // // Set rotation before computing position (frame dimensions are already fixed)
+    frame.rotation = tangentAngle;
+
+    // Position the frame so the anchor point in frame-local space lands at `position` in canvas.
+    // Figma rotates clockwise around the frame center (frame.x + w/2, frame.y + h/2).
+    // For CW rotation θ, a local offset (dax, day) from center maps to canvas offset:
+    //   rdax = dax*cos(θ) - day*sin(θ)
+    //   rday = dax*sin(θ) + day*cos(θ)
+    const w = frame.width;
+    const h = frame.height;
+    const θ = tangentAngle * Math.PI / 180;
+    const dax = anchor.x * w - w / 2;
+    const day = anchor.y * h - h / 2;
+    const rdax = dax * Math.cos(θ) - day * Math.sin(θ);
+    const rday = dax * Math.sin(θ) + day * Math.cos(θ);
+    frame.x = position.x - rdax - w / 2;
+    frame.y = position.y - rday - h / 2;
 
     const maxWidth = children.reduce((max, c) => Math.max(max, c.node.width), 0);
     this.storeLineConnectionPoints(station, children, maxWidth);
@@ -143,13 +180,13 @@ export class StationRenderer {
   } {
     switch (textAlign) {
       case 'right':
-        return { rotation: 0, stopLineFacing: 'left', textLocation: 'right', reverseOrder: false };
+        return { rotation: 0,  stopLineFacing: 'left',  textLocation: 'right',  reverseOrder: false };
       case 'left':
-        return { rotation: 0, stopLineFacing: 'right', textLocation: 'left', reverseOrder: false };
+        return { rotation: 0,  stopLineFacing: 'right', textLocation: 'left',   reverseOrder: false };
       case 'bottom':
-        return { rotation: 90, stopLineFacing: 'left', textLocation: 'bottom', reverseOrder: false };
+        return { rotation: 90, stopLineFacing: 'left',  textLocation: 'bottom', reverseOrder: false };
       case 'top':
-        return { rotation: 90, stopLineFacing: 'right', textLocation: 'top', reverseOrder: false };
+        return { rotation: 90, stopLineFacing: 'right', textLocation: 'top',    reverseOrder: false };
     }
   }
 
@@ -189,15 +226,15 @@ export class StationRenderer {
       const width = node.width;
       const height = node.height;
 
-      const centerLeft = this.applyTransform(transform, { x: 0, y: height / 2 });
-      const centerRight = this.applyTransform(transform, { x: width, y: height / 2 });
+      const centerLeft  = this.applyTransform(transform, { x: 0,        y: height / 2 });
+      const centerRight = this.applyTransform(transform, { x: width,    y: height / 2 });
 
       let head: Vector, tail: Vector, alignStart: Vector, alignEnd: Vector;
       switch (station.textAlign) {
         case 'right':
         case 'top':
           head = centerLeft;
-          tail = alignEnd = this.applyTransform(transform, { x: maxWidth, y: height / 2 });
+          tail = alignEnd = this.applyTransform(transform, { x: maxWidth,          y: height / 2 });
           alignStart = centerRight;
           break;
         case 'left':

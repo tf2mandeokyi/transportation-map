@@ -23,14 +23,15 @@ async function main() {
   await controller.initialize();
 
   const hasExistingData = model.getState().stations.size > 0 || model.getState().lines.size > 0;
-  if (!hasExistingData) {
+  if (hasExistingData) {
+    console.log("Existing map data found, skipping initial render");
+    controller.syncLinesToUI();
+    controller.syncNetworkToUI();
+  } else {
     console.log("Creating demo map");
     await createDemoMap(controller, model);
     await controller.refresh();
     figma.viewport.scrollAndZoomIntoView(figma.currentPage.children);
-  } else {
-    console.log("Existing map data found, skipping initial render");
-    controller.syncLinesToUI();
   }
 }
 

@@ -1,13 +1,13 @@
 import { LineAtStationData } from "../../common/messages";
-import { HVAlign, StationId } from "../../common/types";
+import { HVAlign, RoadSectionId, StationId } from "../../common/types";
 import { postMessageToUI } from "../figma";
 import { BaseController } from "./base";
 
 export class StationController extends BaseController {
-  public async handleAddStation(stopData: { name: string; textAlign: HVAlign }): Promise<void> {
-    const { name, textAlign } = stopData;
+  public async handleAddStation(stopData: { name: string; textAlign: HVAlign; roadSectionId?: RoadSectionId; interpT?: number }): Promise<void> {
+    const { name, textAlign, roadSectionId = null, interpT = 0.5 } = stopData;
 
-    const id = this.createStation(name, textAlign);
+    const id = this.createStation(name, textAlign, roadSectionId, interpT);
     const station = this.model.getState().stations.get(id)!;
 
     await this.view.stationRenderer.renderStation(station, this.model.getState());
@@ -16,13 +16,8 @@ export class StationController extends BaseController {
     postMessageToUI({ type: 'station-added' });
   }
 
-  public createStation(name: string, textAlign: HVAlign = 'right'): StationId {
-    return this.model.addStation({
-      name,
-      textAlign,
-      interpT: 0.5,
-      roadSectionId: null,
-    });
+  public createStation(name: string, textAlign: HVAlign = 'right', roadSectionId: RoadSectionId | null = null, interpT: number = 0.5): StationId {
+    return this.model.addStation({ name, textAlign, interpT, roadSectionId });
   }
 
   public async handleGetStationInfo(stationId: StationId): Promise<void> {

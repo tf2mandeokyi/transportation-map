@@ -1,24 +1,57 @@
-import { HVAlign } from "../../common/types";
-import { Line, MapState, Station } from "../models/structures";
+import { Line, MapState, Road, Station } from "../models/structures";
 import { Model } from "../models";
 import { StationRenderer } from "./station";
+import { RoadSectionId } from "../../common/types";
+import {
+  offsetBezier,
+  subBezier,
+  bezierPathData,
+  TRACK_SPACING,
+  BezierPoints,
+} from "../utils/bezier";
+import { hexToRgb } from "@/common/utils/color";
 
 interface BezierSegment {
   outline: VectorNode;
   main: VectorNode;
 }
 
-function hexToRgb(hex: string): RGB {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return result ? {
-    r: parseInt(result[1], 16) / 255,
-    g: parseInt(result[2], 16) / 255,
-    b: parseInt(result[3], 16) / 255
-  } : { r: 1, g: 0, b: 0 };
+function computeRoadBezier(road: Road, state: Readonly<MapState>): BezierPoints | null {
+  const startNode = state.nodes.get(road.startNodeId);
+  const endNode = state.nodes.get(road.endNodeId);
+  if (!startNode || !endNode) return null;
+
+  const p0 = startNode.pos;
+  const p1 = { x: p0.x + road.endpoints[0].bezierDisplacement.x, y: p0.y + road.endpoints[0].bezierDisplacement.y };
+  const p3 = endNode.pos;
+  const p2 = { x: p3.x + road.endpoints[1].bezierDisplacement.x, y: p3.y + road.endpoints[1].bezierDisplacement.y };
+
+  return { p0, p1, p2, p3 };
+}
+
+function computeSectionBezier(road: Road, sectionId: RoadSectionId, state: Readonly<MapState>): BezierPoints | null {
+  const base = computeRoadBezier(road, state);
+  if (!base) return null;
+
+  const section = road.sections.get(sectionId);
+  if (!section) return null;
+
+  const sections = Array.from(road.sections.values());
+  const center = (sections.length - 1) / 2;
+  const offset = (section.index - center) * TRACK_SPACING;
+
+  return offset === 0 ? base : offsetBezier(base.p0, base.p1, base.p2, base.p3, offset);
+}
+
+function findRoadForSection(sectionId: RoadSectionId, state: Readonly<MapState>): Road | null {
+  for (const road of state.roads.values()) {
+    if (road.sections.has(sectionId)) return road;
+  }
+  return null;
 }
 
 export class LineRenderer {
-  private stationRenderer: StationRenderer;
+  private readonly stationRenderer: StationRenderer;
   private model: Model | null = null;
 
   constructor(stationRenderer: StationRenderer) {
@@ -35,7 +68,6 @@ export class LineRenderer {
     const segmentNodes: SceneNode[] = [];
     const color = hexToRgb(line.color);
 
-    // Collect consecutive StationStop pairs to render bezier segments between them
     for (let i = 0; i < line.paths.length - 1; i++) {
       const current = line.paths[i];
       const next = line.paths[i + 1];
@@ -49,7 +81,7 @@ export class LineRenderer {
       const outlineNodes: VectorNode[] = [];
       const mainNodes: VectorNode[] = [];
 
-      const segment = this.renderLineSegment(line, i, startStation, endStation, color);
+      const segment = this.renderLineSegment(line, i, startStation, endStation, color, state);
       if (segment) {
         outlineNodes.push(segment.outline);
         mainNodes.push(segment.main);
@@ -62,8 +94,10 @@ export class LineRenderer {
       }
 
       if (outlineNodes.length > 0) {
-        segmentNodes.push(figma.group(outlineNodes, figma.currentPage));
-        segmentNodes.push(figma.group(mainNodes, figma.currentPage));
+        segmentNodes.push(
+          figma.group(outlineNodes, figma.currentPage),
+          figma.group(mainNodes, figma.currentPage)
+        );
       }
     }
 
@@ -87,24 +121,59 @@ export class LineRenderer {
     }
   }
 
-  private renderLineSegment(line: Line, segmentIndex: number, startStation: Station, endStation: Station, color: RGB): BezierSegment | null {
+  private renderLineSegment(
+    line: Line,
+    segmentIndex: number,
+    startStation: Station,
+    endStation: Station,
+    color: RGB,
+    state: Readonly<MapState>
+  ): BezierSegment | null {
     const startPoints = this.stationRenderer.getConnectionPoint(startStation.id, line.id, segmentIndex);
-    const endPoints = this.stationRenderer.getConnectionPoint(endStation.id, line.id, segmentIndex + 1);
+    const endPoints   = this.stationRenderer.getConnectionPoint(endStation.id,   line.id, segmentIndex + 1);
 
     if (!startPoints || !endPoints) {
       console.warn(`Missing connection points for line ${line.id} segment ${segmentIndex}`);
       return null;
     }
 
-    const pathData = this.createBezierPath(startPoints.head, endPoints.tail, startStation, endStation);
+    const pathData = this.buildSegmentPath(startStation, endStation, startPoints.head, endPoints.tail, state);
     return this.bezierPathToSegments(pathData, color);
+  }
+
+  private buildSegmentPath(
+    startStation: Station,
+    endStation: Station,
+    headCanvas: Vector,
+    tailCanvas: Vector,
+    state: Readonly<MapState>
+  ): string {
+    const sId = startStation.roadSectionId;
+    const eId = endStation.roadSectionId;
+
+    if (sId && eId && sId === eId) {
+      const road = findRoadForSection(sId, state);
+      if (road) {
+        const sectionBezier = computeSectionBezier(road, sId, state);
+        if (sectionBezier) {
+          const sub = subBezier(
+            sectionBezier.p0, sectionBezier.p1, sectionBezier.p2, sectionBezier.p3,
+            startStation.interpT, endStation.interpT
+          );
+          return bezierPathData(sub);
+        }
+      }
+    }
+
+    // Fallback for cross-section or unlinked stations: straight bezier between connection points
+    return `M ${headCanvas.x} ${headCanvas.y} L ${tailCanvas.x} ${tailCanvas.y}`;
   }
 
   private renderMiddleSegment(line: Line, segmentIndex: number, station: Station, color: RGB): BezierSegment | null {
     const points = this.stationRenderer.getConnectionPoint(station.id, line.id, segmentIndex);
     if (!points) return null;
 
-    const pathData = this.createBezierPath(points.alignStart, points.alignEnd);
+    const pathData = `M ${points.alignStart.x} ${points.alignStart.y} L ${points.alignEnd.x} ${points.alignEnd.y}`;
     return this.bezierPathToSegments(pathData, color);
   }
 
@@ -124,40 +193,6 @@ export class LineRenderer {
     mainNode.strokeJoin = 'ROUND';
 
     return { outline: outlineNode, main: mainNode };
-  }
-
-  private createBezierPath(
-    start: Vector,
-    end: Vector,
-    startStation?: Station,
-    endStation?: Station
-  ): string {
-    const dx = end.x - start.x;
-    const dy = end.y - start.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    const controlDistance = distance * 0.3;
-
-    const startOffset = startStation ? this.getTextAlignOffset(startStation.textAlign, controlDistance) : { x: 0, y: 0 };
-    const endOffset = endStation ? this.getTextAlignOffset(endStation.textAlign, controlDistance) : { x: 0, y: 0 };
-
-    const cp1x = start.x + startOffset.x;
-    const cp1y = start.y + startOffset.y;
-    const cp2x = end.x - endOffset.x;
-    const cp2y = end.y - endOffset.y;
-
-    return `M ${start.x} ${start.y} C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${end.x} ${end.y}`;
-  }
-
-  private getTextAlignOffset(textAlign: HVAlign, distance: number): Vector {
-    // The dot side is opposite the text side; the bezier extends in the dot direction
-    switch (textAlign) {
-      case 'left':  return { x: -distance, y: 0 }; // dots on right → curve extends right
-      case 'right': return { x: distance, y: 0 };  // dots on left → curve extends left... wait
-      // Actually: textAlign 'right' means text is on right, dots are on left.
-      // The connection head points away from the station (outward). Let's keep it simple:
-      case 'bottom': return { x: 0, y: distance };
-      case 'top':   return { x: 0, y: -distance };
-    }
   }
 
   public async moveSegmentsToBack(): Promise<void> {

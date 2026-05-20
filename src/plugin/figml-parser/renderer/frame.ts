@@ -3,6 +3,7 @@ import { BaseRenderer } from './base';
 import { renderNode } from '..';
 import { RenderResult } from '../result';
 import { isRgbObject, StringTemplate } from '../template';
+import { hexToRgb } from '@/common/utils/color';
 
 export class FrameRenderer extends BaseRenderer {
   render(node: FigmlNode, props: FigmlProps): RenderResult {
@@ -39,15 +40,20 @@ export class FrameRenderer extends BaseRenderer {
   }
 
   private applyFrameAttributes(frame: FrameNode, attributes: Record<string, StringTemplate | undefined>, props: FigmlProps) {
-    if (attributes.fill) {
-      const fill = attributes.fill.interpolate(props);
-      frame.fills = [{ type: 'SOLID', color: BaseRenderer.hexToRgb(fill) }];
+    const fill = attributes.fill?.interpolate(props);
+    const clip = attributes.clip?.interpolate(props);
+    const flow = attributes.flow?.interpolate(props);
+    const gap = Number(attributes.gap?.interpolate(props));
+    const padding = attributes.padding?.interpolate(props);
+    const align = attributes.align?.interpolate(props);
+
+    if (fill) {
+      frame.fills = [{ type: 'SOLID', color: hexToRgb(fill) }];
     } else {
       frame.fills = [];
     }
 
-    if (attributes.clip) {
-      const clip = attributes.clip.interpolate(props);
+    if (clip) {
       if (clip !== 'true' && clip !== 'false') {
         throw new Error(`Invalid value for clip attribute: ${clip}. Expected 'true' or 'false'.`);
       }
@@ -55,8 +61,7 @@ export class FrameRenderer extends BaseRenderer {
     }
 
     // Handle layout flow
-    if (attributes.flow) {
-      const flow = attributes.flow.interpolate(props);
+    if (flow) {
       if (flow === 'horizontal') {
         frame.layoutMode = 'HORIZONTAL';
       } else if (flow === 'vertical') {
@@ -65,16 +70,14 @@ export class FrameRenderer extends BaseRenderer {
     }
 
     // Handle layout gap
-    if (attributes.gap) {
-      const gap = Number(attributes.gap.interpolate(props));
+    if (gap) {
       if (!Number.isNaN(gap) && frame.layoutMode !== 'NONE') {
         frame.itemSpacing = gap;
       }
     }
 
     // Handle padding
-    if (attributes.padding) {
-      const padding = attributes.padding.interpolate(props);
+    if (padding) {
       if (frame.layoutMode !== 'NONE') {
         const paddingValues = this.parsePadding(padding);
         frame.paddingLeft = paddingValues.l;
@@ -85,8 +88,7 @@ export class FrameRenderer extends BaseRenderer {
     }
 
     // Handle align (for auto layout)
-    if (attributes.align && frame.layoutMode !== 'NONE') {
-      const align = attributes.align.interpolate(props);
+    if (align && frame.layoutMode !== 'NONE') {
       const [h, v] = align.split(',');
 
       if (frame.layoutMode === 'HORIZONTAL') {
