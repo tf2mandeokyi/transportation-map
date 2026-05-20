@@ -203,4 +203,8 @@ export class Controller {
   public syncLinesToUI(): void {
     this.lineController.syncLinesToUI();
   }
+
+  public cleanup(): void {
+    this.networkController.cleanup();
+  }
 }

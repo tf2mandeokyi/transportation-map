@@ -21,6 +21,7 @@ async function main() {
   const controller = new Controller(model, view);
 
   await controller.initialize();
+  figma.on('close', () => controller.cleanup());
 
   const hasExistingData = model.getState().stations.size > 0 || model.getState().lines.size > 0;
   if (hasExistingData) {
