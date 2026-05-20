@@ -1,13 +1,10 @@
 import React, { useState } from 'react';
 import { HVAlign, RoadSectionId } from '@/common/types';
-import { RoadData } from '@/common/messages';
 import { postMessageToPlugin } from '../figma';
+import { useNetworkContext } from '../contexts/NetworkContext';
 
-interface Props {
-  roads: RoadData[];
-}
-
-const StationsSection: React.FC<Props> = ({ roads }) => {
+const StationsSection: React.FC = () => {
+  const { roads } = useNetworkContext();
   const [stationName, setStationName] = useState('');
   const [textAlign, setTextAlign] = useState<HVAlign>('right');
   const [roadSectionId, setRoadSectionId] = useState<RoadSectionId | ''>('');

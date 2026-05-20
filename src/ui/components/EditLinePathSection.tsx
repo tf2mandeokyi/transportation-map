@@ -1,9 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { LineId, RoadSectionId, StationId } from '@/common/types';
+import React, { useEffect, useRef, useState } from 'react';
+import { RoadSectionId, StationId } from '@/common/types';
 import { postMessageToPlugin } from '../figma';
-import { LineData, LinePathInput, RoadData } from '@/common/messages';
+import { LineData, LinePathInput } from '@/common/messages';
 import { LinePath } from '@/plugin/models/structures';
-import { FigmaPluginMessageManager } from '../events';
+import { useLinesContext } from '../contexts/LinesContext';
+import { useNetworkContext } from '../contexts/NetworkContext';
+import { useMessageManager } from '../contexts/MessageContext';
+
+// ─── Sub-components ────────────────────────────────────────────────────────
 
 const LineInfoEditor: React.FC<{
   line: LineData;
@@ -14,23 +18,11 @@ const LineInfoEditor: React.FC<{
     <div className="two-column">
       <div>
         <label htmlFor="edit-line-name">Line Name</label>
-        <input
-          className="input"
-          id="edit-line-name"
-          type="text"
-          value={line.name}
-          onChange={(e) => onUpdateName(e.target.value)}
-        />
+        <input className="input" id="edit-line-name" type="text" value={line.name} onChange={(e) => onUpdateName(e.target.value)} />
       </div>
       <div>
         <label htmlFor="edit-line-color">Color</label>
-        <input
-          className="input"
-          id="edit-line-color"
-          type="color"
-          value={line.color}
-          onChange={(e) => onUpdateColor(e.target.value)}
-        />
+        <input className="input" id="edit-line-color" type="color" value={line.color} onChange={(e) => onUpdateColor(e.target.value)} />
       </div>
     </div>
   </div>
@@ -51,62 +43,56 @@ const StationPathItem: React.FC<StationPathItemProps> = ({ name, index, onRemove
   </div>
 );
 
-interface Props {
-  lines: LineData[];
-  roads: RoadData[];
-  messageManagerRef: React.RefObject<FigmaPluginMessageManager>;
-  currentEditingLineId: LineId | null;
-  onBack: () => void;
-}
+// ─── Main component ────────────────────────────────────────────────────────
 
-const EditLinePathSection: React.FC<Props> = ({ lines, roads, messageManagerRef, currentEditingLineId, onBack }) => {
-  const [linePaths, setLinePaths] = useState<LinePath[]>([]);
-  const [stationNames, setStationNames] = useState<Record<string, string>>({});
+const EditLinePathSection: React.FC = () => {
+  const { lines, currentEditingLineId, setCurrentEditingLineId } = useLinesContext();
+  const { roads } = useNetworkContext();
+  const manager = useMessageManager();
+
+  const [linePaths, setLinePaths]           = useState<LinePath[]>([]);
+  const [stationNames, setStationNames]     = useState<Record<string, string>>({});
   const [isAddingStations, setIsAddingStations] = useState(false);
-  const [pendingStations, setPendingStations] = useState<Array<{ id: StationId; name: string }>>([]);
+  const [pendingStations, setPendingStations]   = useState<Array<{ id: StationId; name: string }>>([]);
   const [selectedRoadSectionId, setSelectedRoadSectionId] = useState<RoadSectionId | ''>('');
 
-  const allSections = roads.flatMap(road =>
-    road.sections.map(s => {
-      const sectionName = s.name ?? `Section ${s.index}`;
-      return {
-        id: s.id,
-        label: `${road.name ?? road.id} / ${sectionName}`
-      }
-    })
-  );
-
-  const isAddingRef = useRef(isAddingStations);
-  const currentLineIdRef = useRef(currentEditingLineId);
-
+  const isAddingRef        = useRef(isAddingStations);
+  const currentLineIdRef   = useRef(currentEditingLineId);
   useEffect(() => { isAddingRef.current = isAddingStations; }, [isAddingStations]);
   useEffect(() => { currentLineIdRef.current = currentEditingLineId; }, [currentEditingLineId]);
 
   useEffect(() => {
-    const unsubscribe1 = messageManagerRef.current.onMessage('line-path-data', msg => {
+    const unsub1 = manager.onMessage('line-path-data', msg => {
       setLinePaths(msg.paths);
       setStationNames(msg.stationNames);
     });
-
-    const unsubscribe2 = messageManagerRef.current.onMessage('station-removed-from-line', () => {
+    const unsub2 = manager.onMessage('station-removed-from-line', () => {
       const lineId = currentLineIdRef.current;
       if (lineId) postMessageToPlugin({ type: 'get-line-path', lineId });
     });
-
-    const unsubscribe3 = messageManagerRef.current.onMessage('station-clicked', msg => {
+    const unsub3 = manager.onMessage('station-clicked', msg => {
       if (isAddingRef.current) {
         setPendingStations(prev => [...prev, { id: msg.stationId, name: msg.stationName }]);
       }
     });
-
-    return () => { unsubscribe1(); unsubscribe2(); unsubscribe3(); };
-  }, []);
+    return () => { unsub1(); unsub2(); unsub3(); };
+  }, [manager]);
 
   useEffect(() => {
     if (currentEditingLineId) {
       postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
     }
   }, [currentEditingLineId]);
+
+  const allSections = roads.flatMap(road =>
+    road.sections.map(s => {
+      const sectionName = `Section ${s.index}`;
+      return {
+        id: s.id,
+        label: `${road.name ?? road.id} / ${s.name ?? sectionName}`
+      }
+    })
+  );
 
   const handleStartAdding = () => {
     setIsAddingStations(true);
@@ -118,19 +104,17 @@ const EditLinePathSection: React.FC<Props> = ({ lines, roads, messageManagerRef,
 
   const handleFinishAdding = () => {
     if (!currentEditingLineId || pendingStations.length === 0) return;
-
     const newPaths: LinePathInput[] = [
-      ...linePaths.map(p => p.kind === 'station-stop'
-        ? { kind: 'station-stop' as const, stationId: p.stationId }
-        : { kind: 'road-section-enter' as const, roadSectionId: p.roadSectionId }
+      ...linePaths.map(p =>
+        p.kind === 'station-stop'
+          ? { kind: 'station-stop' as const, stationId: p.stationId }
+          : { kind: 'road-section-enter' as const, roadSectionId: p.roadSectionId }
       ),
       ...pendingStations.map(s => ({ kind: 'station-stop' as const, stationId: s.id }))
     ];
-
     postMessageToPlugin({ type: 'update-line-path', lineId: currentEditingLineId, paths: newPaths });
     postMessageToPlugin({ type: 'stop-adding-stations-mode' });
     postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
-
     setIsAddingStations(false);
     setPendingStations([]);
   };
@@ -150,10 +134,6 @@ const EditLinePathSection: React.FC<Props> = ({ lines, roads, messageManagerRef,
     if (!currentEditingLineId) return;
     postMessageToPlugin({ type: 'rotate-line-path', lineId: currentEditingLineId, steps });
     postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
-  };
-
-  const handleSelectStation = (stationId: StationId) => {
-    postMessageToPlugin({ type: 'select-station', stationId });
   };
 
   const handleAddRoadSectionEntry = () => {
@@ -176,7 +156,7 @@ const EditLinePathSection: React.FC<Props> = ({ lines, roads, messageManagerRef,
   return (
     <div className="section">
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-        <button className="button button--secondary" onClick={onBack} style={{ padding: '8px 12px' }}>
+        <button className="button button--secondary" onClick={() => setCurrentEditingLineId(null)} style={{ padding: '8px 12px' }}>
           &lt; Back
         </button>
         <h3 style={{ margin: 0, flex: 1 }}>Edit Line Path</h3>
@@ -214,7 +194,7 @@ const EditLinePathSection: React.FC<Props> = ({ lines, roads, messageManagerRef,
                     name={sName}
                     index={i}
                     onRemove={() => handleRemovePath(path.index)}
-                    onSelect={() => handleSelectStation(path.stationId)}
+                    onSelect={() => postMessageToPlugin({ type: 'select-station', stationId: path.stationId })}
                   />
                 );
               }
@@ -239,31 +219,21 @@ const EditLinePathSection: React.FC<Props> = ({ lines, roads, messageManagerRef,
             {pendingStations.length > 0 && (
               <div style={{ marginBottom: '8px' }}>
                 {pendingStations.map((s, i) => (
-                  <div key={`${s.id}-${i}`} style={{ fontSize: '11px', padding: '2px 0' }}>
-                    {i + 1}. {s.name}
-                  </div>
+                  <div key={`${s.id}-${i}`} style={{ fontSize: '11px', padding: '2px 0' }}>{i + 1}. {s.name}</div>
                 ))}
               </div>
             )}
             <div className="two-column">
-              <button className="button button--primary" onClick={handleFinishAdding} disabled={pendingStations.length === 0}>
-                Finish
-              </button>
-              <button className="button button--secondary" onClick={handleCancelAdding}>
-                Cancel
-              </button>
+              <button className="button button--primary" onClick={handleFinishAdding} disabled={pendingStations.length === 0}>Finish</button>
+              <button className="button button--secondary" onClick={handleCancelAdding}>Cancel</button>
             </div>
           </div>
         ) : (
           <div style={{ marginTop: '8px' }}>
             <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-              <button className="button button--secondary" style={{ flex: 1 }} onClick={handleStartAdding}>
-                + Add Stations
-              </button>
+              <button className="button button--secondary" style={{ flex: 1 }} onClick={handleStartAdding}>+ Add Stations</button>
               {linePaths.length > 1 && (
-                <button className="button button--secondary" onClick={() => handleRotatePath(1)} title="Rotate path by 1">
-                  ↻
-                </button>
+                <button className="button button--secondary" onClick={() => handleRotatePath(1)} title="Rotate path by 1">↻</button>
               )}
             </div>
             {allSections.length > 0 && (
@@ -275,9 +245,7 @@ const EditLinePathSection: React.FC<Props> = ({ lines, roads, messageManagerRef,
                   onChange={e => setSelectedRoadSectionId(e.target.value as RoadSectionId | '')}
                 >
                   <option value="">Road section…</option>
-                  {allSections.map(s => (
-                    <option key={s.id} value={s.id}>{s.label}</option>
-                  ))}
+                  {allSections.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                 </select>
                 <button
                   className="button button--secondary"
