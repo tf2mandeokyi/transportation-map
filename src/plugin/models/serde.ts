@@ -1,4 +1,4 @@
-import { HVAlign, LineId, NodeId, RoadId, RoadSectionId, StationId } from "../../common/types";
+import { HVAlign, LineId, NodeId, RoadId, RoadSectionId, StationId } from "@/common/types";
 import { Connection, Line, LinePath, MapState, Node, Road, RoadSection, RoadSectionEnter, Station, StationStop } from "./structures";
 
 interface SerializedConnection {
@@ -11,7 +11,6 @@ interface SerializedRoadSection {
   i: string; // id
   n?: string; // name
   x: number; // index
-  r: boolean; // isReverseDirection
   s: string[]; // stationIds
 }
 
@@ -91,7 +90,6 @@ export function serializeMapState(state: MapState): string {
       i: sec.id,
       n: sec.name,
       x: sec.index,
-      r: sec.isReverseDirection,
       s: sec.stationIds
     }))
   }));
@@ -150,7 +148,6 @@ export function deserializeMapState(json: string): MapState | null {
           id: sec.i as RoadSectionId,
           name: sec.n,
           index: sec.x,
-          isReverseDirection: sec.r,
           stationIds: (sec.s || []) as StationId[]
         });
       }

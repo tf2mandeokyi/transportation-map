@@ -1,7 +1,7 @@
 import { Line, MapState, Road, Station } from "../models/structures";
 import { Model } from "../models";
 import { StationRenderer } from "./station";
-import { RoadSectionId } from "../../common/types";
+import { RoadSectionId } from "@/common/types";
 import {
   offsetBezier,
   subBezier,

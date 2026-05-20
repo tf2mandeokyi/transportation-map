@@ -2,7 +2,7 @@ import { Line, MapState, Road, Station } from "../models/structures";
 import { Model } from "../models";
 import { renderStation, renderStationLine } from "../figmls";
 import { ErrorChain } from "../error";
-import { HVAlign, LineId, RoadSectionId, StationId } from "../../common/types";
+import { HVAlign, LineId, RoadSectionId, StationId } from "@/common/types";
 import { getStationAnchorPoint } from "../utils/anchor";
 import {
   evalCubicBezier,

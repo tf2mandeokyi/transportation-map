@@ -1,6 +1,7 @@
-import { NodeId, RoadId } from "../../common/types";
-import { NetworkFocusedElement, NodeData, RoadData, RoadSectionData } from "../../common/messages";
+import { NodeId, RoadId } from "@/common/types";
+import { NetworkFocusedElement, NodeData, RoadData, RoadSectionData } from "@/common/messages";
 import { postMessageToUI } from "../figma";
+import { Model } from "../models";
 import { BaseController } from "./base";
 import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_NODE_ID, FIGMA_KEY_ROAD_ID, NODE_RADIUS } from "../views/road";
 
@@ -16,7 +17,7 @@ const STEM_STROKE:        RGB = { r: 0.6,  g: 0.75, b: 1 };
 
 // ─── Network sync helper ───────────────────────────────────────────────────
 
-function buildNetworkPayload(model: import('../models').Model): { nodes: NodeData[]; roads: RoadData[] } {
+function buildNetworkPayload(model: Model): { nodes: NodeData[]; roads: RoadData[] } {
   const state = model.getState();
   const nodes: NodeData[] = Array.from(state.nodes.values()).map(n => ({
     id: n.id, name: n.name, pos: n.pos,
@@ -27,7 +28,7 @@ function buildNetworkPayload(model: import('../models').Model): { nodes: NodeDat
     startNodeId: r.startNodeId,
     endNodeId: r.endNodeId,
     sections: Array.from(r.sections.values()).map((s): RoadSectionData => ({
-      id: s.id, name: s.name, index: s.index, isReverseDirection: s.isReverseDirection,
+      id: s.id, name: s.name, index: s.index,
     })),
   }));
   return { nodes, roads };
@@ -424,7 +425,7 @@ export class NetworkController extends BaseController {
       startNodeId: road.startNodeId,
       endNodeId: road.endNodeId,
       sections: Array.from(road.sections.values()).map(s => ({
-        id: s.id, name: s.name, index: s.index, isReverseDirection: s.isReverseDirection,
+        id: s.id, name: s.name, index: s.index,
       })),
     };
   }

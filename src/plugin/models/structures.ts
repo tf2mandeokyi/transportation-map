@@ -1,4 +1,4 @@
-import { HVAlign, LineId, NodeId, RoadId, RoadSectionId, StationId } from "../../common/types";
+import { HVAlign, LineId, NodeId, RoadId, RoadSectionId, StationId } from "@/common/types";
 
 export interface Connection {
   bezierDisplacement: Vector;
@@ -17,7 +17,6 @@ export interface RoadSection {
   id: RoadSectionId;
   name?: string;
   index: number;
-  isReverseDirection: boolean;
   stationIds: StationId[];
 }
 

@@ -78,9 +78,9 @@ async function createDemoMap(controller: Controller, model: Model) {
   });
 
   // Create road sections (parallel tracks)
-  const sec1 = model.addRoadSection(road1, { name: 'Track A', index: 0, isReverseDirection: false, stationIds: [] });
-  const sec2 = model.addRoadSection(road2, { name: 'Track A', index: 0, isReverseDirection: false, stationIds: [] });
-  const sec3 = model.addRoadSection(road3, { name: 'Track A', index: 0, isReverseDirection: false, stationIds: [] });
+  const sec1 = model.addRoadSection(road1, { name: 'Track A', index: 0, stationIds: [] });
+  const sec2 = model.addRoadSection(road2, { name: 'Track A', index: 0, stationIds: [] });
+  const sec3 = model.addRoadSection(road3, { name: 'Track A', index: 0, stationIds: [] });
 
   // Create stations on sections
   const sWest   = model.addStation({ name: 'West Station',    textAlign: 'right',  interpT: 0.2,  roadSectionId: sec1 });

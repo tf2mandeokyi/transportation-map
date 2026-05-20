@@ -1,6 +1,7 @@
-import { Line, MapState, Node, Road, RoadSection, Station } from "./structures";
+import { Connection, Line, MapState, Node, Road, RoadSection, Station } from "./structures";
 import { deserializeMapState, serializeMapState } from "./serde";
-import { LineId, NodeId, RoadId, RoadSectionId, StationId } from "../../common/types";
+import { LineId, NodeId, RoadId, RoadSectionId, StationId } from "@/common/types";
+import { LinePathInput } from "@/common/messages";
 
 function generateBase62(length: number): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -69,7 +70,7 @@ export class Model {
     return id;
   }
 
-  public updateRoadEndpoints(id: RoadId, endpoints: [import('./structures').Connection, import('./structures').Connection]): void {
+  public updateRoadEndpoints(id: RoadId, endpoints: [Connection, Connection]): void {
     const road = this.state.roads.get(id);
     if (road) road.endpoints = endpoints;
   }
@@ -225,7 +226,7 @@ export class Model {
 
   // ─── LinePath ───
 
-  public addLinePath(lineId: LineId, path: import("../../common/messages").LinePathInput): void {
+  public addLinePath(lineId: LineId, path: LinePathInput): void {
     const line = this.state.lines.get(lineId);
     if (!line) return;
     const index = line.paths.length;
@@ -239,7 +240,7 @@ export class Model {
     this._reindexLinePaths(line);
   }
 
-  public replaceLinePaths(lineId: LineId, paths: import("../../common/messages").LinePathInput[]): void {
+  public replaceLinePaths(lineId: LineId, paths: LinePathInput[]): void {
     const line = this.state.lines.get(lineId);
     if (!line) return;
     line.paths = paths.map((p, i) => ({ ...p, index: i }));

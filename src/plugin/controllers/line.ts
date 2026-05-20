@@ -1,4 +1,4 @@
-import { LineId } from "../../common/types";
+import { LineId } from "@/common/types";
 import { postMessageToUI } from "../figma";
 import { BaseController } from "./base";
 

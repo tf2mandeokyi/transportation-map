@@ -1,4 +1,4 @@
-import { PluginToUIMessage } from "../../common/messages";
+import { PluginToUIMessage } from "@/common/messages";
 
 export type FigmaPluginMessageListener<T extends PluginToUIMessage['type']> = (msg: Extract<PluginToUIMessage, { type: T }>) => void;
 

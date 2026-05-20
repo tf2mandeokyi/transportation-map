@@ -1,5 +1,5 @@
-import { LineAtStationData } from "../../common/messages";
-import { HVAlign, RoadSectionId, StationId } from "../../common/types";
+import { LineAtStationData } from "@/common/messages";
+import { HVAlign, RoadSectionId, StationId } from "@/common/types";
 import { postMessageToUI } from "../figma";
 import { BaseController } from "./base";
 

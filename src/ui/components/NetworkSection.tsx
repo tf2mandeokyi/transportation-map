@@ -36,8 +36,7 @@ interface FocusedRoadPanelProps {
 }
 
 const FocusedRoadPanel: React.FC<FocusedRoadPanelProps> = ({ element, nodes }) => {
-  const [sectionName, setSectionName]       = useState('');
-  const [sectionReverse, setSectionReverse] = useState(false);
+  const [sectionName, setSectionName] = useState('');
 
   const startNode = nodes.find(n => n.id === element.startNodeId);
   const endNode   = nodes.find(n => n.id === element.endNodeId);
@@ -46,10 +45,9 @@ const FocusedRoadPanel: React.FC<FocusedRoadPanelProps> = ({ element, nodes }) =
     postMessageToPlugin({
       type: 'add-road-section',
       roadId: element.roadId,
-      section: { name: sectionName.trim() || undefined, index: element.sections.length, isReverseDirection: sectionReverse },
+      section: { name: sectionName.trim() || undefined, index: element.sections.length },
     });
     setSectionName('');
-    setSectionReverse(false);
   };
 
   return (
@@ -78,7 +76,6 @@ const FocusedRoadPanel: React.FC<FocusedRoadPanelProps> = ({ element, nodes }) =
           <div key={section.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
             <span style={{ flex: 1 }}>
               {section.name ?? `Section ${section.index}`}
-              {section.isReverseDirection && <span style={{ color: '#999', marginLeft: '4px' }}>(reverse)</span>}
             </span>
             <button
               className="button button--secondary small-btn"
@@ -93,10 +90,6 @@ const FocusedRoadPanel: React.FC<FocusedRoadPanelProps> = ({ element, nodes }) =
           onChange={e => setSectionName(e.target.value)}
           style={{ marginBottom: '4px', marginTop: '4px' }}
         />
-        <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', marginBottom: '6px', cursor: 'pointer' }}>
-          <input type="checkbox" checked={sectionReverse} onChange={e => setSectionReverse(e.target.checked)} />
-          Reverse direction
-        </label>
         <button className="button button--secondary" style={{ width: '100%' }} onClick={handleAddSection}>
           + Add Section
         </button>

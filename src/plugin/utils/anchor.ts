@@ -1,4 +1,4 @@
-import { HVAlign } from "../../common/types";
+import { HVAlign } from "@/common/types";
 
 /**
  * Returns the anchor point multipliers for positioning a station frame.

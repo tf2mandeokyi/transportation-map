@@ -1,5 +1,5 @@
 import { NodeData, RoadData, UIToPluginMessage } from "@/common/messages";
-import { LineId, NodeId, RoadId, StationId } from "@/common/types";
+import { HVAlign, LineId, NodeId, RoadId, StationId } from "@/common/types";
 import { postMessageToUI, setUIMessageHandler } from "../figma";
 import { Model } from "../models";
 import { View } from "../views";
@@ -185,14 +185,13 @@ export class Controller {
         id: s.id,
         name: s.name,
         index: s.index,
-        isReverseDirection: s.isReverseDirection,
       })),
     }));
     postMessageToUI({ type: 'network-data', nodes, roads });
   }
 
   // Public API for demo map / external use
-  public createStation(name: string, textAlign: import("../../common/types").HVAlign = 'right'): StationId {
+  public createStation(name: string, textAlign: HVAlign = 'right'): StationId {
     return this.stationController.createStation(name, textAlign);
   }
 

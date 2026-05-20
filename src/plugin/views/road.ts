@@ -63,7 +63,7 @@ export class RoadRenderer {
         const offset = (section.index - center) * TRACK_SPACING;
         const o = offsetBezier(p0, p1, p2, p3, offset);
         const node = this.makeVectorCurve(bezierPathData(o), SECTION_COLOR, SECTION_STROKE);
-        node.name = `Section: ${section.name ?? section.index}${section.isReverseDirection ? ' ←' : ' →'}`;
+        node.name = `Section: ${section.name ?? section.index}`;
         node.setPluginData(FIGMA_KEY_ROAD_ID, road.id);
         result.push(node);
       }

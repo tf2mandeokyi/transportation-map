@@ -4,7 +4,7 @@ import { Connection, LinePath, RoadSection } from "@/plugin/models/structures";
 export type LinePathInput = { kind: 'station-stop'; stationId: StationId } | { kind: 'road-section-enter'; roadSectionId: RoadSectionId };
 
 export type NodeData = { id: NodeId; name?: string; pos: { x: number; y: number } };
-export type RoadSectionData = { id: RoadSectionId; name?: string; index: number; isReverseDirection: boolean };
+export type RoadSectionData = { id: RoadSectionId; name?: string; index: number };
 export type RoadData = { id: RoadId; name?: string; startNodeId: NodeId; endNodeId: NodeId; sections: RoadSectionData[] };
 
 // Messages from UI to Plugin

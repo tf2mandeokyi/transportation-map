@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { LineAtStationData } from '../../common/messages';
-import { HVAlign, StationId } from '../../common/types';
+import { LineAtStationData } from '@/common/messages';
+import { HVAlign, StationId } from '@/common/types';
 import { postMessageToPlugin } from '../figma';
 import { FigmaPluginMessageManager } from '../events';
 
