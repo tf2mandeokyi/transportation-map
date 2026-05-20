@@ -6,14 +6,14 @@ import { BaseController } from "./base";
 import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_NODE_ID, FIGMA_KEY_ROAD_ID, NODE_RADIUS } from "../views/road";
 
 const ROAD_CONTROL_NODE_NAME = '_road-bezier-control';
-const FIGMA_KEY_BEZIER_HANDLE = 'mapBezierHandle'; // value: 'start' | 'end'
-const FIGMA_KEY_NODE_HANDLE   = 'mapNodeHandle';   // value: nodeId
+const FIGMA_KEY_BEZIER_HANDLE   = 'mapBezierHandle';   // value: 'start' | 'end'
+const FIGMA_KEY_ENDPOINT_HANDLE = 'mapEndpointHandle'; // value: 'start' | 'end'
 const HANDLE_RADIUS = 5;
-const HANDLE_FILL:        RGB = { r: 0.1,  g: 0.47, b: 1 };
-const HANDLE_STROKE:      RGB = { r: 1,    g: 1,    b: 1 };
-const NODE_HANDLE_FILL:   RGB = { r: 0.15, g: 0.15, b: 0.15 };
-const NODE_HANDLE_STROKE: RGB = { r: 1,    g: 1,    b: 1 };
-const STEM_STROKE:        RGB = { r: 0.6,  g: 0.75, b: 1 };
+const BEZIER_HANDLE_FILL:   RGB = { r: 0.1,  g: 0.47, b: 1    };
+const BEZIER_HANDLE_STROKE: RGB = { r: 1,    g: 1,    b: 1    };
+const ENDPOINT_HANDLE_FILL:   RGB = { r: 0.15, g: 0.15, b: 0.15 };
+const ENDPOINT_HANDLE_STROKE: RGB = { r: 1,    g: 1,    b: 1    };
+const STEM_STROKE: RGB = { r: 0.6, g: 0.75, b: 1 };
 
 // ─── Network sync helper ───────────────────────────────────────────────────
 
@@ -114,11 +114,14 @@ export class NetworkController extends BaseController {
         return;
       }
 
-      // Node position handle dragged (while in road edit mode)
-      const nodeHandleId = figmaNode.getPluginData(FIGMA_KEY_NODE_HANDLE) as NodeId | '';
-      if (nodeHandleId) {
-        await this.onNodeHandleMoved(nodeHandleId, figmaNode as EllipseNode);
-        return;
+      // Road endpoint handle dragged (while in road edit mode) — moves p0/p3 independent of the node
+      const endpointSide = figmaNode.getPluginData(FIGMA_KEY_ENDPOINT_HANDLE) as 'start' | 'end' | '';
+      if (endpointSide) {
+        const endpointRoadId = figmaNode.getPluginData(FIGMA_KEY_ROAD_ID) as RoadId | '';
+        if (endpointRoadId) {
+          await this.onEndpointHandleMoved(endpointRoadId, endpointSide, figmaNode as EllipseNode);
+          return;
+        }
       }
 
       // Bezier handle dragged
@@ -159,7 +162,33 @@ export class NetworkController extends BaseController {
     }, 500);
   }
 
-  // ── Bezier handle interaction ───────────────────────────────────────────
+  // ── Road endpoint handle interaction (p0 / p3) ──────────────────────────
+
+  private async onEndpointHandleMoved(roadId: RoadId, side: 'start' | 'end', handle: EllipseNode): Promise<void> {
+    const handlePos = { x: handle.x + HANDLE_RADIUS, y: handle.y + HANDLE_RADIUS };
+    const state = this.model.getState();
+    const road = state.roads.get(roadId);
+    if (!road) return;
+
+    if (side === 'start') {
+      const startNode = state.nodes.get(road.startNodeId);
+      if (!startNode) return;
+      this.model.updateRoadEndpoints(roadId, [
+        { ...road.endpoints[0], endpointDisplacement: { x: handlePos.x - startNode.pos.x, y: handlePos.y - startNode.pos.y } },
+        road.endpoints[1],
+      ]);
+    } else {
+      const endNode = state.nodes.get(road.endNodeId);
+      if (!endNode) return;
+      this.model.updateRoadEndpoints(roadId, [
+        road.endpoints[0],
+        { ...road.endpoints[1], endpointDisplacement: { x: handlePos.x - endNode.pos.x, y: handlePos.y - endNode.pos.y } },
+      ]);
+    }
+    // No render here — visuals update when the road loses focus.
+  }
+
+  // ── Bezier handle interaction (p1 / p2) ─────────────────────────────────
 
   private async onBezierHandleMoved(roadId: RoadId, side: 'start' | 'end', handle: EllipseNode): Promise<void> {
     const handlePos = { x: handle.x + HANDLE_RADIUS, y: handle.y + HANDLE_RADIUS };
@@ -170,41 +199,21 @@ export class NetworkController extends BaseController {
     if (side === 'start') {
       const startNode = state.nodes.get(road.startNodeId);
       if (!startNode) return;
+      const p0 = { x: startNode.pos.x + road.endpoints[0].endpointDisplacement.x, y: startNode.pos.y + road.endpoints[0].endpointDisplacement.y };
       this.model.updateRoadEndpoints(roadId, [
-        { ...road.endpoints[0], bezierDisplacement: { x: handlePos.x - startNode.pos.x, y: handlePos.y - startNode.pos.y } },
+        { ...road.endpoints[0], bezierDisplacement: { x: handlePos.x - p0.x, y: handlePos.y - p0.y } },
         road.endpoints[1],
       ]);
     } else {
       const endNode = state.nodes.get(road.endNodeId);
       if (!endNode) return;
+      const p3 = { x: endNode.pos.x + road.endpoints[1].endpointDisplacement.x, y: endNode.pos.y + road.endpoints[1].endpointDisplacement.y };
       this.model.updateRoadEndpoints(roadId, [
         road.endpoints[0],
-        { ...road.endpoints[1], bezierDisplacement: { x: handlePos.x - endNode.pos.x, y: handlePos.y - endNode.pos.y } },
+        { ...road.endpoints[1], bezierDisplacement: { x: handlePos.x - p3.x, y: handlePos.y - p3.y } },
       ]);
     }
     // No render here — visuals update when the road loses focus (see clearNetworkFocus).
-  }
-
-  private async onNodeHandleMoved(nodeId: NodeId, handle: EllipseNode): Promise<void> {
-    const newPos = { x: handle.x + HANDLE_RADIUS, y: handle.y + HANDLE_RADIUS };
-    const roadId = this.roadControlRoadId;
-    this.model.updateNodePosition(nodeId, newPos);
-
-    // Debounce render: don't removeRoadControl here (that would cancel the drag),
-    // but do re-render and re-activate the overlay once the drag settles.
-    if (this.renderDebounceTimer !== null) clearTimeout(this.renderDebounceTimer);
-    this.renderDebounceTimer = setTimeout(async () => {
-      this.renderDebounceTimer = null;
-      this.isRendering = true;
-      try {
-        await this.render();
-        await this.save();
-      } finally {
-        this.isRendering = false;
-      }
-      postMessageToUI({ type: 'network-data', ...buildNetworkPayload(this.model) });
-      if (roadId) await this.activateRoadControl(roadId);
-    }, 500);
   }
 
   // ── Road creation mode ─────────────────────────────────────────────────
@@ -244,8 +253,8 @@ export class NetworkController extends BaseController {
         startNodeId,
         endNodeId,
         endpoints: [
-          { bezierDisplacement: { x: dx / 3, y: dy / 3 }, bezierDirection: { x: dx, y: dy }, groupNumber: 0 },
-          { bezierDisplacement: { x: -dx / 3, y: -dy / 3 }, bezierDirection: { x: -dx, y: -dy }, groupNumber: 0 },
+          { endpointDisplacement: { x: 0, y: 0 }, bezierDisplacement: { x: dx / 3, y: dy / 3 }, bezierDirection: { x: dx, y: dy }, groupNumber: 0 },
+          { endpointDisplacement: { x: 0, y: 0 }, bezierDisplacement: { x: -dx / 3, y: -dy / 3 }, bezierDirection: { x: -dx, y: -dy }, groupNumber: 0 },
         ],
         sections: new Map(),
       });
@@ -281,9 +290,9 @@ export class NetworkController extends BaseController {
     const endNode   = state.nodes.get(road.endNodeId);
     if (!startNode || !endNode) return;
 
-    const p0 = startNode.pos;
+    const p0 = { x: startNode.pos.x + road.endpoints[0].endpointDisplacement.x, y: startNode.pos.y + road.endpoints[0].endpointDisplacement.y };
     const p1 = { x: p0.x + road.endpoints[0].bezierDisplacement.x, y: p0.y + road.endpoints[0].bezierDisplacement.y };
-    const p3 = endNode.pos;
+    const p3 = { x: endNode.pos.x + road.endpoints[1].endpointDisplacement.x, y: endNode.pos.y + road.endpoints[1].endpointDisplacement.y };
     const p2 = { x: p3.x + road.endpoints[1].bezierDisplacement.x, y: p3.y + road.endpoints[1].bezierDisplacement.y };
 
     // Dashed bezier reference line (visual only — not interactive)
@@ -299,41 +308,65 @@ export class NetworkController extends BaseController {
     vector.setPluginData(FIGMA_KEY_IS_ROAD_CONTROL, 'true');
     figma.currentPage.appendChild(vector);
 
-    // Stem lines connecting each node to its direction handle
-    const startStem = this.buildStemLine(p0, p1, roadId);
-    const endStem   = this.buildStemLine(p3, p2, roadId);
+    // Stems: node → endpoint (shows offset), endpoint → bezier control point
+    const startNodeStem = this.buildStemLine(startNode.pos, p0, roadId);
+    const startStem     = this.buildStemLine(p0, p1, roadId);
+    const endNodeStem   = this.buildStemLine(endNode.pos, p3, roadId);
+    const endStem       = this.buildStemLine(p3, p2, roadId);
+    figma.currentPage.appendChild(startNodeStem);
     figma.currentPage.appendChild(startStem);
+    figma.currentPage.appendChild(endNodeStem);
     figma.currentPage.appendChild(endStem);
 
-    // Draggable node-position handles at the bezier start/end points
-    const startNodeHandle = this.buildNodeHandle(p0, roadId, road.startNodeId);
-    const endNodeHandle   = this.buildNodeHandle(p3, roadId, road.endNodeId);
-    figma.currentPage.appendChild(startNodeHandle);
-    figma.currentPage.appendChild(endNodeHandle);
+    // Draggable endpoint handles (dark) at p0 / p3 — move the road start/end independently of the node
+    const startEndpointHandle = this.buildEndpointHandle(p0, roadId, 'start');
+    const endEndpointHandle   = this.buildEndpointHandle(p3, roadId, 'end');
+    figma.currentPage.appendChild(startEndpointHandle);
+    figma.currentPage.appendChild(endEndpointHandle);
 
-    // Draggable direction handles at the bezier control points
-    const startHandle = this.buildHandleEllipse(p1, roadId, 'start');
-    const endHandle   = this.buildHandleEllipse(p2, roadId, 'end');
+    // Draggable bezier control handles (blue) at p1 / p2
+    const startHandle = this.buildBezierHandle(p1, roadId, 'start');
+    const endHandle   = this.buildBezierHandle(p2, roadId, 'end');
     figma.currentPage.appendChild(startHandle);
     figma.currentPage.appendChild(endHandle);
 
     this.roadControlRoadId     = roadId;
-    this.roadControlElementIds = [vector.id, startStem.id, endStem.id, startNodeHandle.id, endNodeHandle.id, startHandle.id, endHandle.id];
+    this.roadControlElementIds = [
+      vector.id,
+      startNodeStem.id, startStem.id, endNodeStem.id, endStem.id,
+      startEndpointHandle.id, endEndpointHandle.id,
+      startHandle.id, endHandle.id,
+    ];
     // The next documentchange batch will contain our own position-assignment events; suppress them.
     this.suppressNextControlChanges = true;
 
     postMessageToUI({ type: 'network-element-focused', element: this.buildRoadElement(roadId) });
   }
 
-  private buildHandleEllipse(pos: Vector, roadId: RoadId, side: 'start' | 'end'): EllipseNode {
+  private buildEndpointHandle(pos: Vector, roadId: RoadId, side: 'start' | 'end'): EllipseNode {
     const ellipse = figma.createEllipse();
     ellipse.resize(HANDLE_RADIUS * 2, HANDLE_RADIUS * 2);
     ellipse.x = pos.x - HANDLE_RADIUS;
     ellipse.y = pos.y - HANDLE_RADIUS;
-    ellipse.fills   = [{ type: 'SOLID', color: HANDLE_FILL }];
-    ellipse.strokes = [{ type: 'SOLID', color: HANDLE_STROKE }];
+    ellipse.fills   = [{ type: 'SOLID', color: ENDPOINT_HANDLE_FILL }];
+    ellipse.strokes = [{ type: 'SOLID', color: ENDPOINT_HANDLE_STROKE }];
     ellipse.strokeWeight = 1.5;
-    ellipse.name = `Handle: ${side}`;
+    ellipse.name = `Endpoint: ${side}`;
+    ellipse.setPluginData(FIGMA_KEY_ROAD_ID, roadId);
+    ellipse.setPluginData(FIGMA_KEY_IS_ROAD_CONTROL, 'true');
+    ellipse.setPluginData(FIGMA_KEY_ENDPOINT_HANDLE, side);
+    return ellipse;
+  }
+
+  private buildBezierHandle(pos: Vector, roadId: RoadId, side: 'start' | 'end'): EllipseNode {
+    const ellipse = figma.createEllipse();
+    ellipse.resize(HANDLE_RADIUS * 2, HANDLE_RADIUS * 2);
+    ellipse.x = pos.x - HANDLE_RADIUS;
+    ellipse.y = pos.y - HANDLE_RADIUS;
+    ellipse.fills   = [{ type: 'SOLID', color: BEZIER_HANDLE_FILL }];
+    ellipse.strokes = [{ type: 'SOLID', color: BEZIER_HANDLE_STROKE }];
+    ellipse.strokeWeight = 1.5;
+    ellipse.name = `Bezier: ${side}`;
     ellipse.setPluginData(FIGMA_KEY_ROAD_ID, roadId);
     ellipse.setPluginData(FIGMA_KEY_IS_ROAD_CONTROL, 'true');
     ellipse.setPluginData(FIGMA_KEY_BEZIER_HANDLE, side);
@@ -350,21 +383,6 @@ export class NetworkController extends BaseController {
     v.setPluginData(FIGMA_KEY_ROAD_ID, roadId);
     v.setPluginData(FIGMA_KEY_IS_ROAD_CONTROL, 'true');
     return v;
-  }
-
-  private buildNodeHandle(pos: Vector, roadId: RoadId, nodeId: NodeId): EllipseNode {
-    const ellipse = figma.createEllipse();
-    ellipse.resize(HANDLE_RADIUS * 2, HANDLE_RADIUS * 2);
-    ellipse.x = pos.x - HANDLE_RADIUS;
-    ellipse.y = pos.y - HANDLE_RADIUS;
-    ellipse.fills   = [{ type: 'SOLID', color: NODE_HANDLE_FILL }];
-    ellipse.strokes = [{ type: 'SOLID', color: NODE_HANDLE_STROKE }];
-    ellipse.strokeWeight = 1.5;
-    ellipse.name = 'Node position';
-    ellipse.setPluginData(FIGMA_KEY_ROAD_ID, roadId);
-    ellipse.setPluginData(FIGMA_KEY_IS_ROAD_CONTROL, 'true');
-    ellipse.setPluginData(FIGMA_KEY_NODE_HANDLE, nodeId);
-    return ellipse;
   }
 
   private async removeRoadControl(): Promise<void> {

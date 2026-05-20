@@ -45,6 +45,7 @@ async function createDemoMap(controller: Controller, model: Model) {
 
   // Create roads between nodes with bezier control offsets
   const straightEndpoint = () => ({
+    endpointDisplacement: { x: 0, y: 0 },
     bezierDisplacement: { x: 100, y: 0 },
     bezierDirection: { x: 1, y: 0 },
     groupNumber: 0
@@ -71,8 +72,8 @@ async function createDemoMap(controller: Controller, model: Model) {
     startNodeId: n2,
     endNodeId: n4,
     endpoints: [
-      { bezierDisplacement: { x: 0, y: -100 }, bezierDirection: { x: 0, y: -1 }, groupNumber: 0 },
-      { bezierDisplacement: { x: 0, y: 100 }, bezierDirection: { x: 0, y: 1 }, groupNumber: 0 }
+      { endpointDisplacement: { x: 0, y: 0 }, bezierDisplacement: { x: 0, y: -100 }, bezierDirection: { x: 0, y: -1 }, groupNumber: 0 },
+      { endpointDisplacement: { x: 0, y: 0 }, bezierDisplacement: { x: 0, y: 100 }, bezierDirection: { x: 0, y: 1 }, groupNumber: 0 }
     ],
     sections: new Map()
   });

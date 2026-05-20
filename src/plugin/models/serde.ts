@@ -2,7 +2,8 @@ import { HVAlign, LineId, NodeId, RoadId, RoadSectionId, StationId } from "@/com
 import { Connection, Line, LinePath, MapState, Node, Road, RoadSection, RoadSectionEnter, Station, StationStop } from "./structures";
 
 interface SerializedConnection {
-  bd: { x: number; y: number }; // bezierDisplacement
+  ed?: { x: number; y: number }; // endpointDisplacement (optional: absent in old saves → defaults to {0,0})
+  bd: { x: number; y: number };  // bezierDisplacement
   bdir: { x: number; y: number }; // bezierDirection
   g: number; // groupNumber
 }
@@ -64,11 +65,16 @@ interface SerializedMapState {
 }
 
 function serializeConnection(c: Connection): SerializedConnection {
-  return { bd: c.bezierDisplacement, bdir: c.bezierDirection, g: c.groupNumber };
+  return { ed: c.endpointDisplacement, bd: c.bezierDisplacement, bdir: c.bezierDirection, g: c.groupNumber };
 }
 
 function deserializeConnection(s: SerializedConnection): Connection {
-  return { bezierDisplacement: s.bd, bezierDirection: s.bdir, groupNumber: s.g };
+  return {
+    endpointDisplacement: s.ed ?? { x: 0, y: 0 },
+    bezierDisplacement: s.bd,
+    bezierDirection: s.bdir,
+    groupNumber: s.g,
+  };
 }
 
 export function serializeMapState(state: MapState): string {

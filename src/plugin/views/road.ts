@@ -44,9 +44,9 @@ export class RoadRenderer {
     const endNode   = state.nodes.get(road.endNodeId);
     if (!startNode || !endNode) return [];
 
-    const p0 = startNode.pos;
+    const p0: Vector = { x: startNode.pos.x + road.endpoints[0].endpointDisplacement.x, y: startNode.pos.y + road.endpoints[0].endpointDisplacement.y };
     const p1: Vector = { x: p0.x + road.endpoints[0].bezierDisplacement.x, y: p0.y + road.endpoints[0].bezierDisplacement.y };
-    const p3 = endNode.pos;
+    const p3: Vector = { x: endNode.pos.x + road.endpoints[1].endpointDisplacement.x, y: endNode.pos.y + road.endpoints[1].endpointDisplacement.y };
     const p2: Vector = { x: p3.x + road.endpoints[1].bezierDisplacement.x, y: p3.y + road.endpoints[1].bezierDisplacement.y };
 
     const sections = Array.from(road.sections.values()).sort((a, b) => a.index - b.index);

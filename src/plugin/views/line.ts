@@ -22,9 +22,9 @@ function computeRoadBezier(road: Road, state: Readonly<MapState>): BezierPoints 
   const endNode = state.nodes.get(road.endNodeId);
   if (!startNode || !endNode) return null;
 
-  const p0 = startNode.pos;
+  const p0 = { x: startNode.pos.x + road.endpoints[0].endpointDisplacement.x, y: startNode.pos.y + road.endpoints[0].endpointDisplacement.y };
   const p1 = { x: p0.x + road.endpoints[0].bezierDisplacement.x, y: p0.y + road.endpoints[0].bezierDisplacement.y };
-  const p3 = endNode.pos;
+  const p3 = { x: endNode.pos.x + road.endpoints[1].endpointDisplacement.x, y: endNode.pos.y + road.endpoints[1].endpointDisplacement.y };
   const p2 = { x: p3.x + road.endpoints[1].bezierDisplacement.x, y: p3.y + road.endpoints[1].bezierDisplacement.y };
 
   return { p0, p1, p2, p3 };
