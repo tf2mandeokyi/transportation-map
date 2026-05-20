@@ -9,6 +9,7 @@ import {
   TRACK_SPACING,
   BezierPoints,
 } from "../utils/bezier";
+import { getLinesForSection, lineOffsetInSection } from "../utils/section";
 import { hexToRgb } from "@/common/utils/color";
 
 interface BezierSegment {
@@ -40,7 +41,7 @@ function computeSectionBezier(road: Road, sectionId: RoadSectionId, state: Reado
   const center = (sections.length - 1) / 2;
   const offset = (section.index - center) * TRACK_SPACING;
 
-  return offset === 0 ? base : offsetBezier(base.p0, base.p1, base.p2, base.p3, offset);
+  return offset === 0 ? base : offsetBezier(base, offset);
 }
 
 function findRoadForSection(sectionId: RoadSectionId, state: Readonly<MapState>): Road | null {
@@ -137,11 +138,12 @@ export class LineRenderer {
       return null;
     }
 
-    const pathData = this.buildSegmentPath(startStation, endStation, startPoints.head, endPoints.tail, state);
+    const pathData = this.buildSegmentPath(line, startStation, endStation, startPoints.head, endPoints.tail, state);
     return this.bezierPathToSegments(pathData, color);
   }
 
   private buildSegmentPath(
+    line: Line,
     startStation: Station,
     endStation: Station,
     headCanvas: Vector,
@@ -154,18 +156,22 @@ export class LineRenderer {
     if (sId && eId && sId === eId) {
       const road = findRoadForSection(sId, state);
       if (road) {
+        const section = road.sections.get(sId);
         const sectionBezier = computeSectionBezier(road, sId, state);
-        if (sectionBezier) {
-          const sub = subBezier(
-            sectionBezier.p0, sectionBezier.p1, sectionBezier.p2, sectionBezier.p3,
-            startStation.interpT, endStation.interpT
-          );
+        if (section && sectionBezier) {
+          const lines = getLinesForSection(section, state);
+          const lineIndex = lines.findIndex(l => l.id === line.id);
+          const perLineOffset = lineOffsetInSection(Math.max(lineIndex, 0), lines.length);
+          const finalBezier = perLineOffset === 0
+            ? sectionBezier
+            : offsetBezier(sectionBezier, perLineOffset);
+          const sub = subBezier(finalBezier, startStation.interpT, endStation.interpT);
           return bezierPathData(sub);
         }
       }
     }
 
-    // Fallback for cross-section or unlinked stations: straight bezier between connection points
+    // Fallback for cross-section or unlinked stations: straight line between connection points
     return `M ${headCanvas.x} ${headCanvas.y} L ${tailCanvas.x} ${tailCanvas.y}`;
   }
 

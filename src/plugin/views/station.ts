@@ -43,7 +43,7 @@ function computeSectionBezier(road: Road, sectionId: RoadSectionId, state: Reado
   const center = (sections.length - 1) / 2;
   const offset = (section.index - center) * TRACK_SPACING;
 
-  return offset === 0 ? base : offsetBezier(base.p0, base.p1, base.p2, base.p3, offset);
+  return offset === 0 ? base : offsetBezier(base, offset);
 }
 
 function findRoadForSection(sectionId: RoadSectionId, state: Readonly<MapState>): Road | null {
@@ -61,7 +61,7 @@ function computeStationPosition(station: Station, state: Readonly<MapState>): Ve
   const bezier = computeSectionBezier(road, station.roadSectionId, state);
   if (!bezier) return { x: 0, y: 0 };
 
-  return evalCubicBezier(bezier.p0, bezier.p1, bezier.p2, bezier.p3, station.interpT);
+  return evalCubicBezier(bezier, station.interpT);
 }
 
 function computeStationTangentAngle(station: Station, state: Readonly<MapState>): number {
@@ -72,7 +72,7 @@ function computeStationTangentAngle(station: Station, state: Readonly<MapState>)
   const base = computeRoadBezier(road, state);
   if (!base) return 0;
 
-  const tangent = evalCubicBezierTangent(base.p0, base.p1, base.p2, base.p3, station.interpT);
+  const tangent = evalCubicBezierTangent(base, station.interpT);
   return Math.atan2(tangent.y, tangent.x) * 180 / Math.PI;
 }
 

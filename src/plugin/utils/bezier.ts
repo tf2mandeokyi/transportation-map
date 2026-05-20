@@ -1,4 +1,7 @@
 export const TRACK_SPACING = 8;
+export const LINE_SPACING = 6;   // center-to-center distance between parallel lines in a section
+export const ROAD_MARGIN = 4;    // margin from outermost line center to road band edge
+export const ROAD_MIN_WIDTH = 8; // minimum road band width when no lines are present
 
 export interface BezierPoints {
   p0: Vector;
@@ -7,7 +10,7 @@ export interface BezierPoints {
   p3: Vector;
 }
 
-export function evalCubicBezier(p0: Vector, p1: Vector, p2: Vector, p3: Vector, t: number): Vector {
+export function evalCubicBezier({ p0, p1, p2, p3 }: BezierPoints, t: number): Vector {
   const u = 1 - t;
   return {
     x: u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x,
@@ -15,7 +18,7 @@ export function evalCubicBezier(p0: Vector, p1: Vector, p2: Vector, p3: Vector, 
   };
 }
 
-export function evalCubicBezierTangent(p0: Vector, p1: Vector, p2: Vector, p3: Vector, t: number): Vector {
+export function evalCubicBezierTangent({ p0, p1, p2, p3 }: BezierPoints, t: number): Vector {
   const u = 1 - t;
   return {
     x: 3 * (u * u * (p1.x - p0.x) + 2 * u * t * (p2.x - p1.x) + t * t * (p3.x - p2.x)),
@@ -32,7 +35,7 @@ function perp(v: Vector): Vector {
   return { x: -v.y, y: v.x };
 }
 
-export function offsetBezier(p0: Vector, p1: Vector, p2: Vector, p3: Vector, offset: number): BezierPoints {
+export function offsetBezier({ p0, p1, p2, p3 }: BezierPoints, offset: number): BezierPoints {
   const n0 = perp(normalize({ x: p1.x - p0.x, y: p1.y - p0.y }));
   const n3 = perp(normalize({ x: p3.x - p2.x, y: p3.y - p2.y }));
   return {
@@ -47,7 +50,7 @@ function lerp(a: Vector, b: Vector, t: number): Vector {
   return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
 }
 
-function splitBezier(p0: Vector, p1: Vector, p2: Vector, p3: Vector, t: number) {
+function splitBezier({ p0, p1, p2, p3 }: BezierPoints, t: number) {
   const p01 = lerp(p0, p1, t);
   const p12 = lerp(p1, p2, t);
   const p23 = lerp(p2, p3, t);
@@ -60,19 +63,19 @@ function splitBezier(p0: Vector, p1: Vector, p2: Vector, p3: Vector, t: number) 
   };
 }
 
-function subBezierForward(p0: Vector, p1: Vector, p2: Vector, p3: Vector, t1: number, t2: number): BezierPoints {
-  const { left } = splitBezier(p0, p1, p2, p3, t2);
+function subBezierForward(points: BezierPoints, t1: number, t2: number): BezierPoints {
+  const { left } = splitBezier(points, t2);
   const t1r = t2 > 0.0001 ? t1 / t2 : 0;
-  const { right } = splitBezier(left.p0, left.p1, left.p2, left.p3, t1r);
+  const { right } = splitBezier(left, t1r);
   return right;
 }
 
-export function subBezier(p0: Vector, p1: Vector, p2: Vector, p3: Vector, t1: number, t2: number): BezierPoints {
+export function subBezier(points: BezierPoints, t1: number, t2: number): BezierPoints {
   if (t1 > t2) {
-    const s = subBezierForward(p0, p1, p2, p3, t2, t1);
+    const s = subBezierForward(points, t2, t1);
     return { p0: s.p3, p1: s.p2, p2: s.p1, p3: s.p0 };
   }
-  return subBezierForward(p0, p1, p2, p3, t1, t2);
+  return subBezierForward(points, t1, t2);
 }
 
 export function bezierPathData({ p0, p1, p2, p3 }: BezierPoints): string {

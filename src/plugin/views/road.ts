@@ -1,6 +1,7 @@
 import { MapState, Node, Road } from "../models/structures";
 import { Model } from "../models";
-import { offsetBezier, bezierPathData, TRACK_SPACING } from "../utils/bezier";
+import { offsetBezier, bezierPathData, TRACK_SPACING, ROAD_MIN_WIDTH } from "../utils/bezier";
+import { getLinesForSection, sectionBandWidth } from "../utils/section";
 
 export const NODE_RADIUS = 4;
 export const FIGMA_KEY_NODE_ID      = 'mapNodeId';
@@ -10,8 +11,7 @@ export const FIGMA_KEY_IS_ROAD_CONTROL = 'isRoadControl';
 // Legacy group name kept so old renders from previous sessions can be cleaned up.
 const ROAD_NETWORK_GROUP_NAME = '_road-network';
 
-const SECTION_STROKE = 1.5;
-const SECTION_COLOR: RGB = { r: 0.55, g: 0.55, b: 0.55 };
+const SECTION_COLOR: RGB = { r: 0.82, g: 0.82, b: 0.82 };
 const NODE_FILL: RGB   = { r: 0.2, g: 0.2, b: 0.2 };
 const NODE_STROKE: RGB = { r: 1, g: 1, b: 1 };
 
@@ -53,7 +53,7 @@ export class RoadRenderer {
     const result: SceneNode[] = [];
 
     if (sections.length === 0) {
-      const node = this.makeVectorCurve(bezierPathData({ p0, p1, p2, p3 }), SECTION_COLOR, SECTION_STROKE);
+      const node = this.makeVectorCurve(bezierPathData({ p0, p1, p2, p3 }), SECTION_COLOR, ROAD_MIN_WIDTH);
       node.name = 'centerline';
       node.setPluginData(FIGMA_KEY_ROAD_ID, road.id);
       result.push(node);
@@ -61,8 +61,10 @@ export class RoadRenderer {
       const center = (sections.length - 1) / 2;
       for (const section of sections) {
         const offset = (section.index - center) * TRACK_SPACING;
-        const o = offsetBezier(p0, p1, p2, p3, offset);
-        const node = this.makeVectorCurve(bezierPathData(o), SECTION_COLOR, SECTION_STROKE);
+        const o = offsetBezier({ p0, p1, p2, p3 }, offset);
+        const numLines = getLinesForSection(section, state).length;
+        const bandWidth = sectionBandWidth(numLines);
+        const node = this.makeVectorCurve(bezierPathData(o), SECTION_COLOR, bandWidth);
         node.name = `Section: ${section.name ?? section.index}`;
         node.setPluginData(FIGMA_KEY_ROAD_ID, road.id);
         result.push(node);
