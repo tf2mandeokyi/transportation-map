@@ -172,18 +172,48 @@ export class RoadRenderer {
       // Road face: negEdge → posEdge (direction n, the CW-side perp)
       path += ` L ${curr.posEdge.x} ${curr.posEdge.y}`;
 
-      // Gap bezier: posEdge[curr] → negEdge[next]
-      // Control points are offset along -direction (toward the node), so the curve bows inward.
-      const gapDist = Math.hypot(
-        next.negEdge.x - curr.posEdge.x,
-        next.negEdge.y - curr.posEdge.y,
-      );
-      const a = gapDist * 0.4;
-      const cp1x = curr.posEdge.x - curr.direction.x * a;
-      const cp1y = curr.posEdge.y - curr.direction.y * a;
-      const cp2x = next.negEdge.x - next.direction.x * a;
-      const cp2y = next.negEdge.y - next.direction.y * a;
-      path += ` C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${next.negEdge.x} ${next.negEdge.y}`;
+      // Gap geometry (A = apex, B = near edge, C = point on far ray):
+      // Both inward rays (dA from posEdge, dB from negEdge) are fired toward the junction.
+      // t, s = ray distances to apex A.  tNear = min(t,s).
+      // C is placed on the far ray at distance tNear from A  →  AC = AB = tNear (isosceles △ABC).
+      // Far side: straight line from its edge to C.
+      // Near side: bezier from C to its edge (maximises bezier length).
+      // The bezier departs C tangent to the straight line for C1 continuity at C.
+      const dAx = -curr.direction.x, dAy = -curr.direction.y;
+      const dBx = -next.direction.x, dBy = -next.direction.y;
+      const gx  = next.negEdge.x - curr.posEdge.x;
+      const gy  = next.negEdge.y - curr.posEdge.y;
+      const det = dBx * dAy - dAx * dBy;
+
+      let gapDone = false;
+      if (Math.abs(det) > 1e-6) {
+        const t = (dBx * gy - gx * dBy) / det;
+        const s = (dAx * gy - dAy * gx) / det;
+        if (t >= -1e-6 && s >= -1e-6) {
+          const tNear = Math.min(t, s);
+          if (t >= s) {
+            // curr is far: straight posEdge→C, bezier C→negEdge (B)
+            const cx = curr.posEdge.x + (t - tNear) * dAx;
+            const cy = curr.posEdge.y + (t - tNear) * dAy;
+            const a  = Math.hypot(next.negEdge.x - cx, next.negEdge.y - cy) * 0.4;
+            path += ` L ${cx} ${cy}`;
+            // cp1: depart C along dA (tangent to straight line)
+            // cp2: handle toward node at negEdge (dB direction)
+            path += ` C ${cx + dAx * a} ${cy + dAy * a} ${next.negEdge.x + dBx * a} ${next.negEdge.y + dBy * a} ${next.negEdge.x} ${next.negEdge.y}`;
+          } else {
+            // next is far: bezier posEdge→C, straight C→negEdge (B)
+            const cx = next.negEdge.x + (s - tNear) * dBx;
+            const cy = next.negEdge.y + (s - tNear) * dBy;
+            const a  = Math.hypot(curr.posEdge.x - cx, curr.posEdge.y - cy) * 0.4;
+            // cp1: handle toward node at posEdge (dA direction)
+            // cp2: arrive at C along dB (tangent to outgoing straight line)
+            path += ` C ${curr.posEdge.x + dAx * a} ${curr.posEdge.y + dAy * a} ${cx + dBx * a} ${cy + dBy * a} ${cx} ${cy}`;
+            path += ` L ${next.negEdge.x} ${next.negEdge.y}`;
+          }
+          gapDone = true;
+        }
+      }
+      if (!gapDone) path += ` L ${next.negEdge.x} ${next.negEdge.y}`;
     }
 
     path += ' Z';
