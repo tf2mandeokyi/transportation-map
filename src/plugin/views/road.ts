@@ -11,8 +11,9 @@ export const FIGMA_KEY_IS_ROAD_CONTROL = 'isRoadControl';
 // Legacy group name kept so old renders from previous sessions can be cleaned up.
 const ROAD_NETWORK_GROUP_NAME = '_road-network';
 
-const SECTION_COLOR: RGB = { r: 0.82, g: 0.82, b: 0.82 };
-const NODE_FILL: RGB   = { r: 0.2, g: 0.2, b: 0.2 };
+const SECTION_COLOR:  RGB = { r: 0.82, g: 0.82, b: 0.82 };
+const JUNCTION_FILL:  RGB = { r: 0.82, g: 0.82, b: 0.82 };
+const NODE_FILL:   RGB = { r: 0.2, g: 0.2, b: 0.2 };
 const NODE_STROKE: RGB = { r: 1, g: 1, b: 1 };
 
 export class RoadRenderer {
@@ -33,7 +34,13 @@ export class RoadRenderer {
       figma.currentPage.insertChild(0, group);
     }
 
-    // Node markers sit above road groups (appended after).
+    // Junction polygons sit above road groups but below node markers.
+    for (const node of state.nodes.values()) {
+      const polygon = this.buildNodePolygon(node, state);
+      if (polygon) figma.currentPage.appendChild(polygon);
+    }
+
+    // Node markers sit above everything.
     for (const node of state.nodes.values()) {
       figma.currentPage.appendChild(this.buildNodeMarker(node));
     }
@@ -82,6 +89,112 @@ export class RoadRenderer {
     node.strokeWeight = weight;
     node.strokeCap = 'ROUND';
     return node;
+  }
+
+  private buildNodePolygon(node: Node, state: Readonly<MapState>): VectorNode | null {
+    if (node.roadConnections.length < 2) return null;
+
+    interface Arm {
+      direction: Vector;
+      n: Vector;        // perp(direction) — the CW-side perpendicular in screen (Y-down) coords
+      posEdge: Vector;  // endpoint displaced to the +n (CW) side
+      negEdge: Vector;  // endpoint displaced to the -n (CCW) side
+    }
+
+    const arms: Arm[] = [];
+
+    for (const { roadId, endpointIndex } of node.roadConnections) {
+      const road = state.roads.get(roadId);
+      if (!road) continue;
+
+      const conn = road.endpoints[endpointIndex];
+      const ep: Vector = {
+        x: node.pos.x + conn.endpointDisplacement.x,
+        y: node.pos.y + conn.endpointDisplacement.y,
+      };
+
+      // Unit vector pointing INTO the road from this endpoint
+      const bLen = Math.hypot(conn.bezierDisplacement.x, conn.bezierDisplacement.y);
+      const dir: Vector = bLen < 0.001
+        ? { x: 1, y: 0 }
+        : { x: conn.bezierDisplacement.x / bLen, y: conn.bezierDisplacement.y / bLen };
+
+      // perp(dir) rotates 90° CW in screen coords (Y-down), giving the CW-side perpendicular
+      const n: Vector = { x: -dir.y, y: dir.x };
+
+      // Compute outer edge offsets along n for the full road band at this endpoint
+      const sections = Array.from(road.sections.values()).sort((a, b) => a.index - b.index);
+      let posOff: number;
+      let negOff: number;
+
+      if (sections.length === 0) {
+        posOff =  ROAD_MIN_WIDTH / 2;
+        negOff = -ROAD_MIN_WIDTH / 2;
+      } else {
+        const center = (sections.length - 1) / 2;
+        posOff = -Infinity;
+        negOff =  Infinity;
+        for (const sec of sections) {
+          const sc = (sec.index - center) * TRACK_SPACING;
+          const numLines = getLinesForSection(sec, state).length;
+          const hb = sectionBandWidth(numLines) / 2;
+          if (sc + hb > posOff) posOff = sc + hb;
+          if (sc - hb < negOff) negOff = sc - hb;
+        }
+      }
+
+      arms.push({
+        direction: dir,
+        n,
+        posEdge: { x: ep.x + n.x * posOff, y: ep.y + n.y * posOff },
+        negEdge: { x: ep.x + n.x * negOff, y: ep.y + n.y * negOff },
+      });
+    }
+
+    if (arms.length < 2) return null;
+
+    // Sort arms CW in screen coords: ascending atan2(direction.y, direction.x)
+    arms.sort((a, b) =>
+      Math.atan2(a.direction.y, a.direction.x) - Math.atan2(b.direction.y, b.direction.x),
+    );
+
+    // Build closed path.
+    // For each arm: straight line across its road face (negEdge → posEdge),
+    // then a cubic bezier to the next arm's negEdge.
+    // At posEdge the outgoing tangent = n (along the road edge), giving C1 continuity
+    // with the next gap curve; at negEdge the incoming tangent also = n of that arm.
+    let path = `M ${arms[0].negEdge.x} ${arms[0].negEdge.y}`;
+
+    for (let i = 0; i < arms.length; i++) {
+      const curr = arms[i];
+      const next = arms[(i + 1) % arms.length];
+
+      // Road face: negEdge → posEdge (direction n, the CW-side perp)
+      path += ` L ${curr.posEdge.x} ${curr.posEdge.y}`;
+
+      // Gap bezier: posEdge[curr] → negEdge[next]
+      // Control points are offset along -direction (toward the node), so the curve bows inward.
+      const gapDist = Math.hypot(
+        next.negEdge.x - curr.posEdge.x,
+        next.negEdge.y - curr.posEdge.y,
+      );
+      const a = gapDist * 0.4;
+      const cp1x = curr.posEdge.x - curr.direction.x * a;
+      const cp1y = curr.posEdge.y - curr.direction.y * a;
+      const cp2x = next.negEdge.x - next.direction.x * a;
+      const cp2y = next.negEdge.y - next.direction.y * a;
+      path += ` C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${next.negEdge.x} ${next.negEdge.y}`;
+    }
+
+    path += ' Z';
+
+    const vn = figma.createVector();
+    vn.vectorPaths = [{ windingRule: 'NONZERO', data: path }];
+    vn.fills = [{ type: 'SOLID', color: JUNCTION_FILL }];
+    vn.strokes = [];
+    vn.name = `Junction: ${node.name ?? node.id}`;
+    vn.setPluginData(FIGMA_KEY_NODE_ID, node.id);
+    return vn;
   }
 
   private buildNodeMarker(node: Node): EllipseNode {
