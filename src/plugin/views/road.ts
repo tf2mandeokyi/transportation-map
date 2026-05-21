@@ -222,6 +222,7 @@ export class RoadRenderer {
     vn.vectorPaths = [{ windingRule: 'NONZERO', data: path }];
     vn.fills = [{ type: 'SOLID', color: JUNCTION_FILL }];
     vn.strokes = [];
+    vn.locked = true;
     vn.name = `Junction: ${node.name ?? node.id}`;
     vn.setPluginData(FIGMA_KEY_NODE_ID, node.id);
     return vn;

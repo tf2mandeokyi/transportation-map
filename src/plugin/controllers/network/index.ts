@@ -142,7 +142,7 @@ export class NetworkController extends BaseController {
   }
 
   public async handleDocumentChange(event: DocumentChangeEvent): Promise<void> {
-    if (this.isRendering) return;
+    if (this.isRendering || this.view.isRendering) return;
     const suppressThisBatch = this.roadControl.suppressNextControlChanges;
     this.roadControl.suppressNextControlChanges = false;
 
@@ -155,7 +155,7 @@ export class NetworkController extends BaseController {
       if (!figmaNode || figmaNode.removed) continue;
 
       const nodeId = figmaNode.getPluginData(FIGMA_KEY_NODE_ID) as NodeId;
-      if (nodeId) {
+      if (nodeId && figmaNode.type === 'ELLIPSE') {
         await this.onNodeMarkerMoved(nodeId, figmaNode as EllipseNode);
         return;
       }

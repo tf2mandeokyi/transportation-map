@@ -9,6 +9,7 @@ export class View {
   readonly stationRenderer: StationRenderer;
   readonly lineSegmentRenderer: LineRenderer;
   readonly roadRenderer: RoadRenderer;
+  public isRendering = false;
 
   constructor() {
     this.stationRenderer = new StationRenderer();
@@ -23,24 +24,29 @@ export class View {
   }
 
   public async render(state: Readonly<MapState>): Promise<void> {
-    // 1. Draw road sections (bezier curves) — rendered first so they sit at the back
-    await this.roadRenderer.renderAll(state)
-      .catch(ErrorChain.thrower('Error rendering road network'));
+    this.isRendering = true;
+    try {
+      // 1. Draw road sections (bezier curves) — rendered first so they sit at the back
+      await this.roadRenderer.renderAll(state)
+        .catch(ErrorChain.thrower('Error rendering road network'));
 
-    // 2. Clear connection points, then render stations on top of the road sections
-    this.stationRenderer.clearConnectionPoints();
-    await Promise.all([...state.stations.values()].map(station =>
-      this.stationRenderer.renderStation(station, state)
-        .catch(ErrorChain.thrower(`Error rendering station ${station.name}`))
-    ));
+      // 2. Clear connection points, then render stations on top of the road sections
+      this.stationRenderer.clearConnectionPoints();
+      await Promise.all([...state.stations.values()].map(station =>
+        this.stationRenderer.renderStation(station, state)
+          .catch(ErrorChain.thrower(`Error rendering station ${station.name}`))
+      ));
 
-    // 3. Render line segments using stored connection points
-    await Promise.all([...state.lines.values()].map(line =>
-      this.lineSegmentRenderer.renderLine(line, state)
-        .catch(ErrorChain.thrower(`Error rendering line ${line.name}`))
-    ));
+      // 3. Render line segments using stored connection points
+      await Promise.all([...state.lines.values()].map(line =>
+        this.lineSegmentRenderer.renderLine(line, state)
+          .catch(ErrorChain.thrower(`Error rendering line ${line.name}`))
+      ));
 
-    // 4. Move line segments behind stations (road sections are already at the very back)
-    await this.lineSegmentRenderer.moveSegmentsToBack();
+      // 4. Move line segments behind stations (road sections are already at the very back)
+      await this.lineSegmentRenderer.moveSegmentsToBack();
+    } finally {
+      this.isRendering = false;
+    }
   }
 }
