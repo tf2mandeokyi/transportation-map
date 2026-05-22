@@ -1,6 +1,8 @@
 import { MapState, Node, Road } from "../models/structures";
 import { Model } from "../models";
 import { offsetBezierAdaptive, bezierListPathData, TRACK_SPACING, ROAD_MIN_WIDTH } from "../utils/bezier";
+import { JunctionShape } from "../utils/junction-shape";
+import { PathBuilder } from "../utils/path";
 import { getLinesForSection, sectionBandWidth } from "../utils/section";
 
 export const NODE_RADIUS = 4;
@@ -93,134 +95,14 @@ export class RoadRenderer {
   }
 
   private buildNodePolygon(node: Node, state: Readonly<MapState>): VectorNode | null {
-    if (node.roadConnections.length < 2) return null;
+    const shape = new JunctionShape(node, state);
+    if (!shape.isValid) return null;
 
-    interface Arm {
-      direction: Vector;
-      n: Vector;        // perp(direction) — the CW-side perpendicular in screen (Y-down) coords
-      posEdge: Vector;  // endpoint displaced to the +n (CW) side
-      negEdge: Vector;  // endpoint displaced to the -n (CCW) side
-    }
-
-    const arms: Arm[] = [];
-
-    for (const { roadId, endpointIndex } of node.roadConnections) {
-      const road = state.roads.get(roadId);
-      if (!road) continue;
-
-      const conn = road.endpoints[endpointIndex];
-      const ep: Vector = {
-        x: node.pos.x + conn.endpointDisplacement.x,
-        y: node.pos.y + conn.endpointDisplacement.y,
-      };
-
-      // Unit vector pointing INTO the road from this endpoint
-      const bLen = Math.hypot(conn.bezierDisplacement.x, conn.bezierDisplacement.y);
-      const dir: Vector = bLen < 0.001
-        ? { x: 1, y: 0 }
-        : { x: conn.bezierDisplacement.x / bLen, y: conn.bezierDisplacement.y / bLen };
-
-      // perp(dir) rotates 90° CW in screen coords (Y-down), giving the CW-side perpendicular
-      const n: Vector = { x: -dir.y, y: dir.x };
-
-      // Compute outer edge offsets along n for the full road band at this endpoint
-      const sections = Array.from(road.sections.values()).sort((a, b) => a.index - b.index);
-      let posOff: number;
-      let negOff: number;
-
-      if (sections.length === 0) {
-        posOff =  ROAD_MIN_WIDTH / 2;
-        negOff = -ROAD_MIN_WIDTH / 2;
-      } else {
-        const center = (sections.length - 1) / 2;
-        posOff = -Infinity;
-        negOff =  Infinity;
-        for (const sec of sections) {
-          const sc = (sec.index - center) * TRACK_SPACING;
-          const numLines = getLinesForSection(sec, state).length;
-          const hb = sectionBandWidth(numLines) / 2;
-          if (sc + hb > posOff) posOff = sc + hb;
-          if (sc - hb < negOff) negOff = sc - hb;
-        }
-      }
-
-      arms.push({
-        direction: dir,
-        n,
-        posEdge: { x: ep.x + n.x * posOff, y: ep.y + n.y * posOff },
-        negEdge: { x: ep.x + n.x * negOff, y: ep.y + n.y * negOff },
-      });
-    }
-
-    if (arms.length < 2) return null;
-
-    // Sort arms CW in screen coords: ascending atan2(direction.y, direction.x)
-    arms.sort((a, b) =>
-      Math.atan2(a.direction.y, a.direction.x) - Math.atan2(b.direction.y, b.direction.x),
-    );
-
-    // Build closed path.
-    // For each arm: straight line across its road face (negEdge → posEdge),
-    // then a cubic bezier to the next arm's negEdge.
-    // At posEdge the outgoing tangent = n (along the road edge), giving C1 continuity
-    // with the next gap curve; at negEdge the incoming tangent also = n of that arm.
-    let path = `M ${arms[0].negEdge.x} ${arms[0].negEdge.y}`;
-
-    for (let i = 0; i < arms.length; i++) {
-      const curr = arms[i];
-      const next = arms[(i + 1) % arms.length];
-
-      // Road face: negEdge → posEdge (direction n, the CW-side perp)
-      path += ` L ${curr.posEdge.x} ${curr.posEdge.y}`;
-
-      // Gap geometry (A = apex, B = near edge, C = point on far ray):
-      // Both inward rays (dA from posEdge, dB from negEdge) are fired toward the junction.
-      // t, s = ray distances to apex A.  tNear = min(t,s).
-      // C is placed on the far ray at distance tNear from A  →  AC = AB = tNear (isosceles △ABC).
-      // Far side: straight line from its edge to C.
-      // Near side: bezier from C to its edge (maximises bezier length).
-      // The bezier departs C tangent to the straight line for C1 continuity at C.
-      const dAx = -curr.direction.x, dAy = -curr.direction.y;
-      const dBx = -next.direction.x, dBy = -next.direction.y;
-      const gx  = next.negEdge.x - curr.posEdge.x;
-      const gy  = next.negEdge.y - curr.posEdge.y;
-      const det = dBx * dAy - dAx * dBy;
-
-      let gapDone = false;
-      if (Math.abs(det) > 1e-6) {
-        const t = (dBx * gy - gx * dBy) / det;
-        const s = (dAx * gy - dAy * gx) / det;
-        if (t >= -1e-6 && s >= -1e-6) {
-          const tNear = Math.min(t, s);
-          if (t >= s) {
-            // curr is far: straight posEdge→C, bezier C→negEdge (B)
-            const cx = curr.posEdge.x + (t - tNear) * dAx;
-            const cy = curr.posEdge.y + (t - tNear) * dAy;
-            const a  = Math.hypot(next.negEdge.x - cx, next.negEdge.y - cy) * 0.4;
-            path += ` L ${cx} ${cy}`;
-            // cp1: depart C along dA (tangent to straight line)
-            // cp2: handle toward node at negEdge (dB direction)
-            path += ` C ${cx + dAx * a} ${cy + dAy * a} ${next.negEdge.x + dBx * a} ${next.negEdge.y + dBy * a} ${next.negEdge.x} ${next.negEdge.y}`;
-          } else {
-            // next is far: bezier posEdge→C, straight C→negEdge (B)
-            const cx = next.negEdge.x + (s - tNear) * dBx;
-            const cy = next.negEdge.y + (s - tNear) * dBy;
-            const a  = Math.hypot(curr.posEdge.x - cx, curr.posEdge.y - cy) * 0.4;
-            // cp1: handle toward node at posEdge (dA direction)
-            // cp2: arrive at C along dB (tangent to outgoing straight line)
-            path += ` C ${curr.posEdge.x + dAx * a} ${curr.posEdge.y + dAy * a} ${cx + dBx * a} ${cy + dBy * a} ${cx} ${cy}`;
-            path += ` L ${next.negEdge.x} ${next.negEdge.y}`;
-          }
-          gapDone = true;
-        }
-      }
-      if (!gapDone) path += ` L ${next.negEdge.x} ${next.negEdge.y}`;
-    }
-
-    path += ' Z';
+    const pb = new PathBuilder();
+    shape.drawPolygon(pb);
 
     const vn = figma.createVector();
-    vn.vectorPaths = [{ windingRule: 'NONZERO', data: path }];
+    vn.vectorPaths = [{ windingRule: 'NONZERO', data: pb.build() }];
     vn.fills = [{ type: 'SOLID', color: JUNCTION_FILL }];
     vn.strokes = [];
     vn.locked = true;

@@ -1,3 +1,5 @@
+import { PathBuilder } from './path';
+
 export const TRACK_SPACING = 8;
 export const LINE_SPACING = 6;   // center-to-center distance between parallel lines in a section
 export const ROAD_MARGIN = 4;    // margin from outermost line center to road band edge
@@ -89,14 +91,7 @@ export function offsetBezierAdaptive(points: BezierPoints, offset: number, toler
 // Converts a list of (possibly split) bezier segments into a single SVG path string.
 // Consecutive segments are assumed to be end-to-end (no gap), so only the first uses M.
 export function bezierListPathData(beziers: BezierPoints[]): string {
-  if (beziers.length === 0) return '';
-  const f = beziers[0];
-  let path = `M ${f.p0.x} ${f.p0.y} C ${f.p1.x} ${f.p1.y} ${f.p2.x} ${f.p2.y} ${f.p3.x} ${f.p3.y}`;
-  for (let i = 1; i < beziers.length; i++) {
-    const { p1, p2, p3 } = beziers[i];
-    path += ` C ${p1.x} ${p1.y} ${p2.x} ${p2.y} ${p3.x} ${p3.y}`;
-  }
-  return path;
+  return new PathBuilder().beziers(beziers).build();
 }
 
 function lerp(a: Vector, b: Vector, t: number): Vector {
@@ -131,6 +126,6 @@ export function subBezier(points: BezierPoints, t1: number, t2: number): BezierP
   return subBezierForward(points, t1, t2);
 }
 
-export function bezierPathData({ p0, p1, p2, p3 }: BezierPoints): string {
-  return `M ${p0.x} ${p0.y} C ${p1.x} ${p1.y} ${p2.x} ${p2.y} ${p3.x} ${p3.y}`;
+export function bezierPathData(seg: BezierPoints): string {
+  return new PathBuilder().beziers([seg]).build();
 }

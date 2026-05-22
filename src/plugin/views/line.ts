@@ -8,6 +8,8 @@ import {
   TRACK_SPACING,
   BezierPoints,
 } from "../utils/bezier";
+import { JunctionShape } from "../utils/junction-shape";
+import { PathBuilder } from "../utils/path";
 import { getLinesForSection, lineOffsetInSection } from "../utils/section";
 import { hexToRgb } from "@/common/utils/color";
 
@@ -63,29 +65,32 @@ function computeTotalOffset(line: Line, road: Road, sectionId: RoadSectionId, st
   return sectionOffset + lineOffset;
 }
 
-// Builds the SVG path fragments for one road-section sub-range with the line's
-// lateral offset applied adaptively.  Returns an array of path tokens to be joined.
-function sectionPathFragments(
+// Returns the offset bezier segments for one road-section sub-range.
+function computeSectionSegs(
   line: Line, road: Road, sectionId: RoadSectionId,
   t1: number, t2: number,
   state: Readonly<MapState>,
-): string[] {
+): BezierPoints[] {
   const centerline = computeRoadBezier(road, state);
   if (!centerline) return [];
 
   const sub = subBezier(centerline, t1, t2);
   const totalOffset = computeTotalOffset(line, road, sectionId, state);
-  const segs = totalOffset === 0 ? [sub] : offsetBezierAdaptive(sub, totalOffset);
+  return totalOffset === 0 ? [sub] : offsetBezierAdaptive(sub, totalOffset);
+}
 
-  // First segment: emit M + C.  Subsequent (from subdivision): emit C only.
-  const tokens: string[] = [];
-  const f = segs[0];
-  tokens.push(`M ${f.p0.x} ${f.p0.y} C ${f.p1.x} ${f.p1.y} ${f.p2.x} ${f.p2.y} ${f.p3.x} ${f.p3.y}`);
-  for (let i = 1; i < segs.length; i++) {
-    const { p1, p2, p3 } = segs[i];
-    tokens.push(`C ${p1.x} ${p1.y} ${p2.x} ${p2.y} ${p3.x} ${p3.y}`);
-  }
-  return tokens;
+function appendJunctionCurve(pb: PathBuilder, prev: BezierPoints, next: BezierPoints): void {
+  const exitLen = Math.hypot(prev.p3.x - prev.p2.x, prev.p3.y - prev.p2.y);
+  const exitDir: Vector = exitLen < 0.001
+    ? { x: 1, y: 0 }
+    : { x: (prev.p3.x - prev.p2.x) / exitLen, y: (prev.p3.y - prev.p2.y) / exitLen };
+
+  const entryLen = Math.hypot(next.p1.x - next.p0.x, next.p1.y - next.p0.y);
+  const entryDir: Vector = entryLen < 0.001
+    ? { x: -1, y: 0 }
+    : { x: -(next.p1.x - next.p0.x) / entryLen, y: -(next.p1.y - next.p0.y) / entryLen };
+
+  JunctionShape.appendGapCurve(pb, prev.p3, exitDir, next.p0, entryDir);
 }
 
 export class LineRenderer {
@@ -229,24 +234,25 @@ export class LineRenderer {
     }
     if (sectionSeq[sectionSeq.length - 1] !== endSectionId) sectionSeq.push(endSectionId);
 
+    const fallback = new PathBuilder().moveTo(headCanvas).lineTo(tailCanvas).build();
+
     // Single-section: sub-bezier of the centerline, then adaptive offset.
     if (sectionSeq.length === 1) {
       const road = findRoadForSection(startSectionId, state);
-      if (!road) return `M ${headCanvas.x} ${headCanvas.y} L ${tailCanvas.x} ${tailCanvas.y}`;
-      const frags = sectionPathFragments(line, road, startSectionId, startStation.interpT, endStation.interpT, state);
-      if (frags.length === 0) return `M ${headCanvas.x} ${headCanvas.y} L ${tailCanvas.x} ${tailCanvas.y}`;
-      return frags.join(' ');
+      if (!road) return fallback;
+      const segs = computeSectionSegs(line, road, startSectionId, startStation.interpT, endStation.interpT, state);
+      if (segs.length === 0) return fallback;
+      return new PathBuilder().beziers(segs).build();
     }
 
-    // Multi-section: chain adaptively-offset sub-beziers, joined by L at junction gaps.
-    const parts: string[] = [];
+    // Multi-section: collect offset segments per section, then chain with smooth junction curves.
+    const entries: BezierPoints[][] = [];
 
     for (let i = 0; i < sectionSeq.length; i++) {
       const sectionId = sectionSeq[i];
       const road = findRoadForSection(sectionId, state);
       if (!road) continue;
 
-      // Entry t: where on this section the path enters.
       let entryT: number;
       if (i === 0) {
         entryT = startStation.interpT;
@@ -258,7 +264,6 @@ export class LineRenderer {
         entryT = sharedNode === road.startNodeId ? 0 : 1;
       }
 
-      // Exit t: where on this section the path exits.
       let exitT: number;
       if (i === sectionSeq.length - 1) {
         exitT = endStation.interpT;
@@ -270,29 +275,21 @@ export class LineRenderer {
         exitT = sharedNode === road.endNodeId ? 1 : 0;
       }
 
-      const frags = sectionPathFragments(line, road, sectionId, entryT, exitT, state);
-      if (frags.length === 0) continue;
-
-      if (parts.length === 0) {
-        parts.push(...frags);
-      } else {
-        // Extract start point of first frag ("M x y C ...") to emit an L jump across
-        // the junction gap, then continue with the curve commands.
-        const firstFrag = frags[0];
-        const mMatch = firstFrag.match(/^M ([^ ]+) ([^ ]+) /);
-        if (mMatch) {
-          parts.push(`L ${mMatch[1]} ${mMatch[2]} ${firstFrag.slice(mMatch[0].length)}`);
-        } else {
-          parts.push(firstFrag);
-        }
-        parts.push(...frags.slice(1));
-      }
+      const segs = computeSectionSegs(line, road, sectionId, entryT, exitT, state);
+      if (segs.length === 0) continue;
+      entries.push(segs);
     }
 
-    if (parts.length === 0) {
-      return `M ${headCanvas.x} ${headCanvas.y} L ${tailCanvas.x} ${tailCanvas.y}`;
+    if (entries.length === 0) return fallback;
+
+    const pb = new PathBuilder().beziers(entries[0]);
+    for (let i = 1; i < entries.length; i++) {
+      const prevSegs = entries[i - 1];
+      const currSegs = entries[i];
+      appendJunctionCurve(pb, prevSegs[prevSegs.length - 1], currSegs[0]);
+      for (const { p1, p2, p3 } of currSegs) pb.cubicTo(p1, p2, p3);
     }
-    return parts.join(' ');
+    return pb.build();
   }
 
   private renderMiddleSegment(line: Line, segmentIndex: number, station: Station, color: RGB): BezierSegment | null {
