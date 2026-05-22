@@ -69,10 +69,10 @@ function computeStationTangentAngle(station: Station, state: Readonly<MapState>)
   const road = findRoadForSection(station.roadSectionId, state);
   if (!road) return 0;
 
-  const base = computeRoadBezier(road, state);
-  if (!base) return 0;
+  const bezier = computeSectionBezier(road, station.roadSectionId, state);
+  if (!bezier) return 0;
 
-  const tangent = evalCubicBezierTangent(base, station.interpT);
+  const tangent = evalCubicBezierTangent(bezier, station.interpT);
   return Math.atan2(tangent.y, tangent.x) * 180 / Math.PI;
 }
 
@@ -113,11 +113,11 @@ export class StationRenderer {
     const tangentAngle = computeStationTangentAngle(station, state);
     const anchor = getStationAnchorPoint(station.textAlign);
 
-    // // Set rotation before computing position (frame dimensions are already fixed)
-    frame.rotation = tangentAngle;
+    // Figma's rotation is CCW on screen; atan2 gives a CW angle, so negate.
+    frame.rotation = -tangentAngle;
 
     // Position the frame so the anchor point in frame-local space lands at `position` in canvas.
-    // Figma rotates clockwise around the frame center (frame.x + w/2, frame.y + h/2).
+    // Figma rotates CCW by α = -tangentAngle, which equals CW by tangentAngle (θ).
     // For CW rotation θ, a local offset (dax, day) from center maps to canvas offset:
     //   rdax = dax*cos(θ) - day*sin(θ)
     //   rday = dax*sin(θ) + day*cos(θ)
