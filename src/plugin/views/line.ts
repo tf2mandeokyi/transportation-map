@@ -1,11 +1,10 @@
 import { Line, MapState, Road, Station } from "../models/structures";
 import { Model } from "../models";
 import { StationRenderer } from "./station";
-import { RoadSectionId } from "@/common/types";
+import { NodeId, RoadSectionId } from "@/common/types";
 import {
-  offsetBezier,
+  offsetBezierAdaptive,
   subBezier,
-  bezierPathData,
   TRACK_SPACING,
   BezierPoints,
 } from "../utils/bezier";
@@ -30,25 +29,63 @@ function computeRoadBezier(road: Road, state: Readonly<MapState>): BezierPoints 
   return { p0, p1, p2, p3 };
 }
 
-function computeSectionBezier(road: Road, sectionId: RoadSectionId, state: Readonly<MapState>): BezierPoints | null {
-  const base = computeRoadBezier(road, state);
-  if (!base) return null;
-
-  const section = road.sections.get(sectionId);
-  if (!section) return null;
-
-  const sections = Array.from(road.sections.values());
-  const center = (sections.length - 1) / 2;
-  const offset = (section.index - center) * TRACK_SPACING;
-
-  return offset === 0 ? base : offsetBezier(base, offset);
-}
-
 function findRoadForSection(sectionId: RoadSectionId, state: Readonly<MapState>): Road | null {
   for (const road of state.roads.values()) {
     if (road.sections.has(sectionId)) return road;
   }
   return null;
+}
+
+// Returns the node shared between two adjacent roads, or null if not adjacent.
+function findSharedNode(roadA: Road, roadB: Road): NodeId | null {
+  if (roadA.endNodeId === roadB.startNodeId || roadA.endNodeId === roadB.endNodeId) return roadA.endNodeId;
+  if (roadA.startNodeId === roadB.startNodeId || roadA.startNodeId === roadB.endNodeId) return roadA.startNodeId;
+  return null;
+}
+
+// Total lateral offset from the road centerline for this line on this section:
+// section-track offset + per-line offset within the section band.
+// If the line has no stations on the section it is placed at the outermost slot.
+function computeTotalOffset(line: Line, road: Road, sectionId: RoadSectionId, state: Readonly<MapState>): number {
+  const section = road.sections.get(sectionId);
+  if (!section) return 0;
+
+  const sections = Array.from(road.sections.values());
+  const center = (sections.length - 1) / 2;
+  const sectionOffset = (section.index - center) * TRACK_SPACING;
+
+  const lines = getLinesForSection(section, state);
+  const lineIndex = lines.findIndex(l => l.id === line.id);
+  const effectiveIdx   = lineIndex >= 0 ? lineIndex   : lines.length;
+  const effectiveCount = lineIndex >= 0 ? lines.length : lines.length + 1;
+  const lineOffset = lineOffsetInSection(effectiveIdx, Math.max(effectiveCount, 1));
+
+  return sectionOffset + lineOffset;
+}
+
+// Builds the SVG path fragments for one road-section sub-range with the line's
+// lateral offset applied adaptively.  Returns an array of path tokens to be joined.
+function sectionPathFragments(
+  line: Line, road: Road, sectionId: RoadSectionId,
+  t1: number, t2: number,
+  state: Readonly<MapState>,
+): string[] {
+  const centerline = computeRoadBezier(road, state);
+  if (!centerline) return [];
+
+  const sub = subBezier(centerline, t1, t2);
+  const totalOffset = computeTotalOffset(line, road, sectionId, state);
+  const segs = totalOffset === 0 ? [sub] : offsetBezierAdaptive(sub, totalOffset);
+
+  // First segment: emit M + C.  Subsequent (from subdivision): emit C only.
+  const tokens: string[] = [];
+  const f = segs[0];
+  tokens.push(`M ${f.p0.x} ${f.p0.y} C ${f.p1.x} ${f.p1.y} ${f.p2.x} ${f.p2.y} ${f.p3.x} ${f.p3.y}`);
+  for (let i = 1; i < segs.length; i++) {
+    const { p1, p2, p3 } = segs[i];
+    tokens.push(`C ${p1.x} ${p1.y} ${p2.x} ${p2.y} ${p3.x} ${p3.y}`);
+  }
+  return tokens;
 }
 
 export class LineRenderer {
@@ -69,26 +106,46 @@ export class LineRenderer {
     const segmentNodes: SceneNode[] = [];
     const color = hexToRgb(line.color);
 
-    for (let i = 0; i < line.paths.length - 1; i++) {
-      const current = line.paths[i];
-      const next = line.paths[i + 1];
+    // Collect station stops with the RoadSectionEnter entries that precede each one.
+    // This allows segments between non-adjacent station stops (separated by RSE entries)
+    // to follow the correct road sections.
+    type StopInfo = { pathIdx: number; station: Station };
+    const stops: StopInfo[] = [];
+    const rsesBefore: RoadSectionId[][] = []; // rsesBefore[i] = RSEs collected before stops[i]
+    let pendingRSEs: RoadSectionId[] = [];
 
-      if (current.kind !== 'station-stop' || next.kind !== 'station-stop') continue;
+    for (const p of line.paths) {
+      if (p.kind === 'road-section-enter') {
+        pendingRSEs.push(p.roadSectionId);
+      } else if (p.kind === 'station-stop') {
+        const station = state.stations.get(p.stationId);
+        if (station) {
+          stops.push({ pathIdx: p.index, station });
+          rsesBefore.push(pendingRSEs);
+          pendingRSEs = [];
+        }
+      }
+    }
 
-      const startStation = state.stations.get(current.stationId);
-      const endStation = state.stations.get(next.stationId);
-      if (!startStation || !endStation) continue;
+    for (let si = 0; si < stops.length - 1; si++) {
+      const { pathIdx: startPathIdx, station: startStation } = stops[si];
+      const { pathIdx: endPathIdx, station: endStation } = stops[si + 1];
+      // RSEs that appeared between these two station stops.
+      const rseBetween = rsesBefore[si + 1];
 
       const outlineNodes: VectorNode[] = [];
       const mainNodes: VectorNode[] = [];
 
-      const segment = this.renderLineSegment(line, i, startStation, endStation, color, state);
+      const segment = this.renderLineSegment(
+        line, startPathIdx, endPathIdx,
+        startStation, endStation, rseBetween, color, state
+      );
       if (segment) {
         outlineNodes.push(segment.outline);
         mainNodes.push(segment.main);
       }
 
-      const middleSegment = this.renderMiddleSegment(line, i + 1, endStation, color);
+      const middleSegment = this.renderMiddleSegment(line, endPathIdx, endStation, color);
       if (middleSegment) {
         outlineNodes.push(middleSegment.outline);
         mainNodes.push(middleSegment.main);
@@ -124,21 +181,26 @@ export class LineRenderer {
 
   private renderLineSegment(
     line: Line,
-    segmentIndex: number,
+    startPathIdx: number,
+    endPathIdx: number,
     startStation: Station,
     endStation: Station,
+    rseBetween: RoadSectionId[],
     color: RGB,
     state: Readonly<MapState>
   ): BezierSegment | null {
-    const startPoints = this.stationRenderer.getConnectionPoint(startStation.id, line.id, segmentIndex);
-    const endPoints   = this.stationRenderer.getConnectionPoint(endStation.id,   line.id, segmentIndex + 1);
+    const startPoints = this.stationRenderer.getConnectionPoint(startStation.id, line.id, startPathIdx);
+    const endPoints   = this.stationRenderer.getConnectionPoint(endStation.id,   line.id, endPathIdx);
 
     if (!startPoints || !endPoints) {
-      console.warn(`Missing connection points for line ${line.id} segment ${segmentIndex}`);
+      console.warn(`Missing connection points for line ${line.id}`);
       return null;
     }
 
-    const pathData = this.buildSegmentPath(line, startStation, endStation, startPoints.head, endPoints.tail, state);
+    const pathData = this.buildSegmentPath(
+      line, startStation, endStation, rseBetween,
+      startPoints.head, endPoints.tail, state
+    );
     return this.bezierPathToSegments(pathData, color);
   }
 
@@ -146,33 +208,91 @@ export class LineRenderer {
     line: Line,
     startStation: Station,
     endStation: Station,
+    rseBetween: RoadSectionId[],
     headCanvas: Vector,
     tailCanvas: Vector,
     state: Readonly<MapState>
   ): string {
-    const sId = startStation.roadSectionId;
-    const eId = endStation.roadSectionId;
+    const startSectionId = startStation.roadSectionId;
+    const endSectionId = endStation.roadSectionId;
 
-    if (sId && eId && sId === eId) {
-      const road = findRoadForSection(sId, state);
-      if (road) {
-        const section = road.sections.get(sId);
-        const sectionBezier = computeSectionBezier(road, sId, state);
-        if (section && sectionBezier) {
-          const lines = getLinesForSection(section, state);
-          const lineIndex = lines.findIndex(l => l.id === line.id);
-          const perLineOffset = lineOffsetInSection(Math.max(lineIndex, 0), lines.length);
-          const finalBezier = perLineOffset === 0
-            ? sectionBezier
-            : offsetBezier(sectionBezier, perLineOffset);
-          const sub = subBezier(finalBezier, startStation.interpT, endStation.interpT);
-          return bezierPathData(sub);
+    if (!startSectionId || !endSectionId) {
+      return `M ${headCanvas.x} ${headCanvas.y} L ${tailCanvas.x} ${tailCanvas.y}`;
+    }
+
+    // Build the ordered sequence of sections this segment traverses.
+    // Starts at the start station's section, goes through any intermediate RSE sections,
+    // and ends at the end station's section.
+    const sectionSeq: RoadSectionId[] = [startSectionId];
+    for (const rsId of rseBetween) {
+      if (sectionSeq[sectionSeq.length - 1] !== rsId) sectionSeq.push(rsId);
+    }
+    if (sectionSeq[sectionSeq.length - 1] !== endSectionId) sectionSeq.push(endSectionId);
+
+    // Single-section: sub-bezier of the centerline, then adaptive offset.
+    if (sectionSeq.length === 1) {
+      const road = findRoadForSection(startSectionId, state);
+      if (!road) return `M ${headCanvas.x} ${headCanvas.y} L ${tailCanvas.x} ${tailCanvas.y}`;
+      const frags = sectionPathFragments(line, road, startSectionId, startStation.interpT, endStation.interpT, state);
+      if (frags.length === 0) return `M ${headCanvas.x} ${headCanvas.y} L ${tailCanvas.x} ${tailCanvas.y}`;
+      return frags.join(' ');
+    }
+
+    // Multi-section: chain adaptively-offset sub-beziers, joined by L at junction gaps.
+    const parts: string[] = [];
+
+    for (let i = 0; i < sectionSeq.length; i++) {
+      const sectionId = sectionSeq[i];
+      const road = findRoadForSection(sectionId, state);
+      if (!road) continue;
+
+      // Entry t: where on this section the path enters.
+      let entryT: number;
+      if (i === 0) {
+        entryT = startStation.interpT;
+      } else {
+        const prevRoad = findRoadForSection(sectionSeq[i - 1], state);
+        if (!prevRoad) continue;
+        const sharedNode = findSharedNode(prevRoad, road);
+        if (sharedNode === null) continue;
+        entryT = sharedNode === road.startNodeId ? 0 : 1;
+      }
+
+      // Exit t: where on this section the path exits.
+      let exitT: number;
+      if (i === sectionSeq.length - 1) {
+        exitT = endStation.interpT;
+      } else {
+        const nextRoad = findRoadForSection(sectionSeq[i + 1], state);
+        if (!nextRoad) continue;
+        const sharedNode = findSharedNode(road, nextRoad);
+        if (sharedNode === null) continue;
+        exitT = sharedNode === road.endNodeId ? 1 : 0;
+      }
+
+      const frags = sectionPathFragments(line, road, sectionId, entryT, exitT, state);
+      if (frags.length === 0) continue;
+
+      if (parts.length === 0) {
+        parts.push(...frags);
+      } else {
+        // Extract start point of first frag ("M x y C ...") to emit an L jump across
+        // the junction gap, then continue with the curve commands.
+        const firstFrag = frags[0];
+        const mMatch = firstFrag.match(/^M ([^ ]+) ([^ ]+) /);
+        if (mMatch) {
+          parts.push(`L ${mMatch[1]} ${mMatch[2]} ${firstFrag.slice(mMatch[0].length)}`);
+        } else {
+          parts.push(firstFrag);
         }
+        parts.push(...frags.slice(1));
       }
     }
 
-    // Fallback for cross-section or unlinked stations: straight line between connection points
-    return `M ${headCanvas.x} ${headCanvas.y} L ${tailCanvas.x} ${tailCanvas.y}`;
+    if (parts.length === 0) {
+      return `M ${headCanvas.x} ${headCanvas.y} L ${tailCanvas.x} ${tailCanvas.y}`;
+    }
+    return parts.join(' ');
   }
 
   private renderMiddleSegment(line: Line, segmentIndex: number, station: Station, color: RGB): BezierSegment | null {

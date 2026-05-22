@@ -46,6 +46,59 @@ export function offsetBezier({ p0, p1, p2, p3 }: BezierPoints, offset: number): 
   };
 }
 
+// Maximum positional error between the simple-offset approximation and the true offset
+// at t ∈ {0.25, 0.5, 0.75}.  "True offset" = evaluate original curve, then move by
+// offset along the perpendicular normal at that point.
+function offsetApproxError(original: BezierPoints, approx: BezierPoints, offset: number): number {
+  let maxErr = 0;
+  for (const t of [0.25, 0.5, 0.75]) {
+    const pos = evalCubicBezier(original, t);
+    const n   = perp(normalize(evalCubicBezierTangent(original, t)));
+    const trueX = pos.x + n.x * offset;
+    const trueY = pos.y + n.y * offset;
+    const app = evalCubicBezier(approx, t);
+    const err = Math.hypot(trueX - app.x, trueY - app.y);
+    if (err > maxErr) maxErr = err;
+  }
+  return maxErr;
+}
+
+function offsetRecurse(
+  points: BezierPoints, offset: number, tolerance: number,
+  result: BezierPoints[], depth: number,
+): void {
+  const approx = offsetBezier(points, offset);
+  if (depth >= 8 || offsetApproxError(points, approx, offset) <= tolerance) {
+    result.push(approx);
+    return;
+  }
+  const { left, right } = splitBezier(points, 0.5);
+  offsetRecurse(left,  offset, tolerance, result, depth + 1);
+  offsetRecurse(right, offset, tolerance, result, depth + 1);
+}
+
+// Adaptive parallel-curve approximation: subdivides until the simple Tiller-Hanson
+// offset is within `tolerance` pixels of the true offset at three interior sample points.
+export function offsetBezierAdaptive(points: BezierPoints, offset: number, tolerance = 0.5): BezierPoints[] {
+  if (offset === 0) return [points];
+  const result: BezierPoints[] = [];
+  offsetRecurse(points, offset, tolerance, result, 0);
+  return result;
+}
+
+// Converts a list of (possibly split) bezier segments into a single SVG path string.
+// Consecutive segments are assumed to be end-to-end (no gap), so only the first uses M.
+export function bezierListPathData(beziers: BezierPoints[]): string {
+  if (beziers.length === 0) return '';
+  const f = beziers[0];
+  let path = `M ${f.p0.x} ${f.p0.y} C ${f.p1.x} ${f.p1.y} ${f.p2.x} ${f.p2.y} ${f.p3.x} ${f.p3.y}`;
+  for (let i = 1; i < beziers.length; i++) {
+    const { p1, p2, p3 } = beziers[i];
+    path += ` C ${p1.x} ${p1.y} ${p2.x} ${p2.y} ${p3.x} ${p3.y}`;
+  }
+  return path;
+}
+
 function lerp(a: Vector, b: Vector, t: number): Vector {
   return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
 }

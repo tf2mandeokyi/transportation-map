@@ -1,6 +1,6 @@
 import { MapState, Node, Road } from "../models/structures";
 import { Model } from "../models";
-import { offsetBezier, bezierPathData, TRACK_SPACING, ROAD_MIN_WIDTH } from "../utils/bezier";
+import { offsetBezierAdaptive, bezierListPathData, TRACK_SPACING, ROAD_MIN_WIDTH } from "../utils/bezier";
 import { getLinesForSection, sectionBandWidth } from "../utils/section";
 
 export const NODE_RADIUS = 4;
@@ -60,7 +60,8 @@ export class RoadRenderer {
     const result: SceneNode[] = [];
 
     if (sections.length === 0) {
-      const node = this.makeVectorCurve(bezierPathData({ p0, p1, p2, p3 }), SECTION_COLOR, ROAD_MIN_WIDTH);
+      const pathData = bezierListPathData([{ p0, p1, p2, p3 }]);
+      const node = this.makeVectorCurve(pathData, SECTION_COLOR, ROAD_MIN_WIDTH);
       node.name = 'centerline';
       node.setPluginData(FIGMA_KEY_ROAD_ID, road.id);
       result.push(node);
@@ -68,10 +69,10 @@ export class RoadRenderer {
       const center = (sections.length - 1) / 2;
       for (const section of sections) {
         const offset = (section.index - center) * TRACK_SPACING;
-        const o = offsetBezier({ p0, p1, p2, p3 }, offset);
+        const segments = offsetBezierAdaptive({ p0, p1, p2, p3 }, offset);
         const numLines = getLinesForSection(section, state).length;
         const bandWidth = sectionBandWidth(numLines);
-        const node = this.makeVectorCurve(bezierPathData(o), SECTION_COLOR, bandWidth);
+        const node = this.makeVectorCurve(bezierListPathData(segments), SECTION_COLOR, bandWidth);
         node.name = `Section: ${section.name ?? section.index}`;
         node.setPluginData(FIGMA_KEY_ROAD_ID, road.id);
         result.push(node);
@@ -239,6 +240,39 @@ export class RoadRenderer {
     ellipse.name = `Node: ${node.name ?? node.id}`;
     ellipse.setPluginData(FIGMA_KEY_NODE_ID, node.id);
     return ellipse;
+  }
+
+  // Pushes all road infrastructure (roads, junctions, node markers) to the back
+  // of the page z-order so lines and stations appear on top.
+  // Call after moveSegmentsToBack so the final stacking is:
+  //   roads < junctions < node markers < line segments < stations
+  public moveAllToBack(): void {
+    const children = [...figma.currentPage.children];
+
+    // Push node markers (ellipses) first — they'll end up above junctions after junctions are pushed.
+    for (const child of children) {
+      if (!child.removed && child.type === 'ELLIPSE' && child.getPluginData(FIGMA_KEY_NODE_ID) !== '') {
+        figma.currentPage.insertChild(0, child);
+      }
+    }
+
+    // Push junction polygons (vectors tagged with a node ID).
+    for (const child of children) {
+      if (!child.removed && child.type === 'VECTOR' && child.getPluginData(FIGMA_KEY_NODE_ID) !== '') {
+        figma.currentPage.insertChild(0, child);
+      }
+    }
+
+    // Push road groups (tagged with a road ID, excluding interactive control vectors).
+    for (const child of children) {
+      if (
+        !child.removed &&
+        child.getPluginData(FIGMA_KEY_ROAD_ID) !== '' &&
+        child.getPluginData(FIGMA_KEY_IS_ROAD_CONTROL) !== 'true'
+      ) {
+        figma.currentPage.insertChild(0, child);
+      }
+    }
   }
 
   private async clearPrevious(): Promise<void> {

@@ -43,8 +43,12 @@ export class View {
           .catch(ErrorChain.thrower(`Error rendering line ${line.name}`))
       ));
 
-      // 4. Move line segments behind stations (road sections are already at the very back)
+      // 4. Move line segments behind stations
       await this.lineSegmentRenderer.moveSegmentsToBack();
+
+      // 5. Move all road infrastructure (roads, junctions, node markers) to the very back
+      //    so they sit below line segments and stations.
+      this.roadRenderer.moveAllToBack();
     } finally {
       this.isRendering = false;
     }
