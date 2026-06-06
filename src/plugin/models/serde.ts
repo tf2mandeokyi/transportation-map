@@ -1,5 +1,5 @@
 import { HVAlign, LineId, NodeId, RoadId, RoadSectionId, StationId } from "@/common/types";
-import { Connection, Line, LinePath, MapState, Node, Road, RoadSection, RoadSectionEnter, Station, StationStop } from "./structures";
+import { Connection, Line, LinePath, MapState, Node, Road, RoadSection, Station } from "./structures";
 
 interface SerializedConnection {
   ep: { x: number; y: number };  // endpointPos (absolute)
@@ -42,9 +42,12 @@ interface SerializedStation {
 }
 
 interface SerializedLinePath {
-  k: 'ss' | 're'; // kind: station-stop or road-section-enter
-  x: number; // index
-  id: string; // stationId or roadSectionId
+  k: 'ss' | 're';
+  x: number;
+  id?: string;  // 'ss': stationId; 're' legacy: old roadSectionId (ignored on load)
+  s?: string;   // 're': sourceRoadId
+  n?: string;   // 're': nodeId
+  d?: string;   // 're': destRoadId
 }
 
 interface SerializedLine {
@@ -116,7 +119,7 @@ export function serializeMapState(state: MapState): string {
     ci: l.isCircular,
     p: l.paths.map(p => p.kind === 'station-stop'
       ? { k: 'ss' as const, x: p.index, id: p.stationId }
-      : { k: 're' as const, x: p.index, id: p.roadSectionId }
+      : { k: 're' as const, x: p.index, s: p.sourceRoadId, n: p.nodeId, d: p.destRoadId }
     ),
     g: l.figmaGroupId
   }));
@@ -211,10 +214,14 @@ export function deserializeMapState(json: string): MapState | null {
 
     const lines = new Map<LineId, Line>();
     for (const l of typed.ln || []) {
-      const paths: LinePath[] = (l.p || []).map(p => p.k === 'ss'
-        ? { kind: 'station-stop', index: p.x, stationId: p.id as StationId } as StationStop
-        : { kind: 'road-section-enter', index: p.x, roadSectionId: p.id as RoadSectionId } as RoadSectionEnter
-      );
+      const paths: LinePath[] = (l.p || []).flatMap((p): LinePath[] => {
+        if (p.k === 'ss') {
+          return [{ kind: 'station-stop', index: p.x, stationId: p.id as StationId }];
+        }
+        // Old saves used a single `id` (roadSectionId); skip and let the validator regenerate.
+        if (!p.s || !p.n || !p.d) return [];
+        return [{ kind: 'road-section-enter', index: p.x, sourceRoadId: p.s as RoadId, nodeId: p.n as NodeId, destRoadId: p.d as RoadId }];
+      });
       lines.set(l.i as LineId, {
         id: l.i as LineId,
         name: l.n,

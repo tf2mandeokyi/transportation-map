@@ -2,6 +2,7 @@ import { Connection, Line, MapState, Node, Road, RoadSection, Station } from "./
 import { deserializeMapState, serializeMapState } from "./serde";
 import { LineId, NodeId, RoadId, RoadSectionId, StationId } from "@/common/types";
 import { LinePathInput } from "@/common/messages";
+import { validateLinePaths } from "../utils/line-validator";
 
 function generateBase62(length: number): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -98,9 +99,9 @@ export class Model {
       for (const stationId of section.stationIds) {
         this.state.stations.delete(stationId);
       }
-      this._removeRoadSectionFromLines(section.id);
     }
 
+    this._removeRoadFromLines(id);
     this.state.roads.delete(id);
   }
 
@@ -132,13 +133,14 @@ export class Model {
       }
     }
 
-    this._removeRoadSectionFromLines(sectionId);
     road.sections.delete(sectionId);
   }
 
-  private _removeRoadSectionFromLines(sectionId: RoadSectionId): void {
+  private _removeRoadFromLines(roadId: RoadId): void {
     for (const line of this.state.lines.values()) {
-      line.paths = line.paths.filter(p => !(p.kind === 'road-section-enter' && p.roadSectionId === sectionId));
+      line.paths = line.paths.filter(p =>
+        !(p.kind === 'road-section-enter' && (p.sourceRoadId === roadId || p.destRoadId === roadId))
+      );
       this._reindexLinePaths(line);
     }
   }
@@ -241,6 +243,7 @@ export class Model {
     if (!line) return;
     const index = line.paths.length;
     line.paths.push({ ...path, index });
+    line.paths = validateLinePaths(line, this.state);
   }
 
   public removeLinePath(lineId: LineId, pathIndex: number): void {
@@ -254,6 +257,13 @@ export class Model {
     const line = this.state.lines.get(lineId);
     if (!line) return;
     line.paths = paths.map((p, i) => ({ ...p, index: i }));
+    line.paths = validateLinePaths(line, this.state);
+  }
+
+  public validateAllLinePaths(): void {
+    for (const line of this.state.lines.values()) {
+      line.paths = validateLinePaths(line, this.state);
+    }
   }
 
   private _reindexLinePaths(line: Line): void {

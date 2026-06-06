@@ -73,7 +73,7 @@ export class ConnectionController extends BaseController {
     const toInput = (p: (typeof line.paths)[number]): LinePathInput =>
       p.kind === 'station-stop'
         ? { kind: 'station-stop', stationId: p.stationId }
-        : { kind: 'road-section-enter', roadSectionId: p.roadSectionId };
+        : { kind: 'road-section-enter', sourceRoadId: p.sourceRoadId, nodeId: p.nodeId, destRoadId: p.destRoadId };
 
     const rotated = [
       ...line.paths.slice(normalized),
@@ -98,7 +98,7 @@ export class ConnectionController extends BaseController {
     const toInput = (p: (typeof line.paths)[number]): LinePathInput =>
       p.kind === 'station-stop'
         ? { kind: 'station-stop', stationId: p.stationId }
-        : { kind: 'road-section-enter', roadSectionId: p.roadSectionId };
+        : { kind: 'road-section-enter', sourceRoadId: p.sourceRoadId, nodeId: p.nodeId, destRoadId: p.destRoadId };
 
     const before = line.paths.slice(0, insertAt).map(toInput);
     const after = line.paths.slice(insertAt).map(toInput);

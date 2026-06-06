@@ -111,9 +111,15 @@ export class Controller {
       case 'render-map':                     return this.renderController.handleRenderMap();
 
       // Misc
+      case 'validate-line-paths':            return this.handleValidateLinePaths();
       case 'clear-plugin-data':              return this.handleClearPluginData();
       case 'request-initial-data':           return this.handleRequestInitialData();
     }
+  }
+
+  private async handleValidateLinePaths(): Promise<void> {
+    this.model.validateAllLinePaths();
+    await this.save();
   }
 
   private async handleClearPluginData(): Promise<void> {

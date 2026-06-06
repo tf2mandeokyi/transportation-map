@@ -1,7 +1,7 @@
 import { HVAlign, LineId, NodeId, RoadId, RoadSectionId, StationId } from "./types";
 import { LinePath, RoadSection } from "@/plugin/models/structures";
 
-export type LinePathInput = { kind: 'station-stop'; stationId: StationId } | { kind: 'road-section-enter'; roadSectionId: RoadSectionId };
+export type LinePathInput = { kind: 'station-stop'; stationId: StationId } | { kind: 'road-section-enter'; sourceRoadId: RoadId; nodeId: NodeId; destRoadId: RoadId };
 
 export type NodeData = { id: NodeId; name?: string; pos: { x: number; y: number } };
 export type RoadSectionData = { id: RoadSectionId; name?: string; index: number };
@@ -36,6 +36,7 @@ export type UIToPluginMessage =
   | { type: 'update-line-stacking-order'; lineIds: LineId[] }
   | { type: 'clear-plugin-data' }
   | { type: 'request-initial-data' }
+  | { type: 'validate-line-paths' }
 
 export type LineData = { id: LineId; name: string; color: string };
 

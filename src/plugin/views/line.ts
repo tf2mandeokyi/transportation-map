@@ -1,7 +1,7 @@
-import { Line, MapState, Road, Station } from "../models/structures";
+import { Line, MapState, Road, RoadSectionEnter, Station } from "../models/structures";
 import { Model } from "../models";
 import { StationRenderer } from "./station";
-import { NodeId, RoadSectionId } from "@/common/types";
+import { RoadSectionId } from "@/common/types";
 import {
   offsetBezierAdaptive,
   subBezier,
@@ -35,13 +35,6 @@ function findRoadForSection(sectionId: RoadSectionId, state: Readonly<MapState>)
   for (const road of state.roads.values()) {
     if (road.sections.has(sectionId)) return road;
   }
-  return null;
-}
-
-// Returns the node shared between two adjacent roads, or null if not adjacent.
-function findSharedNode(roadA: Road, roadB: Road): NodeId | null {
-  if (roadA.endNodeId === roadB.startNodeId || roadA.endNodeId === roadB.endNodeId) return roadA.endNodeId;
-  if (roadA.startNodeId === roadB.startNodeId || roadA.startNodeId === roadB.endNodeId) return roadA.startNodeId;
   return null;
 }
 
@@ -117,15 +110,15 @@ export class LineRenderer {
 
     // Collect station stops with the RoadSectionEnter entries that precede each one.
     // This allows segments between non-adjacent station stops (separated by RSE entries)
-    // to follow the correct road sections.
+    // to follow the correct roads.
     type StopInfo = { pathIdx: number; station: Station };
     const stops: StopInfo[] = [];
-    const rsesBefore: RoadSectionId[][] = []; // rsesBefore[i] = RSEs collected before stops[i]
-    let pendingRSEs: RoadSectionId[] = [];
+    const rsesBefore: RoadSectionEnter[][] = []; // rsesBefore[i] = RSEs collected before stops[i]
+    let pendingRSEs: RoadSectionEnter[] = [];
 
     for (const p of line.paths) {
       if (p.kind === 'road-section-enter') {
-        pendingRSEs.push(p.roadSectionId);
+        pendingRSEs.push(p);
       } else if (p.kind === 'station-stop') {
         const station = state.stations.get(p.stationId);
         if (station) {
@@ -188,7 +181,7 @@ export class LineRenderer {
     endPathIdx: number,
     startStation: Station,
     endStation: Station,
-    rseBetween: RoadSectionId[],
+    rseBetween: RoadSectionEnter[],
     color: RGB,
     state: Readonly<MapState>
   ): BezierSegment | null {
@@ -211,7 +204,7 @@ export class LineRenderer {
     line: Line,
     startStation: Station,
     endStation: Station,
-    rseBetween: RoadSectionId[],
+    rseBetween: RoadSectionEnter[],
     headCanvas: Vector,
     tailCanvas: Vector,
     state: Readonly<MapState>
@@ -223,54 +216,66 @@ export class LineRenderer {
       return `M ${headCanvas.x} ${headCanvas.y} L ${tailCanvas.x} ${tailCanvas.y}`;
     }
 
-    // Build the ordered sequence of sections this segment traverses.
-    // Starts at the start station's section, goes through any intermediate RSE sections,
-    // and ends at the end station's section.
-    const sectionSeq: RoadSectionId[] = [startSectionId];
-    for (const rsId of rseBetween) {
-      if (sectionSeq[sectionSeq.length - 1] !== rsId) sectionSeq.push(rsId);
-    }
-    if (sectionSeq[sectionSeq.length - 1] !== endSectionId) sectionSeq.push(endSectionId);
+    const startRoad = findRoadForSection(startSectionId, state);
+    const endRoad   = findRoadForSection(endSectionId,   state);
+    if (!startRoad || !endRoad) return `M ${headCanvas.x} ${headCanvas.y} L ${tailCanvas.x} ${tailCanvas.y}`;
 
     const fallback = new PathBuilder().moveTo(headCanvas).lineTo(tailCanvas).build();
 
-    // Single-section: sub-bezier of the centerline, then adaptive offset.
-    if (sectionSeq.length === 1) {
-      const road = findRoadForSection(startSectionId, state);
-      if (!road) return fallback;
-      const segs = computeSectionSegs(line, road, startSectionId, startStation.interpT, endStation.interpT, state);
+    // Build the ordered road sequence from the RSE chain.
+    const roadSeq: Road[] = [startRoad];
+    for (const rse of rseBetween) {
+      const road = state.roads.get(rse.destRoadId);
+      if (road && roadSeq[roadSeq.length - 1].id !== road.id) roadSeq.push(road);
+    }
+    if (roadSeq[roadSeq.length - 1].id !== endRoad.id) roadSeq.push(endRoad);
+
+    // Index RSEs by destRoadId so we can look up the entry node for each road.
+    const rseByDest = new Map(rseBetween.map(rse => [rse.destRoadId, rse]));
+
+    // Single-road fast path.
+    if (roadSeq.length === 1) {
+      const segs = computeSectionSegs(line, startRoad, startSectionId, startStation.interpT, endStation.interpT, state);
       if (segs.length === 0) return fallback;
       return new PathBuilder().beziers(segs).build();
     }
 
-    // Multi-section: collect offset segments per section, then chain with smooth junction curves.
+    // Multi-road: collect offset segments per road, chain with smooth junction curves.
     const entries: BezierPoints[][] = [];
 
-    for (let i = 0; i < sectionSeq.length; i++) {
-      const sectionId = sectionSeq[i];
-      const road = findRoadForSection(sectionId, state);
-      if (!road) continue;
+    for (let i = 0; i < roadSeq.length; i++) {
+      const road = roadSeq[i];
 
+      // Section: use station-defined section for start/end roads; first section otherwise.
+      let sectionId: RoadSectionId;
+      if (i === 0) {
+        sectionId = startSectionId;
+      } else if (i === roadSeq.length - 1) {
+        sectionId = endSectionId;
+      } else {
+        const firstSec = road.sections.values().next().value;
+        if (!firstSec) continue;
+        sectionId = firstSec.id;
+      }
+
+      // Entry T: start station's interpT for the first road; RSE node position for the rest.
       let entryT: number;
       if (i === 0) {
         entryT = startStation.interpT;
       } else {
-        const prevRoad = findRoadForSection(sectionSeq[i - 1], state);
-        if (!prevRoad) continue;
-        const sharedNode = findSharedNode(prevRoad, road);
-        if (sharedNode === null) continue;
-        entryT = sharedNode === road.startNodeId ? 0 : 1;
+        const rse = rseByDest.get(road.id);
+        if (!rse) continue;
+        entryT = rse.nodeId === road.startNodeId ? 0 : 1;
       }
 
+      // Exit T: end station's interpT for the last road; next RSE node position otherwise.
       let exitT: number;
-      if (i === sectionSeq.length - 1) {
+      if (i === roadSeq.length - 1) {
         exitT = endStation.interpT;
       } else {
-        const nextRoad = findRoadForSection(sectionSeq[i + 1], state);
-        if (!nextRoad) continue;
-        const sharedNode = findSharedNode(road, nextRoad);
-        if (sharedNode === null) continue;
-        exitT = sharedNode === road.endNodeId ? 1 : 0;
+        const rse = rseByDest.get(roadSeq[i + 1].id);
+        if (!rse) continue;
+        exitT = rse.nodeId === road.endNodeId ? 1 : 0;
       }
 
       const segs = computeSectionSegs(line, road, sectionId, entryT, exitT, state);

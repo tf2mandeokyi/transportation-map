@@ -3,6 +3,7 @@ import { Model } from "../models";
 import { renderStation, renderStationLine } from "../figmls";
 import { ErrorChain } from "../error";
 import { HVAlign, LineId, RoadSectionId, StationId } from "@/common/types";
+import { getLineDirectionAtStop } from "../utils/section";
 import {
   evalCubicBezier,
   evalCubicBezierTangent,
@@ -132,16 +133,16 @@ export class StationRenderer {
     state: Readonly<MapState>,
     tangentAngle: number,
   ): Promise<{ line: Line; segmentIndex: number; node: SceneNode }[]> {
-    const { rotation, stopLineFacing, textLocation, reverseOrder } = this.getLayoutParams(station.textAlign);
+    const { rotation, textLocation, reverseOrder } = this.getLayoutParams(station.textAlign);
 
     const lines = this.getLinesForStation(station, state);
-    const children = await Promise.all(lines.map(async ({ line, segmentIndex }) => {
+    const children = await Promise.all(lines.map(async ({ line, segmentIndex, facing }) => {
       const node = await renderStationLine({
           text: line.name,
           color: line.color,
           stops: true,
           visible: true,
-          facing: stopLineFacing
+          facing
         })
         .intoNode()
         .catch(ErrorChain.thrower(`Error rendering line ${line.name} at station ${station.name}`));
@@ -150,7 +151,9 @@ export class StationRenderer {
 
     if (reverseOrder) children.reverse();
 
-    const align = `${stopLineFacing},center` as const;
+    const forwardFacing: 'left' | 'right' =
+      (station.textAlign === 'right' || station.textAlign === 'bottom') ? 'left' : 'right';
+    const align = `${forwardFacing},center` as const;
     const stationElement = await renderStation({
       text: station.name,
       visible: true,
@@ -167,23 +170,20 @@ export class StationRenderer {
 
   private getLayoutParams(textAlign: HVAlign): {
     rotation: number;
-    stopLineFacing: 'left' | 'right';
     textLocation: 'left' | 'right' | 'top' | 'bottom';
     reverseOrder: boolean;
   } {
     switch (textAlign) {
-      case 'right':
-        return { rotation: 0, stopLineFacing: 'left',  textLocation: 'right',  reverseOrder: false };
-      case 'left':
-        return { rotation: 0, stopLineFacing: 'right', textLocation: 'left',   reverseOrder: false };
-      case 'bottom':
-        return { rotation: 0, stopLineFacing: 'left',  textLocation: 'bottom', reverseOrder: false };
-      case 'top':
-        return { rotation: 0, stopLineFacing: 'right', textLocation: 'top',    reverseOrder: false };
+      case 'right':  return { rotation: 0, textLocation: 'right',  reverseOrder: false };
+      case 'left':   return { rotation: 0, textLocation: 'left',   reverseOrder: false };
+      case 'bottom': return { rotation: 0, textLocation: 'bottom', reverseOrder: false };
+      case 'top':    return { rotation: 0, textLocation: 'top',    reverseOrder: false };
     }
   }
 
-  private getLinesForStation(station: Station, state: Readonly<MapState>): Array<{ line: Line; segmentIndex: number }> {
+  private getLinesForStation(
+    station: Station, state: Readonly<MapState>
+  ): Array<{ line: Line; segmentIndex: number; facing: 'left' | 'right' }> {
     const result: Array<{ lineId: LineId; segmentIndex: number }> = [];
 
     for (const line of state.lines.values()) {
@@ -197,16 +197,29 @@ export class StationRenderer {
 
     const globalOrder = state.lineStackingOrder;
     result.sort((a, b) => {
+      const lineA = state.lines.get(a.lineId)!;
+      const lineB = state.lines.get(b.lineId)!;
+      const dirA = getLineDirectionAtStop(lineA, a.segmentIndex, state);
+      const dirB = getLineDirectionAtStop(lineB, b.segmentIndex, state);
+      if (dirA !== dirB) return dirA === 'forward' ? -1 : 1;
       const oa = globalOrder.indexOf(a.lineId);
       const ob = globalOrder.indexOf(b.lineId);
       if (oa !== ob) return oa - ob;
       return a.segmentIndex - b.segmentIndex;
     });
 
-    return result.map(({ lineId, segmentIndex }) => ({
-      line: state.lines.get(lineId)!,
-      segmentIndex
-    })).filter(item => item.line);
+    const forwardFacing: 'left' | 'right' =
+      (station.textAlign === 'right' || station.textAlign === 'bottom') ? 'left' : 'right';
+
+    return result.map(({ lineId, segmentIndex }) => {
+      const line = state.lines.get(lineId)!;
+      if (!line) return null;
+      const dir = getLineDirectionAtStop(line, segmentIndex, state);
+      const facing: 'left' | 'right' = dir === 'forward'
+        ? forwardFacing
+        : (forwardFacing === 'left' ? 'right' : 'left');
+      return { line, segmentIndex, facing };
+    }).filter((item): item is { line: Line; segmentIndex: number; facing: 'left' | 'right' } => item !== null);
   }
 
   private storeLineConnectionPoints(

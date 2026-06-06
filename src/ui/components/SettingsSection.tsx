@@ -8,10 +8,17 @@ const SettingsSection: React.FC = () => {
     }
   };
 
+  const handleValidatePaths = () => {
+    postMessageToPlugin({ type: 'validate-line-paths' });
+  };
+
   return (
     <div className="section">
       <h3>Development</h3>
       <div className="button-container">
+        <button className="button button--secondary full-width" onClick={handleValidatePaths}>
+          Validate Line Paths
+        </button>
         <button className="button button--secondary-destructive full-width" onClick={handleClearData}>
           Clear Saved Data
         </button>

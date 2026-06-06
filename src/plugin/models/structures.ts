@@ -48,7 +48,9 @@ export interface StationStop {
 export interface RoadSectionEnter {
   kind: 'road-section-enter';
   index: number;
-  roadSectionId: RoadSectionId;
+  sourceRoadId: RoadId;
+  nodeId: NodeId;
+  destRoadId: RoadId;
 }
 
 export type LinePath = StationStop | RoadSectionEnter;
