@@ -46,6 +46,7 @@ export class FrameRenderer extends BaseRenderer {
     const gap = Number(attributes.gap?.interpolate(props));
     const padding = attributes.padding?.interpolate(props);
     const align = attributes.align?.interpolate(props);
+    const stacking = attributes.stacking?.interpolate(props);
 
     if (fill) {
       frame.fills = [{ type: 'SOLID', color: hexToRgb(fill) }];
@@ -117,6 +118,15 @@ export class FrameRenderer extends BaseRenderer {
           case 'right': frame.counterAxisAlignItems = 'MAX'; break;
           default: throw new Error(`Invalid horizontal align value: ${h}`);
         }
+      }
+    }
+
+    // Handle canvas stacking order
+    if (stacking) {
+      if (stacking === 'first') {
+        frame.itemReverseZIndex = true;
+      } else if (stacking === 'last') {
+        frame.itemReverseZIndex = false;
       }
     }
   }
