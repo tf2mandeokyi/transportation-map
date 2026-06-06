@@ -21,15 +21,14 @@ export class JunctionShape {
       if (!road) continue;
 
       const conn = road.endpoints[endpointIndex];
-      const ep: Vector = {
-        x: node.pos.x + conn.endpointDisplacement.x,
-        y: node.pos.y + conn.endpointDisplacement.y,
-      };
+      const ep: Vector = conn.endpointPos;
 
-      const bLen = Math.hypot(conn.bezierDisplacement.x, conn.bezierDisplacement.y);
+      const bDx = conn.bezierPos.x - conn.endpointPos.x;
+      const bDy = conn.bezierPos.y - conn.endpointPos.y;
+      const bLen = Math.hypot(bDx, bDy);
       const dir: Vector = bLen < 0.001
         ? { x: 1, y: 0 }
-        : { x: conn.bezierDisplacement.x / bLen, y: conn.bezierDisplacement.y / bLen };
+        : { x: bDx / bLen, y: bDy / bLen };
 
       // perp(dir) rotates 90° CW in screen coords (Y-down)
       const n: Vector = { x: -dir.y, y: dir.x };

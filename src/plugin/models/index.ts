@@ -50,9 +50,19 @@ export class Model {
     this.state.nodes.delete(id);
   }
 
-  public updateNodePosition(id: NodeId, pos: { x: number; y: number }): void {
+  public moveNodeConnections(id: NodeId, delta: { x: number; y: number }): void {
     const node = this.state.nodes.get(id);
-    if (node) node.pos = pos;
+    if (!node) return;
+    for (const { roadId, endpointIndex } of node.roadConnections) {
+      const road = this.state.roads.get(roadId);
+      if (!road) continue;
+      const conn = road.endpoints[endpointIndex];
+      road.endpoints[endpointIndex] = {
+        ...conn,
+        endpointPos: { x: conn.endpointPos.x + delta.x, y: conn.endpointPos.y + delta.y },
+        bezierPos:   { x: conn.bezierPos.x   + delta.x, y: conn.bezierPos.y   + delta.y },
+      };
+    }
   }
 
   // ─── Road ───

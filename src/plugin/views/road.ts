@@ -69,8 +69,17 @@ export class RoadRenderer {
       frame.clipsContent = false;
       frame.name = `Junction: ${node.name ?? node.id}`;
       frame.setPluginData(FIGMA_KEY_NODE_ID, node.id);
-      frame.setPluginData(FIGMA_KEY_JUNCTION_OFFSET_X, String(node.pos.x - bounds.x));
-      frame.setPluginData(FIGMA_KEY_JUNCTION_OFFSET_Y, String(node.pos.y - bounds.y));
+      let jx = 0, jy = 0, jc = 0;
+      for (const { roadId, endpointIndex } of node.roadConnections) {
+        const road = state.roads.get(roadId);
+        if (!road) continue;
+        jx += road.endpoints[endpointIndex].endpointPos.x;
+        jy += road.endpoints[endpointIndex].endpointPos.y;
+        jc++;
+      }
+      const junctionCenter = jc > 0 ? { x: jx / jc, y: jy / jc } : { x: bounds.x, y: bounds.y };
+      frame.setPluginData(FIGMA_KEY_JUNCTION_OFFSET_X, String(junctionCenter.x - bounds.x));
+      frame.setPluginData(FIGMA_KEY_JUNCTION_OFFSET_Y, String(junctionCenter.y - bounds.y));
       figma.currentPage.appendChild(frame);
       frame.appendChild(polygon);
       // The path data uses absolute page coords. After reparenting, subtract the
@@ -82,7 +91,8 @@ export class RoadRenderer {
     // Node markers only for nodes that have no junction polygon.
     for (const node of state.nodes.values()) {
       if (nodesWithJunction.has(node.id)) continue;
-      figma.currentPage.appendChild(this.buildNodeMarker(node));
+      const marker = this.buildNodeMarker(node, state);
+      if (marker) figma.currentPage.appendChild(marker);
     }
   }
 
@@ -91,10 +101,10 @@ export class RoadRenderer {
     const endNode   = state.nodes.get(road.endNodeId);
     if (!startNode || !endNode) return [];
 
-    const p0: Vector = { x: startNode.pos.x + road.endpoints[0].endpointDisplacement.x, y: startNode.pos.y + road.endpoints[0].endpointDisplacement.y };
-    const p1: Vector = { x: p0.x + road.endpoints[0].bezierDisplacement.x, y: p0.y + road.endpoints[0].bezierDisplacement.y };
-    const p3: Vector = { x: endNode.pos.x + road.endpoints[1].endpointDisplacement.x, y: endNode.pos.y + road.endpoints[1].endpointDisplacement.y };
-    const p2: Vector = { x: p3.x + road.endpoints[1].bezierDisplacement.x, y: p3.y + road.endpoints[1].bezierDisplacement.y };
+    const p0: Vector = road.endpoints[0].endpointPos;
+    const p1: Vector = road.endpoints[0].bezierPos;
+    const p3: Vector = road.endpoints[1].endpointPos;
+    const p2: Vector = road.endpoints[1].bezierPos;
 
     const sections = Array.from(road.sections.values()).sort((a, b) => a.index - b.index);
     const result: SceneNode[] = [];
@@ -166,11 +176,23 @@ export class RoadRenderer {
     return vn;
   }
 
-  private buildNodeMarker(node: Node): EllipseNode {
+  private buildNodeMarker(node: Node, state: Readonly<MapState>): EllipseNode | null {
+    let x = 0, y = 0, count = 0;
+    for (const { roadId, endpointIndex } of node.roadConnections) {
+      const road = state.roads.get(roadId);
+      if (!road) continue;
+      x += road.endpoints[endpointIndex].endpointPos.x;
+      y += road.endpoints[endpointIndex].endpointPos.y;
+      count++;
+    }
+    if (count === 0) return null;
+    x /= count;
+    y /= count;
+
     const ellipse = figma.createEllipse();
     ellipse.resize(NODE_RADIUS * 2, NODE_RADIUS * 2);
-    ellipse.x = node.pos.x - NODE_RADIUS;
-    ellipse.y = node.pos.y - NODE_RADIUS;
+    ellipse.x = x - NODE_RADIUS;
+    ellipse.y = y - NODE_RADIUS;
     ellipse.fills   = [{ type: 'SOLID', color: NODE_FILL }];
     ellipse.strokes = [{ type: 'SOLID', color: NODE_STROKE }];
     ellipse.strokeWeight = 1.5;

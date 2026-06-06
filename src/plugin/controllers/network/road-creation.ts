@@ -23,6 +23,7 @@ export class RoadCreationStateMachine {
   async handleNodeClick(
     nodeId: NodeId,
     model: Model,
+    getNodeCenter: (nodeId: NodeId) => { x: number; y: number },
     onRoadCreated: () => Promise<void>,
   ): Promise<boolean> {
     if (!this.isActive) return false;
@@ -36,7 +37,9 @@ export class RoadCreationStateMachine {
     }
 
     if (this.mode === 'second-node' && this.startNodeId && nodeId !== this.startNodeId) {
-      await this.finishRoadCreation(this.startNodeId, nodeId, model, onRoadCreated);
+      const startPos = getNodeCenter(this.startNodeId);
+      const endPos   = getNodeCenter(nodeId);
+      await this.finishRoadCreation(this.startNodeId, nodeId, startPos, endPos, model, onRoadCreated);
     }
     return true;
   }
@@ -44,27 +47,24 @@ export class RoadCreationStateMachine {
   private async finishRoadCreation(
     startNodeId: NodeId,
     endNodeId: NodeId,
+    startPos: { x: number; y: number },
+    endPos: { x: number; y: number },
     model: Model,
     onRoadCreated: () => Promise<void>,
   ): Promise<void> {
-    const state = model.getState();
-    const start = state.nodes.get(startNodeId);
-    const end   = state.nodes.get(endNodeId);
-    if (start && end) {
-      const dx = end.pos.x - start.pos.x;
-      const dy = end.pos.y - start.pos.y;
-      model.addRoad({
-        name: undefined,
-        startNodeId,
-        endNodeId,
-        endpoints: [
-          { endpointDisplacement: { x: 0, y: 0 }, bezierDisplacement: { x: dx / 3, y: dy / 3 }, bezierDirection: { x: dx, y: dy }, groupNumber: 0 },
-          { endpointDisplacement: { x: 0, y: 0 }, bezierDisplacement: { x: -dx / 3, y: -dy / 3 }, bezierDirection: { x: -dx, y: -dy }, groupNumber: 0 },
-        ],
-        sections: new Map(),
-      });
-      await onRoadCreated();
-    }
+    const dx = endPos.x - startPos.x;
+    const dy = endPos.y - startPos.y;
+    model.addRoad({
+      name: undefined,
+      startNodeId,
+      endNodeId,
+      endpoints: [
+        { endpointPos: startPos, bezierPos: { x: startPos.x + dx / 3, y: startPos.y + dy / 3 }, bezierDirection: { x: dx, y: dy }, groupNumber: 0 },
+        { endpointPos: endPos,   bezierPos: { x: endPos.x - dx / 3,   y: endPos.y - dy / 3   }, bezierDirection: { x: -dx, y: -dy }, groupNumber: 0 },
+      ],
+      sections: new Map(),
+    });
+    await onRoadCreated();
     this.exit();
   }
 

@@ -1,8 +1,8 @@
 import { HVAlign, LineId, NodeId, RoadId, RoadSectionId, StationId } from "@/common/types";
 
 export interface Connection {
-  endpointDisplacement: Vector; // p0 = node.pos + endpointDisplacement (road start/end offset from junction)
-  bezierDisplacement: Vector;   // p1 = p0 + bezierDisplacement (bezier control point)
+  endpointPos: Vector;   // absolute position of road endpoint
+  bezierPos: Vector;     // absolute position of bezier control point
   bezierDirection: Vector;
   groupNumber: number;
 }
@@ -10,7 +10,6 @@ export interface Connection {
 export interface Node {
   id: NodeId;
   name?: string;
-  pos: Vector;
   roadConnections: Array<{ roadId: RoadId; endpointIndex: 0 | 1 }>;
 }
 

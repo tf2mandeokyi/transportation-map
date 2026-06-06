@@ -1,4 +1,5 @@
-import { RoadId } from "@/common/types";
+import { NodeId, RoadId } from "@/common/types";
+import { MapState } from "../../models/structures";
 import { Model } from "../../models";
 import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_ROAD_ID } from "../../views/road";
 import { bezierPathData, offsetBezier, TRACK_SPACING } from "../../utils/bezier";
@@ -55,10 +56,10 @@ export class RoadControlManager {
     const endNode   = state.nodes.get(road.endNodeId);
     if (!startNode || !endNode) return;
 
-    const p0 = { x: startNode.pos.x + road.endpoints[0].endpointDisplacement.x, y: startNode.pos.y + road.endpoints[0].endpointDisplacement.y };
-    const p1 = { x: p0.x + road.endpoints[0].bezierDisplacement.x, y: p0.y + road.endpoints[0].bezierDisplacement.y };
-    const p3 = { x: endNode.pos.x + road.endpoints[1].endpointDisplacement.x, y: endNode.pos.y + road.endpoints[1].endpointDisplacement.y };
-    const p2 = { x: p3.x + road.endpoints[1].bezierDisplacement.x, y: p3.y + road.endpoints[1].bezierDisplacement.y };
+    const p0 = road.endpoints[0].endpointPos;
+    const p1 = road.endpoints[0].bezierPos;
+    const p3 = road.endpoints[1].endpointPos;
+    const p2 = road.endpoints[1].bezierPos;
 
     const roadGroup = figma.currentPage.children.find(n =>
       n.getPluginData(FIGMA_KEY_ROAD_ID) === roadId && n.getPluginData(FIGMA_KEY_IS_ROAD_CONTROL) !== 'true'
@@ -68,9 +69,11 @@ export class RoadControlManager {
       this.lockedRoadNodeId = roadGroup.id;
     }
 
-    const startNodeStem = this.buildStemLine(startNode.pos, p0, roadId);
+    const startCenter = this.computeNodeCenter(state, road.startNodeId);
+    const endCenter   = this.computeNodeCenter(state, road.endNodeId);
+    const startNodeStem = this.buildStemLine(startCenter, p0, roadId);
     const startStem     = this.buildStemLine(p0, p1, roadId);
-    const endNodeStem   = this.buildStemLine(endNode.pos, p3, roadId);
+    const endNodeStem   = this.buildStemLine(endCenter, p3, roadId);
     const endStem       = this.buildStemLine(p3, p2, roadId);
     figma.currentPage.appendChild(startNodeStem);
     figma.currentPage.appendChild(startStem);
@@ -146,18 +149,18 @@ export class RoadControlManager {
     if (!road) return;
 
     if (side === 'start') {
-      const startNode = state.nodes.get(road.startNodeId);
-      if (!startNode) return;
+      const oldEp = road.endpoints[0].endpointPos;
+      const delta = { x: handlePos.x - oldEp.x, y: handlePos.y - oldEp.y };
       this.model.updateRoadEndpoints(roadId, [
-        { ...road.endpoints[0], endpointDisplacement: { x: handlePos.x - startNode.pos.x, y: handlePos.y - startNode.pos.y } },
+        { ...road.endpoints[0], endpointPos: handlePos, bezierPos: { x: road.endpoints[0].bezierPos.x + delta.x, y: road.endpoints[0].bezierPos.y + delta.y } },
         road.endpoints[1],
       ]);
     } else {
-      const endNode = state.nodes.get(road.endNodeId);
-      if (!endNode) return;
+      const oldEp = road.endpoints[1].endpointPos;
+      const delta = { x: handlePos.x - oldEp.x, y: handlePos.y - oldEp.y };
       this.model.updateRoadEndpoints(roadId, [
         road.endpoints[0],
-        { ...road.endpoints[1], endpointDisplacement: { x: handlePos.x - endNode.pos.x, y: handlePos.y - endNode.pos.y } },
+        { ...road.endpoints[1], endpointPos: handlePos, bezierPos: { x: road.endpoints[1].bezierPos.x + delta.x, y: road.endpoints[1].bezierPos.y + delta.y } },
       ]);
     }
 
@@ -171,20 +174,14 @@ export class RoadControlManager {
     if (!road) return;
 
     if (side === 'start') {
-      const startNode = state.nodes.get(road.startNodeId);
-      if (!startNode) return;
-      const p0 = { x: startNode.pos.x + road.endpoints[0].endpointDisplacement.x, y: startNode.pos.y + road.endpoints[0].endpointDisplacement.y };
       this.model.updateRoadEndpoints(roadId, [
-        { ...road.endpoints[0], bezierDisplacement: { x: handlePos.x - p0.x, y: handlePos.y - p0.y } },
+        { ...road.endpoints[0], bezierPos: handlePos },
         road.endpoints[1],
       ]);
     } else {
-      const endNode = state.nodes.get(road.endNodeId);
-      if (!endNode) return;
-      const p3 = { x: endNode.pos.x + road.endpoints[1].endpointDisplacement.x, y: endNode.pos.y + road.endpoints[1].endpointDisplacement.y };
       this.model.updateRoadEndpoints(roadId, [
         road.endpoints[0],
-        { ...road.endpoints[1], bezierDisplacement: { x: handlePos.x - p3.x, y: handlePos.y - p3.y } },
+        { ...road.endpoints[1], bezierPos: handlePos },
       ]);
     }
 
@@ -200,14 +197,10 @@ export class RoadControlManager {
     const road = state.roads.get(roadId);
     if (!road) return;
 
-    const startNode = state.nodes.get(road.startNodeId);
-    const endNode   = state.nodes.get(road.endNodeId);
-    if (!startNode || !endNode) return;
-
-    const p0 = { x: startNode.pos.x + road.endpoints[0].endpointDisplacement.x, y: startNode.pos.y + road.endpoints[0].endpointDisplacement.y };
-    const p1 = { x: p0.x + road.endpoints[0].bezierDisplacement.x, y: p0.y + road.endpoints[0].bezierDisplacement.y };
-    const p3 = { x: endNode.pos.x + road.endpoints[1].endpointDisplacement.x, y: endNode.pos.y + road.endpoints[1].endpointDisplacement.y };
-    const p2 = { x: p3.x + road.endpoints[1].bezierDisplacement.x, y: p3.y + road.endpoints[1].bezierDisplacement.y };
+    const p0 = road.endpoints[0].endpointPos;
+    const p1 = road.endpoints[0].bezierPos;
+    const p3 = road.endpoints[1].endpointPos;
+    const p2 = road.endpoints[1].bezierPos;
 
     if (this.stemLineIds) {
       const ids = this.stemLineIds;
@@ -222,9 +215,11 @@ export class RoadControlManager {
           data: `M ${from.x - tx} ${from.y - ty} L ${to.x - tx} ${to.y - ty}`,
         }];
       };
-      await updateStem(ids.startNodeStem, startNode.pos, p0);
+      const startCenter = this.computeNodeCenter(state, road.startNodeId);
+      const endCenter   = this.computeNodeCenter(state, road.endNodeId);
+      await updateStem(ids.startNodeStem, startCenter, p0);
       await updateStem(ids.startStem,     p0, p1);
-      await updateStem(ids.endNodeStem,   endNode.pos, p3);
+      await updateStem(ids.endNodeStem,   endCenter, p3);
       await updateStem(ids.endStem,       p3, p2);
     }
 
@@ -279,6 +274,20 @@ export class RoadControlManager {
         }
       });
     }
+  }
+
+  private computeNodeCenter(state: Readonly<MapState>, nodeId: NodeId): Vector {
+    const node = state.nodes.get(nodeId);
+    if (!node || node.roadConnections.length === 0) return { x: 0, y: 0 };
+    let sumX = 0, sumY = 0, count = 0;
+    for (const { roadId, endpointIndex } of node.roadConnections) {
+      const road = state.roads.get(roadId);
+      if (!road) continue;
+      sumX += road.endpoints[endpointIndex].endpointPos.x;
+      sumY += road.endpoints[endpointIndex].endpointPos.y;
+      count++;
+    }
+    return count > 0 ? { x: sumX / count, y: sumY / count } : { x: 0, y: 0 };
   }
 
   private buildEndpointHandle(pos: Vector, roadId: RoadId, side: 'start' | 'end'): EllipseNode {

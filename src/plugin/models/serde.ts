@@ -2,8 +2,8 @@ import { HVAlign, LineId, NodeId, RoadId, RoadSectionId, StationId } from "@/com
 import { Connection, Line, LinePath, MapState, Node, Road, RoadSection, RoadSectionEnter, Station, StationStop } from "./structures";
 
 interface SerializedConnection {
-  ed?: { x: number; y: number }; // endpointDisplacement (optional: absent in old saves → defaults to {0,0})
-  bd: { x: number; y: number };  // bezierDisplacement
+  ep: { x: number; y: number };  // endpointPos (absolute)
+  bp: { x: number; y: number };  // bezierPos (absolute)
   bdir: { x: number; y: number }; // bezierDirection
   g: number; // groupNumber
 }
@@ -28,7 +28,6 @@ interface SerializedRoad {
 interface SerializedNode {
   i: string; // id
   n?: string; // name
-  p: { x: number; y: number }; // pos
   rc: Array<{ r: string; e: 0 | 1 }>; // roadConnections
 }
 
@@ -66,13 +65,13 @@ interface SerializedMapState {
 }
 
 function serializeConnection(c: Connection): SerializedConnection {
-  return { ed: c.endpointDisplacement, bd: c.bezierDisplacement, bdir: c.bezierDirection, g: c.groupNumber };
+  return { ep: c.endpointPos, bp: c.bezierPos, bdir: c.bezierDirection, g: c.groupNumber };
 }
 
 function deserializeConnection(s: SerializedConnection): Connection {
   return {
-    endpointDisplacement: s.ed ?? { x: 0, y: 0 },
-    bezierDisplacement: s.bd,
+    endpointPos: s.ep,
+    bezierPos: s.bp,
     bezierDirection: s.bdir,
     groupNumber: s.g,
   };
@@ -82,7 +81,6 @@ export function serializeMapState(state: MapState): string {
   const nodes: SerializedNode[] = Array.from(state.nodes.values()).map(n => ({
     i: n.id,
     n: n.name,
-    p: n.pos,
     rc: n.roadConnections.map(rc => ({ r: rc.roadId, e: rc.endpointIndex }))
   }));
 
@@ -134,22 +132,51 @@ export function serializeMapState(state: MapState): string {
   return JSON.stringify(serialized);
 }
 
+// Migrates in-place from the old format (node.pos + relative displacements) to the new
+// format (absolute endpointPos / bezierPos), so old saves continue to load correctly.
+function migrateOldFormat(data: any): void {
+  const firstRoad = data.rd?.[0];
+  if (!firstRoad || 'ep' in firstRoad.e0) return; // already new format
+
+  const nodePositions = new Map<string, { x: number; y: number }>();
+  for (const n of data.nd || []) {
+    if (n.p) nodePositions.set(n.i, n.p);
+  }
+
+  const convertConn = (c: any, nodePos: { x: number; y: number }) => {
+    const ed = c.ed ?? { x: 0, y: 0 };
+    const ep = { x: nodePos.x + ed.x, y: nodePos.y + ed.y };
+    const bp = { x: ep.x + c.bd.x, y: ep.y + c.bd.y };
+    return { ep, bp, bdir: c.bdir, g: c.g };
+  };
+
+  for (const r of data.rd || []) {
+    r.e0 = convertConn(r.e0, nodePositions.get(r.sn) ?? { x: 0, y: 0 });
+    r.e1 = convertConn(r.e1, nodePositions.get(r.en) ?? { x: 0, y: 0 });
+  }
+
+  for (const n of data.nd || []) {
+    delete n.p;
+  }
+}
+
 export function deserializeMapState(json: string): MapState | null {
   try {
-    const data: SerializedMapState = JSON.parse(json);
+    const data: any = JSON.parse(json);
+    migrateOldFormat(data);
+    const typed = data as SerializedMapState;
 
     const nodes = new Map<NodeId, Node>();
-    for (const n of data.nd || []) {
+    for (const n of typed.nd || []) {
       nodes.set(n.i as NodeId, {
         id: n.i as NodeId,
         name: n.n,
-        pos: n.p,
         roadConnections: n.rc.map(rc => ({ roadId: rc.r as RoadId, endpointIndex: rc.e }))
       });
     }
 
     const roads = new Map<RoadId, Road>();
-    for (const r of data.rd || []) {
+    for (const r of typed.rd || []) {
       const sections = new Map<RoadSectionId, RoadSection>();
       for (const sec of r.sec || []) {
         sections.set(sec.i as RoadSectionId, {
@@ -170,7 +197,7 @@ export function deserializeMapState(json: string): MapState | null {
     }
 
     const stations = new Map<StationId, Station>();
-    for (const s of data.st || []) {
+    for (const s of typed.st || []) {
       stations.set(s.i as StationId, {
         id: s.i as StationId,
         name: s.n,
@@ -183,7 +210,7 @@ export function deserializeMapState(json: string): MapState | null {
     }
 
     const lines = new Map<LineId, Line>();
-    for (const l of data.ln || []) {
+    for (const l of typed.ln || []) {
       const paths: LinePath[] = (l.p || []).map(p => p.k === 'ss'
         ? { kind: 'station-stop', index: p.x, stationId: p.id as StationId } as StationStop
         : { kind: 'road-section-enter', index: p.x, roadSectionId: p.id as RoadSectionId } as RoadSectionEnter
@@ -203,7 +230,7 @@ export function deserializeMapState(json: string): MapState | null {
       roads,
       stations,
       lines,
-      lineStackingOrder: (data.lo || []) as LineId[]
+      lineStackingOrder: (typed.lo || []) as LineId[]
     };
   } catch (error) {
     console.error('Failed to deserialize map state:', error);

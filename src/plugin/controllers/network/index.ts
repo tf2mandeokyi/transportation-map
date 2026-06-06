@@ -8,28 +8,15 @@ import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_NODE_ID, FIGMA_KEY_ROAD_ID, FIGMA_
 import { RoadControlManager, FIGMA_KEY_BEZIER_HANDLE, FIGMA_KEY_ENDPOINT_HANDLE } from "./road-control";
 import { RoadCreationStateMachine } from "./road-creation";
 
-function buildNetworkPayload(model: Model): { nodes: NodeData[]; roads: RoadData[] } {
-  const state = model.getState();
-  const nodes: NodeData[] = Array.from(state.nodes.values()).map(n => ({
-    id: n.id, name: n.name, pos: n.pos,
-  }));
-  const roads: RoadData[] = Array.from(state.roads.values()).map(r => ({
-    id: r.id,
-    name: r.name,
-    startNodeId: r.startNodeId,
-    endNodeId: r.endNodeId,
-    sections: Array.from(r.sections.values()).map((s): RoadSectionData => ({
-      id: s.id, name: s.name, index: s.index,
-    })),
-  }));
-  return { nodes, roads };
-}
 
 export class NetworkController extends BaseController {
   private readonly roadControl: RoadControlManager;
   private readonly roadCreation: RoadCreationStateMachine;
   private isRendering = false;
   private renderDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  // Caches the initial placement position for newly created isolated nodes
+  // (nodes with no road connections yet) so road creation can use it.
+  private readonly nodePositionCache = new Map<NodeId, { x: number; y: number }>();
 
   constructor(model: Model, view: View) {
     super(model, view);
@@ -40,7 +27,8 @@ export class NetworkController extends BaseController {
   // ── Public message handlers (node/road CRUD) ────────────────────────────
 
   public async handleAddNode(msg: Extract<UIToPluginMessage, { type: 'add-node' }>): Promise<void> {
-    this.model.addNode({ name: msg.node.name, pos: msg.node.pos, roadConnections: [] });
+    const id = this.model.addNode({ name: msg.node.name, roadConnections: [] });
+    this.nodePositionCache.set(id, msg.node.pos);
     await this.save();
     this.syncNetworkToUI();
   }
@@ -89,7 +77,7 @@ export class NetworkController extends BaseController {
       if (first) {
         const nodeId = first.getPluginData(FIGMA_KEY_NODE_ID) as NodeId;
         if (nodeId) {
-          await this.roadCreation.handleNodeClick(nodeId, this.model, async () => {
+          await this.roadCreation.handleNodeClick(nodeId, this.model, (id) => this.getNodeCenter(id), async () => {
             this.isRendering = true;
             try { await this.render(); await this.save(); } finally { this.isRendering = false; }
             this.syncNetworkToUI();
@@ -188,7 +176,24 @@ export class NetworkController extends BaseController {
   // ── Network sync ────────────────────────────────────────────────────────
 
   public syncNetworkToUI(): void {
-    postMessageToUI({ type: 'network-data', ...buildNetworkPayload(this.model) });
+    postMessageToUI({ type: 'network-data', ...this.buildNetworkPayload() });
+  }
+
+  private buildNetworkPayload(): { nodes: NodeData[]; roads: RoadData[] } {
+    const state = this.model.getState();
+    const nodes: NodeData[] = Array.from(state.nodes.values()).map(n => ({
+      id: n.id, name: n.name, pos: this.getNodeCenter(n.id),
+    }));
+    const roads: RoadData[] = Array.from(state.roads.values()).map(r => ({
+      id: r.id,
+      name: r.name,
+      startNodeId: r.startNodeId,
+      endNodeId: r.endNodeId,
+      sections: Array.from(r.sections.values()).map((s): RoadSectionData => ({
+        id: s.id, name: s.name, index: s.index,
+      })),
+    }));
+    return { nodes, roads };
   }
 
   // ── Private helpers ─────────────────────────────────────────────────────
@@ -198,7 +203,14 @@ export class NetworkController extends BaseController {
   }
 
   private async onNodePositionChanged(nodeId: NodeId, newPos: { x: number; y: number }): Promise<void> {
-    this.model.updateNodePosition(nodeId, newPos);
+    const currentCenter = this.getNodeCenter(nodeId);
+    const delta = { x: newPos.x - currentCenter.x, y: newPos.y - currentCenter.y };
+    const node = this.model.getState().nodes.get(nodeId);
+    if (node && node.roadConnections.length > 0) {
+      this.model.moveNodeConnections(nodeId, delta);
+    } else {
+      this.nodePositionCache.set(nodeId, newPos);
+    }
     await this.roadControl.remove();
 
     if (this.renderDebounceTimer !== null) clearTimeout(this.renderDebounceTimer);
@@ -225,9 +237,26 @@ export class NetworkController extends BaseController {
     postMessageToUI({ type: 'network-selection-cleared' });
   }
 
+  private getNodeCenter(nodeId: NodeId): { x: number; y: number } {
+    const state = this.model.getState();
+    const node = state.nodes.get(nodeId);
+    if (node) {
+      let sumX = 0, sumY = 0, count = 0;
+      for (const { roadId, endpointIndex } of node.roadConnections) {
+        const road = state.roads.get(roadId);
+        if (!road) continue;
+        sumX += road.endpoints[endpointIndex].endpointPos.x;
+        sumY += road.endpoints[endpointIndex].endpointPos.y;
+        count++;
+      }
+      if (count > 0) return { x: sumX / count, y: sumY / count };
+    }
+    return this.nodePositionCache.get(nodeId) ?? { x: 0, y: 0 };
+  }
+
   private buildNodeElement(nodeId: NodeId): NetworkFocusedElement {
     const node = this.model.getState().nodes.get(nodeId);
-    return { kind: 'node', nodeId, name: node?.name, pos: node?.pos ?? { x: 0, y: 0 } };
+    return { kind: 'node', nodeId, name: node?.name, pos: this.getNodeCenter(nodeId) };
   }
 
   private buildRoadElement(roadId: RoadId): NetworkFocusedElement {

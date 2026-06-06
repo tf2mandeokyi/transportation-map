@@ -37,43 +37,44 @@ async function main() {
 }
 
 async function createDemoMap(controller: Controller, model: Model) {
+  const n1Pos = { x: 100, y: 300 };
+  const n2Pos = { x: 400, y: 300 };
+  const n3Pos = { x: 700, y: 300 };
+  const n4Pos = { x: 400, y: 100 };
+
   // Create graph nodes (intersection points)
-  const n1 = model.addNode({ name: 'West Junction', pos: { x: 100, y: 300 }, roadConnections: [] });
-  const n2 = model.addNode({ name: 'Central Junction', pos: { x: 400, y: 300 }, roadConnections: [] });
-  const n3 = model.addNode({ name: 'East Junction', pos: { x: 700, y: 300 }, roadConnections: [] });
-  const n4 = model.addNode({ name: 'North Junction', pos: { x: 400, y: 100 }, roadConnections: [] });
+  const n1 = model.addNode({ name: 'West Junction',    roadConnections: [] });
+  const n2 = model.addNode({ name: 'Central Junction', roadConnections: [] });
+  const n3 = model.addNode({ name: 'East Junction',    roadConnections: [] });
+  const n4 = model.addNode({ name: 'North Junction',   roadConnections: [] });
 
-  // Create roads between nodes with bezier control offsets
-  const straightEndpoint = () => ({
-    endpointDisplacement: { x: 0, y: 0 },
-    bezierDisplacement: { x: 100, y: 0 },
-    bezierDirection: { x: 1, y: 0 },
-    groupNumber: 0
-  });
-
+  // Create roads between nodes with absolute endpoint and bezier positions
   const road1 = model.addRoad({
     name: 'West-Central',
-    startNodeId: n1,
-    endNodeId: n2,
-    endpoints: [straightEndpoint(), { ...straightEndpoint(), bezierDisplacement: { x: -100, y: 0 } }],
+    startNodeId: n1, endNodeId: n2,
+    endpoints: [
+      { endpointPos: n1Pos, bezierPos: { x: n1Pos.x + 100, y: n1Pos.y }, bezierDirection: { x: 1, y: 0 }, groupNumber: 0 },
+      { endpointPos: n2Pos, bezierPos: { x: n2Pos.x - 100, y: n2Pos.y }, bezierDirection: { x: -1, y: 0 }, groupNumber: 0 },
+    ],
     sections: new Map()
   });
 
   const road2 = model.addRoad({
     name: 'Central-East',
-    startNodeId: n2,
-    endNodeId: n3,
-    endpoints: [straightEndpoint(), { ...straightEndpoint(), bezierDisplacement: { x: -100, y: 0 } }],
+    startNodeId: n2, endNodeId: n3,
+    endpoints: [
+      { endpointPos: n2Pos, bezierPos: { x: n2Pos.x + 100, y: n2Pos.y }, bezierDirection: { x: 1, y: 0 }, groupNumber: 0 },
+      { endpointPos: n3Pos, bezierPos: { x: n3Pos.x - 100, y: n3Pos.y }, bezierDirection: { x: -1, y: 0 }, groupNumber: 0 },
+    ],
     sections: new Map()
   });
 
   const road3 = model.addRoad({
     name: 'Central-North',
-    startNodeId: n2,
-    endNodeId: n4,
+    startNodeId: n2, endNodeId: n4,
     endpoints: [
-      { endpointDisplacement: { x: 0, y: 0 }, bezierDisplacement: { x: 0, y: -100 }, bezierDirection: { x: 0, y: -1 }, groupNumber: 0 },
-      { endpointDisplacement: { x: 0, y: 0 }, bezierDisplacement: { x: 0, y: 100 }, bezierDirection: { x: 0, y: 1 }, groupNumber: 0 }
+      { endpointPos: n2Pos, bezierPos: { x: n2Pos.x, y: n2Pos.y - 100 }, bezierDirection: { x: 0, y: -1 }, groupNumber: 0 },
+      { endpointPos: n4Pos, bezierPos: { x: n4Pos.x, y: n4Pos.y + 100 }, bezierDirection: { x: 0,  y: 1 }, groupNumber: 0 },
     ],
     sections: new Map()
   });
