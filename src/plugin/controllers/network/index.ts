@@ -51,18 +51,6 @@ export class NetworkController extends BaseController {
     this.syncNetworkToUI();
   }
 
-  public async handleAddRoad(msg: Extract<UIToPluginMessage, { type: 'add-road' }>): Promise<void> {
-    this.model.addRoad({
-      name: msg.road.name,
-      startNodeId: msg.road.startNodeId,
-      endNodeId: msg.road.endNodeId,
-      endpoints: msg.road.endpoints,
-      sections: new Map(),
-    });
-    await this.save();
-    this.syncNetworkToUI();
-  }
-
   public async handleRemoveRoad(roadId: RoadId): Promise<void> {
     this.model.removeRoad(roadId);
     await this.save();

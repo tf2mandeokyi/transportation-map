@@ -1,5 +1,5 @@
 import { HVAlign, LineId, NodeId, RoadId, RoadSectionId, StationId } from "./types";
-import { Connection, LinePath, RoadSection } from "@/plugin/models/structures";
+import { LinePath, RoadSection } from "@/plugin/models/structures";
 
 export type LinePathInput = { kind: 'station-stop'; stationId: StationId } | { kind: 'road-section-enter'; roadSectionId: RoadSectionId };
 
@@ -9,8 +9,8 @@ export type RoadData = { id: RoadId; name?: string; startNodeId: NodeId; endNode
 
 // Messages from UI to Plugin
 export type UIToPluginMessage =
-  | { type: 'add-station'; station: { name: string; textAlign: HVAlign; roadSectionId?: RoadSectionId; interpT?: number } }
-  | { type: 'update-station'; stationId: StationId; name: string; textAlign: HVAlign }
+  | { type: 'add-station'; station: { name: string; textAlign: HVAlign; textRotation?: number; roadSectionId?: RoadSectionId; interpT?: number } }
+  | { type: 'update-station'; stationId: StationId; name: string; textAlign: HVAlign; textRotation: number }
   | { type: 'delete-station'; stationId: StationId }
   | { type: 'copy-station'; stationId: StationId; direction: 'forwards' | 'backwards' }
   | { type: 'combine-stations'; sourceStationId: StationId; targetStationId: StationId }
@@ -19,7 +19,6 @@ export type UIToPluginMessage =
   | { type: 'remove-node'; nodeId: NodeId }
   | { type: 'start-adding-road-mode' }
   | { type: 'cancel-adding-road-mode' }
-  | { type: 'add-road'; road: { name?: string; startNodeId: NodeId; endNodeId: NodeId; endpoints: [Connection, Connection] } }
   | { type: 'remove-road'; roadId: RoadId }
   | { type: 'add-road-section'; roadId: RoadId; section: Omit<RoadSection, 'id' | 'stationIds'> }
   | { type: 'remove-road-section'; roadId: RoadId; sectionId: RoadSectionId }
@@ -39,7 +38,6 @@ export type UIToPluginMessage =
   | { type: 'request-initial-data' }
 
 export type LineData = { id: LineId; name: string; color: string };
-export type LineAtStationData = LineData;
 
 export type NetworkFocusedElement =
   | { kind: 'node'; nodeId: NodeId; name?: string; pos: { x: number; y: number } }
@@ -47,8 +45,7 @@ export type NetworkFocusedElement =
 
 // Messages from Plugin to UI
 export type PluginToUIMessage =
-  | { type: 'station-added' }
-  | { type: 'station-clicked'; stationId: StationId; stationName: string; textAlign: HVAlign; lines: Array<LineAtStationData> }
+  | { type: 'station-clicked'; stationId: StationId; stationName: string; textAlign: HVAlign; textRotation: number; lines: Array<LineData> }
   | { type: 'line-added' } & LineData
   | { type: 'line-path-data'; lineId: LineId; paths: LinePath[]; stationNames: Record<StationId, string> }
   | { type: 'station-removed-from-line' }

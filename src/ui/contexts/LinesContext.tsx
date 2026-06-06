@@ -26,8 +26,7 @@ export const LinesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return [...prev, { id: msg.id, name: msg.name, color: msg.color }];
       });
     });
-    const unsub2 = manager.onMessage('station-added', () => {});
-    return () => { unsub1(); unsub2(); };
+    return () => { unsub1(); };
   }, [manager]);
 
   const removeLine = useCallback((lineId: LineId) => {

@@ -77,7 +77,7 @@ export class Controller {
     switch (msg.type) {
       // Station actions
       case 'add-station':              return this.stationController.handleAddStation(msg.station);
-      case 'update-station':           return this.stationController.handleUpdateStation(msg.stationId, msg.name, msg.textAlign);
+      case 'update-station':           return this.stationController.handleUpdateStation(msg.stationId, msg.name, msg.textAlign, msg.textRotation);
       case 'delete-station':           return this.stationController.handleDeleteStation(msg.stationId);
       case 'copy-station':             return this.stationController.handleCopyStation(msg.stationId, msg.direction);
       case 'combine-stations':         return this.stationController.handleCombineStations(msg.sourceStationId, msg.targetStationId);
@@ -88,7 +88,6 @@ export class Controller {
       case 'remove-node':              return this.networkController.handleRemoveNode(msg.nodeId);
       case 'start-adding-road-mode':   return this.networkController.startRoadCreationMode();
       case 'cancel-adding-road-mode':  return this.networkController.cancelRoadCreationMode();
-      case 'add-road':                 return this.networkController.handleAddRoad(msg);
       case 'remove-road':              return this.networkController.handleRemoveRoad(msg.roadId);
       case 'add-road-section':         return this.networkController.handleAddRoadSection(msg);
       case 'remove-road-section':      return this.networkController.handleRemoveRoadSection(msg);

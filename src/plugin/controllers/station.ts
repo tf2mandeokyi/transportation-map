@@ -1,23 +1,21 @@
-import { LineAtStationData } from "@/common/messages";
+import { LineData } from "@/common/messages";
 import { HVAlign, RoadSectionId, StationId } from "@/common/types";
 import { postMessageToUI } from "../figma";
 import { BaseController } from "./base";
 
 export class StationController extends BaseController {
-  public async handleAddStation(stopData: { name: string; textAlign: HVAlign; roadSectionId?: RoadSectionId; interpT?: number }): Promise<void> {
-    const { name, textAlign, roadSectionId = null, interpT = 0.5 } = stopData;
+  public async handleAddStation(stopData: { name: string; textAlign: HVAlign; textRotation?: number; roadSectionId?: RoadSectionId; interpT?: number }): Promise<void> {
+    const { name, textAlign, textRotation = 0, roadSectionId = null, interpT = 0.5 } = stopData;
 
-    const id = this.createStation(name, textAlign, roadSectionId, interpT);
+    const id = this.createStation(name, textAlign, textRotation, roadSectionId, interpT);
     const station = this.model.getState().stations.get(id)!;
 
     await this.view.stationRenderer.renderStation(station, this.model.getState());
     await this.save();
-
-    postMessageToUI({ type: 'station-added' });
   }
 
-  public createStation(name: string, textAlign: HVAlign = 'right', roadSectionId: RoadSectionId | null = null, interpT: number = 0.5): StationId {
-    return this.model.addStation({ name, textAlign, interpT, roadSectionId });
+  public createStation(name: string, textAlign: HVAlign = 'right', textRotation: number = 0, roadSectionId: RoadSectionId | null = null, interpT: number = 0.5): StationId {
+    return this.model.addStation({ name, textAlign, textRotation, interpT, roadSectionId });
   }
 
   public async handleGetStationInfo(stationId: StationId): Promise<void> {
@@ -27,7 +25,7 @@ export class StationController extends BaseController {
       return;
     }
 
-    const lines: Array<LineAtStationData> = [];
+    const lines: Array<LineData> = [];
     for (const line of this.model.getState().lines.values()) {
       const hasStop = line.paths.some(p => p.kind === 'station-stop' && p.stationId === stationId);
       if (hasStop) {
@@ -40,11 +38,12 @@ export class StationController extends BaseController {
       stationId,
       stationName: station.name,
       textAlign: station.textAlign,
+      textRotation: station.textRotation,
       lines
     });
   }
 
-  public async handleUpdateStation(stationId: StationId, name: string, textAlign: HVAlign): Promise<void> {
+  public async handleUpdateStation(stationId: StationId, name: string, textAlign: HVAlign, textRotation: number): Promise<void> {
     const station = this.model.getState().stations.get(stationId);
     if (!station) {
       console.warn(`Station ${stationId} not found`);
@@ -53,6 +52,7 @@ export class StationController extends BaseController {
 
     station.name = name;
     station.textAlign = textAlign;
+    station.textRotation = textRotation;
 
     await this.save();
     await this.handleGetStationInfo(stationId);
@@ -88,6 +88,7 @@ export class StationController extends BaseController {
     const newStationId = this.model.addStation({
       name: station.name,
       textAlign: station.textAlign,
+      textRotation: station.textRotation,
       interpT: newInterpT,
       roadSectionId: station.roadSectionId,
     });
