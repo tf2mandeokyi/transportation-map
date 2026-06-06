@@ -14,8 +14,6 @@ import {
 export interface ConnectionPoints {
   head: Vector;
   tail: Vector;
-  alignStart: Vector;
-  alignEnd: Vector;
 }
 
 function computeRoadBezier(road: Road, state: Readonly<MapState>): BezierPoints | null {
@@ -224,24 +222,22 @@ export class StationRenderer {
       const centerLeft  = this.applyTransform(transform, { x: 0,        y: height / 2 });
       const centerRight = this.applyTransform(transform, { x: width,    y: height / 2 });
 
-      let head: Vector, tail: Vector, alignStart: Vector, alignEnd: Vector;
+      let head: Vector, tail: Vector;
       switch (station.textAlign) {
         case 'right':
         case 'top':
           head = centerLeft;
-          tail = alignEnd = this.applyTransform(transform, { x: maxWidth,          y: height / 2 });
-          alignStart = centerRight;
+          tail = this.applyTransform(transform, { x: maxWidth,          y: height / 2 });
           break;
         case 'left':
         case 'bottom':
           head = centerRight;
-          tail = alignStart = this.applyTransform(transform, { x: width - maxWidth, y: height / 2 });
-          alignEnd = centerLeft;
+          tail = this.applyTransform(transform, { x: width - maxWidth, y: height / 2 });
           break;
       }
 
       const key = `${station.id}-${line.id}-${segmentIndex}`;
-      this.lineConnectionPoints.set(key, { head, tail, alignStart, alignEnd });
+      this.lineConnectionPoints.set(key, { head, tail });
     }
   }
 

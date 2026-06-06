@@ -76,7 +76,11 @@ function computeSectionSegs(
 
   const sub = subBezier(centerline, t1, t2);
   const totalOffset = computeTotalOffset(line, road, sectionId, state);
-  return totalOffset === 0 ? [sub] : offsetBezierAdaptive(sub, totalOffset);
+  // Normalize offset to the road's canonical direction (t=0→1). When traversing
+  // in reverse (t1 > t2), subBezier flips the tangent, which would flip the
+  // perpendicular normal — negating here keeps all lines offset consistently.
+  const directedOffset = t1 > t2 ? -totalOffset : totalOffset;
+  return directedOffset === 0 ? [sub] : offsetBezierAdaptive(sub, directedOffset);
 }
 
 function appendJunctionCurve(pb: PathBuilder, prev: BezierPoints, next: BezierPoints): void {
@@ -148,12 +152,6 @@ export class LineRenderer {
       if (segment) {
         outlineNodes.push(segment.outline);
         mainNodes.push(segment.main);
-      }
-
-      const middleSegment = this.renderMiddleSegment(line, endPathIdx, endStation, color);
-      if (middleSegment) {
-        outlineNodes.push(middleSegment.outline);
-        mainNodes.push(middleSegment.main);
       }
 
       if (outlineNodes.length > 0) {
@@ -290,14 +288,6 @@ export class LineRenderer {
       for (const { p1, p2, p3 } of currSegs) pb.cubicTo(p1, p2, p3);
     }
     return pb.build();
-  }
-
-  private renderMiddleSegment(line: Line, segmentIndex: number, station: Station, color: RGB): BezierSegment | null {
-    const points = this.stationRenderer.getConnectionPoint(station.id, line.id, segmentIndex);
-    if (!points) return null;
-
-    const pathData = `M ${points.alignStart.x} ${points.alignStart.y} L ${points.alignEnd.x} ${points.alignEnd.y}`;
-    return this.bezierPathToSegments(pathData, color);
   }
 
   private bezierPathToSegments(pathData: string, color: RGB): BezierSegment | null {
