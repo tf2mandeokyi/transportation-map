@@ -4,7 +4,7 @@ import { postMessageToUI } from "../../figma";
 import { Model } from "../../models";
 import { View } from "../../views";
 import { BaseController } from "../base";
-import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_NODE_ID, FIGMA_KEY_ROAD_ID, NODE_RADIUS } from "../../views/road";
+import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_NODE_ID, FIGMA_KEY_ROAD_ID, FIGMA_KEY_JUNCTION_OFFSET_X, FIGMA_KEY_JUNCTION_OFFSET_Y, NODE_RADIUS } from "../../views/road";
 import { RoadControlManager, FIGMA_KEY_BEZIER_HANDLE, FIGMA_KEY_ENDPOINT_HANDLE } from "./road-control";
 import { RoadCreationStateMachine } from "./road-creation";
 
@@ -143,9 +143,18 @@ export class NetworkController extends BaseController {
       if (!figmaNode || figmaNode.removed) continue;
 
       const nodeId = figmaNode.getPluginData(FIGMA_KEY_NODE_ID) as NodeId;
-      if (nodeId && figmaNode.type === 'ELLIPSE') {
-        await this.onNodeMarkerMoved(nodeId, figmaNode as EllipseNode);
-        return;
+      if (nodeId) {
+        if (figmaNode.type === 'ELLIPSE') {
+          await this.onNodeMarkerMoved(nodeId, figmaNode as EllipseNode);
+          return;
+        }
+        if (figmaNode.type === 'FRAME') {
+          const frame = figmaNode as FrameNode;
+          const ox = parseFloat(frame.getPluginData(FIGMA_KEY_JUNCTION_OFFSET_X) || '0');
+          const oy = parseFloat(frame.getPluginData(FIGMA_KEY_JUNCTION_OFFSET_Y) || '0');
+          await this.onNodePositionChanged(nodeId, { x: frame.x + ox, y: frame.y + oy });
+          return;
+        }
       }
 
       const endpointSide = figmaNode.getPluginData(FIGMA_KEY_ENDPOINT_HANDLE) as 'start' | 'end' | '';
@@ -185,7 +194,10 @@ export class NetworkController extends BaseController {
   // ── Private helpers ─────────────────────────────────────────────────────
 
   private async onNodeMarkerMoved(nodeId: NodeId, ellipse: EllipseNode): Promise<void> {
-    const newPos = { x: ellipse.x + NODE_RADIUS, y: ellipse.y + NODE_RADIUS };
+    await this.onNodePositionChanged(nodeId, { x: ellipse.x + NODE_RADIUS, y: ellipse.y + NODE_RADIUS });
+  }
+
+  private async onNodePositionChanged(nodeId: NodeId, newPos: { x: number; y: number }): Promise<void> {
     this.model.updateNodePosition(nodeId, newPos);
     await this.roadControl.remove();
 
