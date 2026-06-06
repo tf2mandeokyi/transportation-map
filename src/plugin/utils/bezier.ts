@@ -2,7 +2,7 @@ import { PathBuilder } from './path';
 
 export const TRACK_SPACING = 8;
 export const LINE_SPACING = 6;   // center-to-center distance between parallel lines in a section
-export const ROAD_MARGIN = 4;    // margin from outermost line center to road band edge
+export const ROAD_MARGIN = 1;    // margin from outermost line center to road band edge
 export const ROAD_MIN_WIDTH = 8; // minimum road band width when no lines are present
 
 export interface BezierPoints {

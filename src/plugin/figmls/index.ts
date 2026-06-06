@@ -41,10 +41,11 @@ interface StationProps {
   text: string,
   visible: boolean,
   rotation: number,
+  textRotation: number,
   textLocation: 'left' | 'right' | 'top' | 'bottom',
   align: FigmlAlignment,
   children: SceneNode[]
 }
-export function renderStation({ text, visible, rotation, textLocation, align, children }: StationProps): RenderResult {
-  return STATION_TEMPLATE.render({ text, visible, rotation, align, children }, { textLocation });
+export function renderStation({ text, visible, rotation, textRotation, textLocation, align, children }: StationProps): RenderResult {
+  return STATION_TEMPLATE.render({ text, visible, rotation, textRotation, align, children }, { textLocation });
 }

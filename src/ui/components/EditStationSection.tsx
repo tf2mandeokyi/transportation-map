@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { LineAtStationData } from '@/common/messages';
+import { LineData } from '@/common/messages';
 import { HVAlign, StationId } from '@/common/types';
 import { postMessageToPlugin } from '../figma';
 import { useMessageManager } from '../contexts/MessageContext';
@@ -10,10 +10,12 @@ const EditStationSection: React.FC = () => {
   const [stationId, setStationId]           = useState<StationId | null>(null);
   const [stationName, setStationName]       = useState<string | null>(null);
   const [stationTextAlign, setStationTextAlign] = useState<HVAlign | null>(null);
-  const [linesAtStation, setLinesAtStation] = useState<Array<LineAtStationData>>([]);
+  const [stationTextRotation, setStationTextRotation] = useState<number | null>(null);
+  const [linesAtStation, setLinesAtStation] = useState<Array<LineData>>([]);
 
   const [name, setName]             = useState('');
   const [textAlign, setTextAlign]   = useState<HVAlign>('right');
+  const [textRotation, setTextRotation] = useState(0);
   const [isCombiningMode, setIsCombiningMode] = useState(false);
 
   // Refs to avoid stale closures in the message subscription
@@ -28,6 +30,7 @@ const EditStationSection: React.FC = () => {
     setStationId(null);
     setStationName(null);
     setStationTextAlign(null);
+    setStationTextRotation(null);
     setLinesAtStation([]);
     setIsCombiningMode(false);
   };
@@ -45,6 +48,7 @@ const EditStationSection: React.FC = () => {
         setStationId(msg.stationId);
         setStationName(msg.stationName);
         setStationTextAlign(msg.textAlign);
+        setStationTextRotation(msg.textRotation);
         setLinesAtStation(msg.lines);
         setIsCombiningMode(false);
       }
@@ -56,29 +60,35 @@ const EditStationSection: React.FC = () => {
     };
   }, [manager]);
 
-  const onUpdateStation = (name: string, textAlign: HVAlign) => {
+  const onUpdateStation = (name: string, textAlign: HVAlign, textRotation: number) => {
     if (!stationId) return;
-    postMessageToPlugin({ type: 'update-station', stationId, name, textAlign });
+    postMessageToPlugin({ type: 'update-station', stationId, name, textAlign, textRotation });
   };
 
   useEffect(() => {
     if (stationName !== null) setName(stationName);
     if (stationTextAlign) setTextAlign(stationTextAlign);
-  }, [stationName, stationTextAlign]);
+    if (stationTextRotation !== null) setTextRotation(stationTextRotation);
+  }, [stationName, stationTextAlign, stationTextRotation]);
 
   useEffect(() => {
     if (!stationId || stationName === null) return;
     if (nameUpdateTimerRef.current) clearTimeout(nameUpdateTimerRef.current);
     if (name !== stationName) {
-      nameUpdateTimerRef.current = setTimeout(() => { onUpdateStation(name, textAlign); }, 500);
+      nameUpdateTimerRef.current = setTimeout(() => { onUpdateStation(name, textAlign, textRotation); }, 500);
     }
     return () => { if (nameUpdateTimerRef.current) clearTimeout(nameUpdateTimerRef.current); };
   }, [name]);
 
   useEffect(() => {
     if (!stationId || stationTextAlign === null) return;
-    if (textAlign !== stationTextAlign) onUpdateStation(name, textAlign);
+    if (textAlign !== stationTextAlign) onUpdateStation(name, textAlign, textRotation);
   }, [textAlign]);
+
+  useEffect(() => {
+    if (!stationId || stationTextRotation === null) return;
+    if (textRotation !== stationTextRotation) onUpdateStation(name, textAlign, textRotation);
+  }, [textRotation]);
 
   if (!stationId || stationName === null) {
     return (
@@ -121,6 +131,16 @@ const EditStationSection: React.FC = () => {
             <option value="top">Top</option>
             <option value="bottom">Bottom</option>
           </select>
+        </div>
+        <div style={{ marginBottom: '8px' }}>
+          <label htmlFor="edit-station-text-rotation">Text Rotation (°)</label>
+          <input
+            className="input"
+            id="edit-station-text-rotation"
+            type="number"
+            value={textRotation}
+            onChange={(e) => setTextRotation(Number(e.target.value))}
+          />
         </div>
         <div className="two-column" style={{ marginBottom: '8px' }}>
           <button className="button button--secondary" onClick={() => postMessageToPlugin({ type: 'copy-station', stationId, direction: 'forwards' })}>

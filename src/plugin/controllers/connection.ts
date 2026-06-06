@@ -136,6 +136,7 @@ export class ConnectionController extends BaseController {
         stationId: station.id,
         stationName: station.name,
         textAlign: station.textAlign,
+        textRotation: station.textRotation,
         lines
       });
     }

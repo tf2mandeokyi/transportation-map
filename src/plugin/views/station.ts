@@ -3,7 +3,6 @@ import { Model } from "../models";
 import { renderStation, renderStationLine } from "../figmls";
 import { ErrorChain } from "../error";
 import { HVAlign, LineId, RoadSectionId, StationId } from "@/common/types";
-import { getStationAnchorPoint } from "../utils/anchor";
 import {
   evalCubicBezier,
   evalCubicBezierTangent,
@@ -107,11 +106,10 @@ export class StationRenderer {
     frame.clipsContent = false;
     frame.children.forEach(child => child.remove());
 
-    const children = await this.renderStationWithTemplate(frame, station, state);
-
     const position = computeStationPosition(station, state);
     const tangentAngle = computeStationTangentAngle(station, state);
-    const anchor = getStationAnchorPoint(station.textAlign);
+
+    const children = await this.renderStationWithTemplate(frame, station, state, tangentAngle);
 
     // Figma's rotation is CCW on screen; atan2 gives a CW angle, so negate.
     frame.rotation = -tangentAngle;
@@ -123,13 +121,8 @@ export class StationRenderer {
     //   rday = dax*sin(θ) + day*cos(θ)
     const w = frame.width;
     const h = frame.height;
-    const θ = tangentAngle * Math.PI / 180;
-    const dax = anchor.x * w - w / 2;
-    const day = anchor.y * h - h / 2;
-    const rdax = dax * Math.cos(θ) - day * Math.sin(θ);
-    const rday = dax * Math.sin(θ) + day * Math.cos(θ);
-    frame.x = position.x - rdax - w / 2;
-    frame.y = position.y - rday - h / 2;
+    frame.x = position.x - w / 2;
+    frame.y = position.y - h / 2;
 
     const maxWidth = children.reduce((max, c) => Math.max(max, c.node.width), 0);
     this.storeLineConnectionPoints(station, children, maxWidth);
@@ -138,7 +131,8 @@ export class StationRenderer {
   private async renderStationWithTemplate(
     parentFrame: FrameNode,
     station: Station,
-    state: Readonly<MapState>
+    state: Readonly<MapState>,
+    tangentAngle: number,
   ): Promise<{ line: Line; segmentIndex: number; node: SceneNode }[]> {
     const { rotation, stopLineFacing, textLocation, reverseOrder } = this.getLayoutParams(station.textAlign);
 
@@ -163,6 +157,7 @@ export class StationRenderer {
       text: station.name,
       visible: true,
       rotation,
+      textRotation: station.textRotation + tangentAngle,
       children: children.map(c => c.node),
       align,
       textLocation
@@ -180,13 +175,13 @@ export class StationRenderer {
   } {
     switch (textAlign) {
       case 'right':
-        return { rotation: 0,  stopLineFacing: 'left',  textLocation: 'right',  reverseOrder: false };
+        return { rotation: 0, stopLineFacing: 'left',  textLocation: 'right',  reverseOrder: false };
       case 'left':
-        return { rotation: 0,  stopLineFacing: 'right', textLocation: 'left',   reverseOrder: false };
+        return { rotation: 0, stopLineFacing: 'right', textLocation: 'left',   reverseOrder: false };
       case 'bottom':
-        return { rotation: 90, stopLineFacing: 'left',  textLocation: 'bottom', reverseOrder: false };
+        return { rotation: 0, stopLineFacing: 'left',  textLocation: 'bottom', reverseOrder: false };
       case 'top':
-        return { rotation: 90, stopLineFacing: 'right', textLocation: 'top',    reverseOrder: false };
+        return { rotation: 0, stopLineFacing: 'right', textLocation: 'top',    reverseOrder: false };
     }
   }
 
