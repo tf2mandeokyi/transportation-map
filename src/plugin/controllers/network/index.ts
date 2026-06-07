@@ -205,6 +205,10 @@ export class NetworkController extends BaseController {
   private async onNodePositionChanged(nodeId: NodeId, newPos: { x: number; y: number }): Promise<void> {
     const currentCenter = this.getNodeCenter(nodeId);
     const delta = { x: newPos.x - currentCenter.x, y: newPos.y - currentCenter.y };
+    // Ignore sub-pixel deltas: our own render places nodes at exactly the model
+    // position, so the post-render documentchange always produces delta ≈ 0.
+    // A real user drag in Figma always moves by at least a pixel.
+    if (Math.abs(delta.x) < 0.5 && Math.abs(delta.y) < 0.5) return;
     const node = this.model.getState().nodes.get(nodeId);
     if (node && node.roadConnections.length > 0) {
       this.model.moveNodeConnections(nodeId, delta);
