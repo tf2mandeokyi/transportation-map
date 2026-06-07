@@ -6,7 +6,6 @@ import { getLineDirectionAtStop } from "../utils/section";
 import {
   evalCubicBezier,
   evalCubicBezierTangent,
-  offsetBezier,
   TRACK_SPACING,
   BezierPoints,
 } from "../utils/bezier";
@@ -29,20 +28,6 @@ function computeRoadBezier(road: Road, state: Readonly<MapState>): BezierPoints 
   return { p0, p1, p2, p3 };
 }
 
-function computeSectionBezier(road: Road, sectionId: RoadSectionId, state: Readonly<MapState>): BezierPoints | null {
-  const base = computeRoadBezier(road, state);
-  if (!base) return null;
-
-  const section = road.sections.get(sectionId);
-  if (!section) return null;
-
-  const sections = Array.from(road.sections.values());
-  const center = (sections.length - 1) / 2;
-  const offset = (section.index - center) * TRACK_SPACING;
-
-  return offset === 0 ? base : offsetBezier(base, offset);
-}
-
 function findRoadForSection(sectionId: RoadSectionId, state: Readonly<MapState>): Road | null {
   for (const road of state.roads.values()) {
     if (road.sections.has(sectionId)) return road;
@@ -55,10 +40,23 @@ function computeStationPosition(station: Station, state: Readonly<MapState>): Ve
   const road = findRoadForSection(station.roadSectionId, state);
   if (!road) return { x: 0, y: 0 };
 
-  const bezier = computeSectionBezier(road, station.roadSectionId, state);
-  if (!bezier) return { x: 0, y: 0 };
+  const base = computeRoadBezier(road, state);
+  if (!base) return { x: 0, y: 0 };
 
-  return evalCubicBezier(bezier, station.interpT);
+  const section = road.sections.get(station.roadSectionId);
+  if (!section) return { x: 0, y: 0 };
+
+  const sections = Array.from(road.sections.values());
+  const center = (sections.length - 1) / 2;
+  const offset = (section.index - center) * TRACK_SPACING;
+
+  const pos = evalCubicBezier(base, station.interpT);
+  if (offset === 0) return pos;
+
+  const tangent = evalCubicBezierTangent(base, station.interpT);
+  const len = Math.hypot(tangent.x, tangent.y);
+  if (len < 0.001) return pos;
+  return { x: pos.x + (-tangent.y / len) * offset, y: pos.y + (tangent.x / len) * offset };
 }
 
 function computeStationTangentAngle(station: Station, state: Readonly<MapState>): number {
@@ -66,10 +64,10 @@ function computeStationTangentAngle(station: Station, state: Readonly<MapState>)
   const road = findRoadForSection(station.roadSectionId, state);
   if (!road) return 0;
 
-  const bezier = computeSectionBezier(road, station.roadSectionId, state);
-  if (!bezier) return 0;
+  const base = computeRoadBezier(road, state);
+  if (!base) return 0;
 
-  const tangent = evalCubicBezierTangent(bezier, station.interpT);
+  const tangent = evalCubicBezierTangent(base, station.interpT);
   return Math.atan2(tangent.y, tangent.x) * 180 / Math.PI;
 }
 
@@ -109,13 +107,20 @@ export class StationRenderer {
 
     const children = await this.renderStationWithTemplate(frame, station, state, tangentAngle);
 
-    // Figma's rotation is CCW on screen; atan2 gives a CW angle, so negate.
-    frame.rotation = -tangentAngle;
-
+    // Read intrinsic dimensions before rotation (rotation doesn't change them, but
+    // this makes intent clear).
     const w = frame.width;
     const h = frame.height;
-    frame.x = position.x - w / 2;
-    frame.y = position.y - h / 2;
+
+    // Figma's rotation is CCW on screen; atan2 gives a CW angle, so negate.
+    // frame.x/y = relativeTransform translation. Setting rotation rotates around
+    // the top-left corner (x/y stays fixed), so we must solve for the tx/ty that
+    // places the rotated frame's center at `position`.
+    // Center = R(θ) * [w/2, h/2]^T + [tx, ty], where R(-θ) is Figma's CCW rotation.
+    frame.rotation = -tangentAngle;
+    const θRad = tangentAngle * Math.PI / 180;
+    frame.x = position.x - Math.cos(θRad) * w / 2 + Math.sin(θRad) * h / 2;
+    frame.y = position.y - Math.sin(θRad) * w / 2 - Math.cos(θRad) * h / 2;
 
     const maxWidth = children.reduce((max, c) => Math.max(max, c.node.width), 0);
     this.storeLineConnectionPoints(station, children, maxWidth);
