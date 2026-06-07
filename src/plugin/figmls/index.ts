@@ -5,6 +5,7 @@ import stationLineFigml from "./station-line.figml";
 import stationLineDotFigml from "./station-line-dot.figml";
 import stationLineTextFigml from "./station-line-text.figml";
 import { RenderResult } from "../figml-parser/result";
+
 import { FigmlParser } from "../figml-parser";
 import { FigmlAlignment } from "../figml-parser/types";
 import { hexToRgb } from "@/common/utils/color";
@@ -44,7 +45,7 @@ interface StationProps {
   textRotation: number,
   textLocation: 'left' | 'right' | 'top' | 'bottom',
   align: FigmlAlignment,
-  children: SceneNode[]
+  children: RenderResult[]
 }
 export function renderStation({ text, visible, rotation, textRotation, textLocation, align, children }: StationProps): RenderResult {
   return STATION_TEMPLATE.render({ text, visible, rotation, textRotation, align, children }, { textLocation });

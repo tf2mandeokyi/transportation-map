@@ -12,15 +12,23 @@ export class FrameRenderer extends BaseRenderer {
 
     // Handle special case for children prop
     if (node.content?.onlyHasChildrenTemplate() && props.children) {
-      const children = props.children;
-      if (Array.isArray(children)) {
-        for (const child of children) {
-          frame.appendChild(child);
+      const propChildren = props.children;
+      if (Array.isArray(propChildren)) {
+        for (const child of propChildren) {
+          if (child instanceof RenderResult) {
+            frame.appendChild(child.node);
+            children.push(child);
+          } else {
+            frame.appendChild(child as SceneNode);
+          }
         }
-      } else if (typeof children === 'number' || typeof children === 'string' || typeof children === 'boolean' || isRgbObject(children)) {
-        throw new Error("Invalid type for children prop: " + typeof children);
+      } else if (propChildren instanceof RenderResult) {
+        frame.appendChild(propChildren.node);
+        children.push(propChildren);
+      } else if (typeof propChildren === 'number' || typeof propChildren === 'string' || typeof propChildren === 'boolean' || isRgbObject(propChildren)) {
+        throw new Error("Invalid type for children prop: " + typeof propChildren);
       } else {
-        frame.appendChild(children);
+        frame.appendChild(propChildren as SceneNode);
       }
     } else if (node.children.length > 0) {
       // Render normal children but defer appendChild

@@ -1,7 +1,6 @@
 import { Line, MapState, Road, Station } from "../models/structures";
 import { Model } from "../models";
 import { renderStation, renderStationLine } from "../figmls";
-import { ErrorChain } from "../error";
 import { HVAlign, LineId, RoadSectionId, StationId } from "@/common/types";
 import { getLineDirectionAtStop } from "../utils/section";
 import {
@@ -113,11 +112,6 @@ export class StationRenderer {
     // Figma's rotation is CCW on screen; atan2 gives a CW angle, so negate.
     frame.rotation = -tangentAngle;
 
-    // Position the frame so the anchor point in frame-local space lands at `position` in canvas.
-    // Figma rotates CCW by α = -tangentAngle, which equals CW by tangentAngle (θ).
-    // For CW rotation θ, a local offset (dax, day) from center maps to canvas offset:
-    //   rdax = dax*cos(θ) - day*sin(θ)
-    //   rday = dax*sin(θ) + day*cos(θ)
     const w = frame.width;
     const h = frame.height;
     frame.x = position.x - w / 2;
@@ -136,18 +130,16 @@ export class StationRenderer {
     const { rotation, textLocation, reverseOrder } = this.getLayoutParams(station.textAlign);
 
     const lines = this.getLinesForStation(station, state);
-    const children = await Promise.all(lines.map(async ({ line, segmentIndex, facing }) => {
-      const node = await renderStationLine({
-          text: line.name,
-          color: line.color,
-          stops: true,
-          visible: true,
-          facing
-        })
-        .intoNode()
-        .catch(ErrorChain.thrower(`Error rendering line ${line.name} at station ${station.name}`));
-      return { line, segmentIndex, node };
-    }));
+    const children = lines.map(({ line, segmentIndex, facing }) => {
+      const result = renderStationLine({
+        text: line.name,
+        color: line.color,
+        stops: true,
+        visible: true,
+        facing
+      });
+      return { line, segmentIndex, result };
+    });
 
     if (reverseOrder) children.reverse();
 
@@ -159,13 +151,13 @@ export class StationRenderer {
       visible: true,
       rotation,
       textRotation: station.textRotation + tangentAngle,
-      children: children.map(c => c.node),
+      children: children.map(c => c.result),
       align,
       textLocation
     }).intoNode();
 
     parentFrame.appendChild(stationElement);
-    return children;
+    return children.map(({ line, segmentIndex, result }) => ({ line, segmentIndex, node: result.node }));
   }
 
   private getLayoutParams(textAlign: HVAlign): {
@@ -208,16 +200,11 @@ export class StationRenderer {
       return a.segmentIndex - b.segmentIndex;
     });
 
-    const forwardFacing: 'left' | 'right' =
-      (station.textAlign === 'right' || station.textAlign === 'bottom') ? 'left' : 'right';
-
     return result.map(({ lineId, segmentIndex }) => {
       const line = state.lines.get(lineId)!;
       if (!line) return null;
       const dir = getLineDirectionAtStop(line, segmentIndex, state);
-      const facing: 'left' | 'right' = dir === 'forward'
-        ? forwardFacing
-        : (forwardFacing === 'left' ? 'right' : 'left');
+      const facing: 'left' | 'right' = dir === 'forward' ? 'right' : 'left';
       return { line, segmentIndex, facing };
     }).filter((item): item is { line: Line; segmentIndex: number; facing: 'left' | 'right' } => item !== null);
   }
