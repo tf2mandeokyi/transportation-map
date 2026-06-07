@@ -33,11 +33,9 @@ classDiagram
         id: string
         name?: string
         index: integer
-        isReverseDirection: boolean
     }
 
     %% index = lateral ordering, 0 = leftmost when facing Connection[1]
-    %% isReverseDirection = track runs Connection[1]→Connection[0] instead of canonical direction
     %% each RoadSection spans the full length of the Road
 
     Road "1" *-- "1..n" RoadSection
@@ -50,7 +48,7 @@ classDiagram
         interpT: float
     }
 
-    %% interpT: 0 = Connection[0] end, 1 = Connection[1] end (unaffected by isReverseDirection)
+    %% interpT: 0 = Connection[0] end, 1 = Connection[1] end
 
     RoadSection "1" *-- "0..n" Station
 
@@ -96,8 +94,6 @@ classDiagram
         lineStackingOrder: LineId[]
     }
 
-    %% rightHandTraffic dropped — replaced by RoadSection.isReverseDirection (per-section)
-
     %% ─── Removed from old model ───
     %% Station.position (Vector)       → replaced by interpT on RoadSection
     %% Station.orientation             → replaced by textAlign: HVAlign
@@ -106,4 +102,4 @@ classDiagram
     %% Line.path (StationId[])         → replaced by LinePath / StationStop / RoadSectionEnter
     %% Line.color (RGB)                → changed to string (hex)
     %% LineStopInfo.stopsAt            → replaced by StationStop (presence implies stop)
-    %% MapState.rightHandTraffic       → replaced by RoadSection.isReverseDirection
+    %% MapState.rightHandTraffic       → dropped

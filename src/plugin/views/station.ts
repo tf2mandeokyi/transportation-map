@@ -1,23 +1,79 @@
-import { Line, MapState, Station } from "../models/structures";
+import { Line, MapState, Road, Station } from "../models/structures";
 import { Model } from "../models";
 import { renderStation, renderStationLine } from "../figmls";
-import { ErrorChain } from "../error";
-import { LineId, StationId, StationOrientation } from "../../common/types";
-import { getStationAnchorPoint } from "../utils/anchor";
+import { HVAlign, LineId, RoadSectionId, StationId } from "@/common/types";
+import { getLineDirectionAtStop } from "../utils/section";
+import {
+  evalQuadraticBezier,
+  evalQuadraticBezierTangent,
+  TRACK_SPACING,
+  QuadBezierPoints,
+} from "../utils/bezier";
 
 export interface ConnectionPoints {
-  head: Vector,
-  tail: Vector,
-  alignStart: Vector,
-  alignEnd: Vector
+  head: Vector;
+  tail: Vector;
+}
+
+function computeRoadBezier(road: Road, state: Readonly<MapState>): QuadBezierPoints | null {
+  const startNode = state.nodes.get(road.startNodeId);
+  const endNode = state.nodes.get(road.endNodeId);
+  if (!startNode || !endNode) return null;
+
+  const p0 = road.endpoints[0].endpointPos;
+  const p1 = road.bezierMidPoint;
+  const p2 = road.endpoints[1].endpointPos;
+
+  return { p0, p1, p2 };
+}
+
+function findRoadForSection(sectionId: RoadSectionId, state: Readonly<MapState>): Road | null {
+  for (const road of state.roads.values()) {
+    if (road.sections.has(sectionId)) return road;
+  }
+  return null;
+}
+
+function computeStationPosition(station: Station, state: Readonly<MapState>): Vector {
+  if (!station.roadSectionId) return { x: 0, y: 0 };
+  const road = findRoadForSection(station.roadSectionId, state);
+  if (!road) return { x: 0, y: 0 };
+
+  const base = computeRoadBezier(road, state);
+  if (!base) return { x: 0, y: 0 };
+
+  const section = road.sections.get(station.roadSectionId);
+  if (!section) return { x: 0, y: 0 };
+
+  const sections = Array.from(road.sections.values());
+  const center = (sections.length - 1) / 2;
+  const offset = (section.index - center) * TRACK_SPACING;
+
+  const pos = evalQuadraticBezier(base, station.interpT);
+  if (offset === 0) return pos;
+
+  const tangent = evalQuadraticBezierTangent(base, station.interpT);
+  const len = Math.hypot(tangent.x, tangent.y);
+  if (len < 0.001) return pos;
+  return { x: pos.x + (-tangent.y / len) * offset, y: pos.y + (tangent.x / len) * offset };
+}
+
+function computeStationTangentAngle(station: Station, state: Readonly<MapState>): number {
+  if (!station.roadSectionId) return 0;
+  const road = findRoadForSection(station.roadSectionId, state);
+  if (!road) return 0;
+
+  const base = computeRoadBezier(road, state);
+  if (!base) return 0;
+
+  const tangent = evalQuadraticBezierTangent(base, station.interpT);
+  return Math.atan2(tangent.y, tangent.x) * 180 / Math.PI;
 }
 
 export class StationRenderer {
-  private figmaStationMap: Map<StationId, SceneNode> = new Map();
-  private lineConnectionPoints: Map<string, ConnectionPoints> = new Map();
+  private readonly figmaStationMap: Map<StationId, SceneNode> = new Map();
+  private readonly lineConnectionPoints: Map<string, ConnectionPoints> = new Map();
   private model?: Model;
-
-  constructor() {}
 
   public setModel(model: Model): void {
     this.model = model;
@@ -26,7 +82,7 @@ export class StationRenderer {
   public async renderStation(station: Station, state: Readonly<MapState>): Promise<void> {
     let frame: FrameNode | null = null;
     if (station.figmaNodeId) {
-      try { frame = await figma.getNodeByIdAsync(station.figmaNodeId) as FrameNode | null }
+      try { frame = await figma.getNodeByIdAsync(station.figmaNodeId) as FrameNode; }
       catch {}
     }
     if (!frame) {
@@ -43,170 +99,149 @@ export class StationRenderer {
 
     frame.fills = [];
     frame.clipsContent = false;
-
-    // Clear existing children and rebuild
     frame.children.forEach(child => child.remove());
 
-    // Use figml template to render the station
-    const children = await this.renderStationWithTemplate(frame, station, state);
+    const position = computeStationPosition(station, state);
+    const tangentAngle = computeStationTangentAngle(station, state);
 
-    // Position frame based on anchor point determined by orientation
-    // IMPORTANT: This must happen AFTER rendering content, when frame has correct width/height
-    const isRightHandTraffic = this.model?.isRightHandTraffic() || true;
-    const anchor = getStationAnchorPoint(station.orientation, isRightHandTraffic);
-    frame.x = station.position.x - frame.width * anchor.x;
-    frame.y = station.position.y - frame.height * anchor.y;
+    const children = await this.renderStationWithTemplate(frame, station, state, tangentAngle);
+
+    // Read intrinsic dimensions before rotation (rotation doesn't change them, but
+    // this makes intent clear).
+    const w = frame.width;
+    const h = frame.height;
+
+    // Figma's rotation is CCW on screen; atan2 gives a CW angle, so negate.
+    // frame.x/y = relativeTransform translation. Setting rotation rotates around
+    // the top-left corner (x/y stays fixed), so we must solve for the tx/ty that
+    // places the rotated frame's center at `position`.
+    // Center = R(θ) * [w/2, h/2]^T + [tx, ty], where R(-θ) is Figma's CCW rotation.
+    frame.rotation = -tangentAngle;
+    const θRad = tangentAngle * Math.PI / 180;
+    frame.x = position.x - Math.cos(θRad) * w / 2 + Math.sin(θRad) * h / 2;
+    frame.y = position.y - Math.sin(θRad) * w / 2 - Math.cos(θRad) * h / 2;
 
     const maxWidth = children.reduce((max, c) => Math.max(max, c.node.width), 0);
-
-    // After rendering, calculate and store the absolute center position of each line's dot
     this.storeLineConnectionPoints(station, children, maxWidth);
   }
 
-  private async renderStationWithTemplate(parentFrame: FrameNode, station: Station, state: Readonly<MapState>): Promise<{ line: Line, segmentIndex: number, node: SceneNode }[]> {
-    // Determine station configurations
-    const isRightHandTraffic = this.model?.isRightHandTraffic() || true;
-    const textLocation = this.getTextLocation(station.orientation, isRightHandTraffic);
-    const rotation = this.getRotation(station.orientation);
-    const stopLineFacing = this.getStopLineFacing(station.orientation);
-    const reverseStationOrder = this.shouldReverseStationOrder(station.orientation, isRightHandTraffic);
+  private async renderStationWithTemplate(
+    parentFrame: FrameNode,
+    station: Station,
+    state: Readonly<MapState>,
+    tangentAngle: number,
+  ): Promise<{ line: Line; segmentIndex: number; node: SceneNode }[]> {
+    const { rotation, textLocation, reverseOrder } = this.getLayoutParams(station.textAlign);
 
-    // Get lines for this station
     const lines = this.getLinesForStation(station, state);
-    const children = await Promise.all(lines.map(async ({ line, segmentIndex, stopsAt }) => {
-      const node = await renderStationLine({
-          text: line.name,
-          color: line.color,
-          stops: stopsAt,
-          visible: !station.hidden,
-          facing: stopLineFacing
-        })
-        .intoNode()
-        .catch(ErrorChain.thrower(`Error rendering line ${line.name} at station ${station.name}`));
-      return { line, segmentIndex, node };
-    }));
+    const children = lines.map(({ line, segmentIndex, facing }) => {
+      const result = renderStationLine({
+        text: line.name,
+        color: line.color,
+        stops: true,
+        visible: true,
+        facing
+      });
+      return { line, segmentIndex, result };
+    });
 
-    if (reverseStationOrder) {
-      children.reverse();
-    }
+    if (reverseOrder) children.reverse();
 
-    // Render the station container using the station template
-    const align = `${stopLineFacing},center` as const;
+    const forwardFacing: 'left' | 'right' =
+      (station.textAlign === 'right' || station.textAlign === 'bottom') ? 'left' : 'right';
+    const align = `${forwardFacing},center` as const;
     const stationElement = await renderStation({
       text: station.name,
-      visible: !station.hidden,
-      rotation, children: children.map(c => c.node),
-      align, textLocation
+      visible: true,
+      rotation,
+      textRotation: station.textRotation + tangentAngle,
+      children: children.map(c => c.result),
+      align,
+      textLocation
     }).intoNode();
 
     parentFrame.appendChild(stationElement);
-
-    return children;
+    return children.map(({ line, segmentIndex, result }) => ({ line, segmentIndex, node: result.node }));
   }
 
-  private getTextLocation(orientation: StationOrientation, isRightHandTraffic: boolean): 'left' | 'right' | 'top' | 'bottom' {
-    switch (orientation) {
-      case 'LEFT': return isRightHandTraffic ? 'top' : 'bottom';
-      case 'RIGHT': return isRightHandTraffic ? 'bottom' : 'top';
-      case 'UP': return isRightHandTraffic ? 'right' : 'left';
-      case 'DOWN': return isRightHandTraffic ? 'left' : 'right';
-      default: return 'top';
+  private getLayoutParams(textAlign: HVAlign): {
+    rotation: number;
+    textLocation: 'left' | 'right' | 'top' | 'bottom';
+    reverseOrder: boolean;
+  } {
+    switch (textAlign) {
+      case 'right':  return { rotation: 0, textLocation: 'right',  reverseOrder: false };
+      case 'left':   return { rotation: 0, textLocation: 'left',   reverseOrder: false };
+      case 'bottom': return { rotation: 0, textLocation: 'bottom', reverseOrder: false };
+      case 'top':    return { rotation: 0, textLocation: 'top',    reverseOrder: false };
     }
   }
 
-  private getRotation(orientation: StationOrientation): number {
-    switch (orientation) {
-      case 'UP': case 'DOWN': return 90; // Rotate 90 degrees for vertical orientations
-      case 'LEFT': case 'RIGHT': return 0; // No rotation for horizontal orientations
-    }
-  }
-
-  private getStopLineFacing(orientation: StationOrientation): 'left' | 'right' {
-    switch (orientation) {
-      case 'LEFT': case 'DOWN': return 'left';
-      case 'RIGHT': case 'UP': return 'right';
-    }
-  }
-
-  private shouldReverseStationOrder(orientation: StationOrientation, isRightHandTraffic: boolean): boolean {
-    switch (orientation) {
-      case 'LEFT': return !isRightHandTraffic;
-      case 'RIGHT': return isRightHandTraffic;
-      case 'UP': return isRightHandTraffic;
-      case 'DOWN': return !isRightHandTraffic;
-    }
-  }
-
-  private getLinesForStation(station: Station, state: Readonly<MapState>): Array<{line: Line, stopsAt: boolean, segmentIndex: number}> {
-    if (!this.model) return [];
-
-    // Collect all instances where lines visit this station (with their segment indices)
-    const lineVisits: Array<{lineId: LineId, segmentIndex: number}> = [];
+  private getLinesForStation(
+    station: Station, state: Readonly<MapState>
+  ): Array<{ line: Line; segmentIndex: number; facing: 'left' | 'right' }> {
+    const result: Array<{ lineId: LineId; segmentIndex: number }> = [];
 
     for (const line of state.lines.values()) {
-      // Find all positions where this station appears in the line's path
-      for (let i = 0; i < line.path.length; i++) {
-        if (line.path[i] === station.id) {
-          lineVisits.push({ lineId: line.id, segmentIndex: i });
+      for (let i = 0; i < line.paths.length; i++) {
+        const path = line.paths[i];
+        if (path.kind === 'station-stop' && path.stationId === station.id) {
+          result.push({ lineId: line.id, segmentIndex: i });
         }
       }
     }
 
-    // Sort by: 1. global line stacking order, 2. segment index
-    const globalStackingOrder = state.lineStackingOrder;
-    lineVisits.sort((a, b) => {
-      const orderA = globalStackingOrder.indexOf(a.lineId);
-      const orderB = globalStackingOrder.indexOf(b.lineId);
-      if (orderA !== orderB) return orderA - orderB;
+    const globalOrder = state.lineStackingOrder;
+    result.sort((a, b) => {
+      const lineA = state.lines.get(a.lineId)!;
+      const lineB = state.lines.get(b.lineId)!;
+      const dirA = getLineDirectionAtStop(lineA, a.segmentIndex, state);
+      const dirB = getLineDirectionAtStop(lineB, b.segmentIndex, state);
+      if (dirA !== dirB) return dirA === 'forward' ? -1 : 1;
+      const oa = globalOrder.indexOf(a.lineId);
+      const ob = globalOrder.indexOf(b.lineId);
+      if (oa !== ob) return oa - ob;
       return a.segmentIndex - b.segmentIndex;
     });
 
-    // Map to line objects with stopsAt info
-    return lineVisits.map(visit => {
-      const line = state.lines.get(visit.lineId);
-      const lineInfo = station.lines.get(visit.lineId);
-      return {
-        line: line!,
-        stopsAt: lineInfo?.stopsAt || false,
-        segmentIndex: visit.segmentIndex
-      };
-    }).filter(item => item.line);
+    return result.map(({ lineId, segmentIndex }) => {
+      const line = state.lines.get(lineId)!;
+      if (!line) return null;
+      const dir = getLineDirectionAtStop(line, segmentIndex, state);
+      const facing: 'left' | 'right' = dir === 'forward' ? 'right' : 'left';
+      return { line, segmentIndex, facing };
+    }).filter((item): item is { line: Line; segmentIndex: number; facing: 'left' | 'right' } => item !== null);
   }
 
-  private storeLineConnectionPoints(station: Station, lines: Array<{line: Line, segmentIndex: number, node: SceneNode}>, maxWidth: number) {
-    for (let i = 0; i < lines.length; i++) {
-      const { line, node, segmentIndex } = lines[i];
-
-      // Use absoluteTransform to calculate transformed positions
-      // absoluteTransform is a 2x3 matrix: [[a, b, tx], [c, d, ty]]
-      // where (tx, ty) is the top-left corner position
+  private storeLineConnectionPoints(
+    station: Station,
+    lines: Array<{ line: Line; segmentIndex: number; node: SceneNode }>,
+    maxWidth: number
+  ) {
+    for (const { line, node, segmentIndex } of lines) {
       const transform = node.absoluteTransform;
       const width = node.width;
       const height = node.height;
 
-      // Calculate the four corners of the element in absolute coordinates
-      const centerLeft = this.applyTransform(transform, { x: 0, y: height / 2 });
-      const centerRight = this.applyTransform(transform, { x: width, y: height / 2 });
+      const centerLeft  = this.applyTransform(transform, { x: 0,        y: height / 2 });
+      const centerRight = this.applyTransform(transform, { x: width,    y: height / 2 });
 
-      let head: Vector, tail: Vector, alignStart: Vector, alignEnd: Vector;
-      switch (station.orientation) {
-        case 'LEFT':
-        case 'DOWN':
+      let head: Vector, tail: Vector;
+      switch (station.textAlign) {
+        case 'right':
+        case 'top':
           head = centerLeft;
-          tail = alignEnd = this.applyTransform(transform, { x: maxWidth, y: height / 2 });
-          alignStart = centerRight;
+          tail = this.applyTransform(transform, { x: maxWidth,          y: height / 2 });
           break;
-        case 'RIGHT':
-        case 'UP':
+        case 'left':
+        case 'bottom':
           head = centerRight;
-          tail = alignStart = this.applyTransform(transform, { x: width - maxWidth, y: height / 2 });
-          alignEnd = centerLeft;
+          tail = this.applyTransform(transform, { x: width - maxWidth, y: height / 2 });
           break;
       }
 
-      // Store the connection point with segment index
       const key = `${station.id}-${line.id}-${segmentIndex}`;
-      this.lineConnectionPoints.set(key, { head, tail, alignStart, alignEnd });
+      this.lineConnectionPoints.set(key, { head, tail });
     }
   }
 
@@ -218,8 +253,7 @@ export class StationRenderer {
   }
 
   public getConnectionPoint(stationId: StationId, lineId: LineId, segmentIndex: number): ConnectionPoints | undefined {
-    const key = `${stationId}-${lineId}-${segmentIndex}`;
-    return this.lineConnectionPoints.get(key);
+    return this.lineConnectionPoints.get(`${stationId}-${lineId}-${segmentIndex}`);
   }
 
   public clearConnectionPoints(): void {

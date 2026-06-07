@@ -1,15 +1,102 @@
-import { StationId, StationOrientation } from "../../common/types";
-import { Line, Station } from "../models/structures";
+import { Line, MapState, Road, RoadSectionEnter, Station } from "../models/structures";
 import { Model } from "../models";
 import { StationRenderer } from "./station";
+import { RoadSectionId } from "@/common/types";
+import {
+  elevateToCubic,
+  offsetBezierAdaptive,
+  subQuadBezier,
+  QuadBezierPoints,
+  CubicBezierPoints,
+  TRACK_SPACING,
+} from "../utils/bezier";
+import { JunctionShape } from "../utils/junction-shape";
+import { PathBuilder } from "../utils/path";
+import { getLinesForSection, lineOffsetInSection } from "../utils/section";
+import { hexToRgb } from "@/common/utils/color";
 
 interface BezierSegment {
   outline: VectorNode;
   main: VectorNode;
 }
 
+function computeRoadBezier(road: Road, state: Readonly<MapState>): QuadBezierPoints | null {
+  const startNode = state.nodes.get(road.startNodeId);
+  const endNode = state.nodes.get(road.endNodeId);
+  if (!startNode || !endNode) return null;
+
+  return {
+    p0: road.endpoints[0].endpointPos,
+    p1: road.bezierMidPoint,
+    p2: road.endpoints[1].endpointPos,
+  };
+}
+
+function findRoadForSection(sectionId: RoadSectionId, state: Readonly<MapState>): Road | null {
+  for (const road of state.roads.values()) {
+    if (road.sections.has(sectionId)) return road;
+  }
+  return null;
+}
+
+// Total lateral offset from the road centerline for this line on this section:
+// section-track offset + per-line offset within the section band.
+// If the line has no stations on the section it is placed at the outermost slot.
+function computeTotalOffset(line: Line, road: Road, sectionId: RoadSectionId, state: Readonly<MapState>): number {
+  const section = road.sections.get(sectionId);
+  if (!section) return 0;
+
+  const sections = Array.from(road.sections.values());
+  const center = (sections.length - 1) / 2;
+  const sectionOffset = (section.index - center) * TRACK_SPACING;
+
+  const lines = getLinesForSection(section, state);
+  const lineIndex = lines.findIndex(l => l.id === line.id);
+  const effectiveIdx   = lineIndex >= 0 ? lineIndex   : lines.length;
+  const effectiveCount = lineIndex >= 0 ? lines.length : lines.length + 1;
+  const lineOffset = lineOffsetInSection(effectiveIdx, Math.max(effectiveCount, 1));
+
+  return sectionOffset + lineOffset;
+}
+
+// Returns the offset bezier segments for one road-section sub-range.
+function computeSectionSegs(
+  line: Line, road: Road, sectionId: RoadSectionId,
+  t1: number, t2: number,
+  state: Readonly<MapState>,
+): CubicBezierPoints[] {
+  const centerline = computeRoadBezier(road, state);
+  if (!centerline) return [];
+
+  // Elevate the quadratic sub-segment to cubic before offsetting so the cubic
+  // Tiller-Hanson approximation has full degrees of freedom.
+  const sub = elevateToCubic(subQuadBezier(centerline, t1, t2));
+  const totalOffset = computeTotalOffset(line, road, sectionId, state);
+  // Normalize offset to the road's canonical direction (t=0→1). When traversing
+  // in reverse (t1 > t2), subQuadBezier flips the tangent, which would flip the
+  // perpendicular normal — negating here keeps all lines offset consistently.
+  const directedOffset = t1 > t2 ? -totalOffset : totalOffset;
+  return directedOffset === 0 ? [sub] : offsetBezierAdaptive(sub, directedOffset);
+}
+
+function appendJunctionCurve(pb: PathBuilder, prev: CubicBezierPoints, next: CubicBezierPoints): void {
+  // Tangent at t=1 of cubic: p3 - p2
+  const exitLen = Math.hypot(prev.p3.x - prev.p2.x, prev.p3.y - prev.p2.y);
+  const exitDir: Vector = exitLen < 0.001
+    ? { x: 1, y: 0 }
+    : { x: (prev.p3.x - prev.p2.x) / exitLen, y: (prev.p3.y - prev.p2.y) / exitLen };
+
+  // Tangent at t=0 of cubic: p1 - p0 (negated for "into junction" direction)
+  const entryLen = Math.hypot(next.p1.x - next.p0.x, next.p1.y - next.p0.y);
+  const entryDir: Vector = entryLen < 0.001
+    ? { x: -1, y: 0 }
+    : { x: -(next.p1.x - next.p0.x) / entryLen, y: -(next.p1.y - next.p0.y) / entryLen };
+
+  JunctionShape.appendGapCurve(pb, prev.p3, exitDir, next.p0, entryDir);
+}
+
 export class LineRenderer {
-  private stationRenderer: StationRenderer;
+  private readonly stationRenderer: StationRenderer;
   private model: Model | null = null;
 
   constructor(stationRenderer: StationRenderer) {
@@ -20,71 +107,64 @@ export class LineRenderer {
     this.model = model;
   }
 
-  public async clearAllSegments(): Promise<void> {
-    if (!this.model) return;
+  public async renderLine(line: Line, state: Readonly<MapState>): Promise<void> {
+    await this.cleanupOldLineGroup(line);
 
-    // Remove all line groups using the stored IDs in the model
-    const state = this.model.getState();
-    for (const line of state.lines.values()) {
-      if (line.figmaGroupId) {
-        try {
-          const node = await figma.getNodeByIdAsync(line.figmaGroupId);
-          if (node && !node.removed) {
-            node.remove();
-          }
-        } catch {
-          // Node doesn't exist anymore, that's fine
+    const segmentNodes: SceneNode[] = [];
+    const color = hexToRgb(line.color);
+
+    // Collect station stops with the RoadSectionEnter entries that precede each one.
+    // This allows segments between non-adjacent station stops (separated by RSE entries)
+    // to follow the correct roads.
+    type StopInfo = { pathIdx: number; station: Station };
+    const stops: StopInfo[] = [];
+    const rsesBefore: RoadSectionEnter[][] = []; // rsesBefore[i] = RSEs collected before stops[i]
+    let pendingRSEs: RoadSectionEnter[] = [];
+
+    for (const p of line.paths) {
+      if (p.kind === 'road-section-enter') {
+        pendingRSEs.push(p);
+      } else if (p.kind === 'station-stop') {
+        const station = state.stations.get(p.stationId);
+        if (station) {
+          stops.push({ pathIdx: p.index, station });
+          rsesBefore.push(pendingRSEs);
+          pendingRSEs = [];
         }
       }
     }
-  }
 
-  public async renderLine(line: Line, stations: Map<StationId, Station>): Promise<void> {
-    // Clean up old group if it exists (from previous render)
-    await this.cleanupOldLineGroup(line);
+    for (let si = 0; si < stops.length - 1; si++) {
+      const { pathIdx: startPathIdx, station: startStation } = stops[si];
+      const { pathIdx: endPathIdx, station: endStation } = stops[si + 1];
+      // RSEs that appeared between these two station stops.
+      const rseBetween = rsesBefore[si + 1];
 
-    // Collect all segment nodes first
-    const segmentNodes: SceneNode[] = [];
-
-    // Draw bezier curve segments between consecutive nodes in the line's path
-    for (let i = 0; i < line.path.length - 1; i++) {
-      const startStationId = line.path[i];
-      const endStationId = line.path[i + 1];
-
-      const startStation = stations.get(startStationId);
-      const endStation = stations.get(endStationId);
-
-      if (!startStation || !endStation) continue;
       const outlineNodes: VectorNode[] = [];
       const mainNodes: VectorNode[] = [];
 
-      const segmentGroup = this.renderLineSegment(line, i, startStation, endStation);
-      if (segmentGroup) {
-        outlineNodes.push(segmentGroup.outline);
-        mainNodes.push(segmentGroup.main);
+      const segment = this.renderLineSegment(
+        line, startPathIdx, endPathIdx,
+        startStation, endStation, rseBetween, color, state
+      );
+      if (segment) {
+        outlineNodes.push(segment.outline);
+        mainNodes.push(segment.main);
       }
 
-      if (i < line.path.length - 1) {
-        // Also render a small segment at the end station to create a "dot" effect
-        const middleSegment = this.renderMiddleSegment(line, i + 1, endStation);
-        if (middleSegment) {
-          outlineNodes.push(middleSegment.outline);
-          mainNodes.push(middleSegment.main);
-        }
+      if (outlineNodes.length > 0) {
+        segmentNodes.push(
+          figma.group(outlineNodes, figma.currentPage),
+          figma.group(mainNodes, figma.currentPage)
+        );
       }
-
-      const outlineGroup = figma.group(outlineNodes, figma.currentPage);
-      const mainGroup = figma.group(mainNodes, figma.currentPage);
-      segmentNodes.push(outlineGroup, mainGroup);
     }
 
-    // Create parent group for this line only if we have segments
     if (segmentNodes.length > 0) {
       const lineGroup = figma.group(segmentNodes, figma.currentPage);
       lineGroup.name = `Line: ${line.name}`;
-      lineGroup.locked = true; // Prevent accidental movement
+      lineGroup.locked = true;
 
-      // Store the group ID in the model
       if (this.model) {
         this.model.updateLineFigmaGroupId(line.id, lineGroup.id);
       }
@@ -92,75 +172,145 @@ export class LineRenderer {
   }
 
   private async cleanupOldLineGroup(line: Line): Promise<void> {
-    // Remove old group using the stored ID in the model
     if (line.figmaGroupId) {
       try {
         const oldGroup = await figma.getNodeByIdAsync(line.figmaGroupId);
-        if (oldGroup && !oldGroup.removed) {
-          oldGroup.remove();
-        }
-      } catch {
-        // Node doesn't exist anymore, that's fine
+        if (oldGroup && !oldGroup.removed) oldGroup.remove();
+      } catch {}
+    }
+  }
+
+  private renderLineSegment(
+    line: Line,
+    startPathIdx: number,
+    endPathIdx: number,
+    startStation: Station,
+    endStation: Station,
+    rseBetween: RoadSectionEnter[],
+    color: RGB,
+    state: Readonly<MapState>
+  ): BezierSegment | null {
+    const startPoints = this.stationRenderer.getConnectionPoint(startStation.id, line.id, startPathIdx);
+    const endPoints   = this.stationRenderer.getConnectionPoint(endStation.id,   line.id, endPathIdx);
+
+    if (!startPoints || !endPoints) {
+      console.warn(`Missing connection points for line ${line.id}`);
+      return null;
+    }
+
+    const pathData = this.buildSegmentPath(
+      line, startStation, endStation, rseBetween,
+      startPoints.head, endPoints.tail, state
+    );
+    return this.bezierPathToSegments(pathData, color);
+  }
+
+  private buildSegmentPath(
+    line: Line,
+    startStation: Station,
+    endStation: Station,
+    rseBetween: RoadSectionEnter[],
+    headCanvas: Vector,
+    tailCanvas: Vector,
+    state: Readonly<MapState>
+  ): string {
+    const startSectionId = startStation.roadSectionId;
+    const endSectionId = endStation.roadSectionId;
+
+    if (!startSectionId || !endSectionId) {
+      return `M ${headCanvas.x} ${headCanvas.y} L ${tailCanvas.x} ${tailCanvas.y}`;
+    }
+
+    const startRoad = findRoadForSection(startSectionId, state);
+    const endRoad   = findRoadForSection(endSectionId,   state);
+    if (!startRoad || !endRoad) return `M ${headCanvas.x} ${headCanvas.y} L ${tailCanvas.x} ${tailCanvas.y}`;
+
+    const fallback = new PathBuilder().moveTo(headCanvas).lineTo(tailCanvas).build();
+
+    // Build the ordered road sequence from the RSE chain.
+    const roadSeq: Road[] = [startRoad];
+    for (const rse of rseBetween) {
+      const road = state.roads.get(rse.destRoadId);
+      if (road && roadSeq[roadSeq.length - 1].id !== road.id) roadSeq.push(road);
+    }
+    if (roadSeq[roadSeq.length - 1].id !== endRoad.id) roadSeq.push(endRoad);
+
+    // Index RSEs by destRoadId so we can look up the entry node for each road.
+    const rseByDest = new Map(rseBetween.map(rse => [rse.destRoadId, rse]));
+
+    // Single-road fast path.
+    if (roadSeq.length === 1) {
+      const segs = computeSectionSegs(line, startRoad, startSectionId, startStation.interpT, endStation.interpT, state);
+      if (segs.length === 0) return fallback;
+      return new PathBuilder().beziers(segs).build();
+    }
+
+    // Multi-road: collect offset segments per road, chain with smooth junction curves.
+    const entries: CubicBezierPoints[][] = [];
+
+    for (let i = 0; i < roadSeq.length; i++) {
+      const road = roadSeq[i];
+
+      // Section: use station-defined section for start/end roads; first section otherwise.
+      let sectionId: RoadSectionId;
+      if (i === 0) {
+        sectionId = startSectionId;
+      } else if (i === roadSeq.length - 1) {
+        sectionId = endSectionId;
+      } else {
+        const firstSec = road.sections.values().next().value;
+        if (!firstSec) continue;
+        sectionId = firstSec.id;
       }
-    }
-  }
 
-  private renderLineSegment(line: Line, segmentIndex: number, startStation: Station, endStation: Station): BezierSegment | null {
-    // Get the stored connection points for this line at both stations
-    // segmentIndex is the index of the start station, segmentIndex + 1 is the index of the end station
-    const startStationPoints = this.stationRenderer.getConnectionPoint(startStation.id, line.id, segmentIndex);
-    const endStationPoints = this.stationRenderer.getConnectionPoint(endStation.id, line.id, segmentIndex + 1);
+      // Entry T: start station's interpT for the first road; RSE node position for the rest.
+      let entryT: number;
+      if (i === 0) {
+        entryT = startStation.interpT;
+      } else {
+        const rse = rseByDest.get(road.id);
+        if (!rse) continue;
+        entryT = rse.nodeId === road.startNodeId ? 0 : 1;
+      }
 
-    if (!startStationPoints || !endStationPoints) {
-      console.warn(`Missing connection points for line ${line.id} (${line.name})`
-        + ` segment ${segmentIndex} between ${startStation.id} (${startStation.name})`
-        + ` and ${endStation.id} (${endStation.name})`);
-      return null;
-    }
+      // Exit T: end station's interpT for the last road; next RSE node position otherwise.
+      let exitT: number;
+      if (i === roadSeq.length - 1) {
+        exitT = endStation.interpT;
+      } else {
+        const rse = rseByDest.get(roadSeq[i + 1].id);
+        if (!rse) continue;
+        exitT = rse.nodeId === road.endNodeId ? 1 : 0;
+      }
 
-    // Calculate bezier curve control points for smooth curves based on station orientations
-    const pathData = this.createBezierPath(startStationPoints.head, endStationPoints.tail, startStation, endStation);
-    return this.bezierPathToSegments(pathData, line.color);
-  }
-
-  private renderMiddleSegment(line: Line, segmentIndex: number, station: Station): BezierSegment | null {
-    // Get the stored connection points for this line at the station
-    const stationPoints = this.stationRenderer.getConnectionPoint(station.id, line.id, segmentIndex);
-
-    if (!stationPoints) {
-      console.warn(`Missing connection points for line ${line.id} (${line.name}) segment ${segmentIndex} at station ${station.id} (${station.name})`);
-      return null;
+      const segs = computeSectionSegs(line, road, sectionId, entryT, exitT, state);
+      if (segs.length === 0) continue;
+      entries.push(segs);
     }
 
-    const pathData = this.createBezierPath(stationPoints.alignStart, stationPoints.alignEnd);
-    return this.bezierPathToSegments(pathData, line.color);
+    if (entries.length === 0) return fallback;
+
+    const pb = new PathBuilder().beziers(entries[0]);
+    for (let i = 1; i < entries.length; i++) {
+      const prevSegs = entries[i - 1];
+      const currSegs = entries[i];
+      appendJunctionCurve(pb, prevSegs[prevSegs.length - 1], currSegs[0]);
+      for (const { p1, p2, p3 } of currSegs) pb.cubicTo(p1, p2, p3);
+    }
+    return pb.build();
   }
 
   private bezierPathToSegments(pathData: string, color: RGB): BezierSegment | null {
-    // Create white outline (rendered first, so it's behind)
     const outlineNode = figma.createVector();
-    outlineNode.vectorPaths = [{
-      windingRule: 'NONZERO',
-      data: pathData
-    }];
-    outlineNode.strokes = [{
-      type: 'SOLID',
-      color: { r: 1, g: 1, b: 1 }
-    }];
+    outlineNode.vectorPaths = [{ windingRule: 'NONZERO', data: pathData }];
+    outlineNode.strokes = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];
     outlineNode.strokeWeight = 4;
     outlineNode.strokeCap = 'ROUND';
     outlineNode.strokeJoin = 'ROUND';
 
-    // Create colored main line (rendered second, so it's on top)
     const mainNode = figma.createVector();
-    mainNode.vectorPaths = [{
-      windingRule: 'NONZERO',
-      data: pathData
-    }];
-    mainNode.strokes = [{
-      type: 'SOLID',
-      color
-    }];
+    mainNode.vectorPaths = [{ windingRule: 'NONZERO', data: pathData }];
+    mainNode.strokes = [{ type: 'SOLID', color }];
     mainNode.strokeWeight = 2;
     mainNode.strokeCap = 'ROUND';
     mainNode.strokeJoin = 'ROUND';
@@ -168,48 +318,8 @@ export class LineRenderer {
     return { outline: outlineNode, main: mainNode };
   }
 
-  private createBezierPath(
-    start: {x: number, y: number},
-    end: {x: number, y: number},
-    startStation?: Station,
-    endStation?: Station
-  ): string {
-    // Calculate the distance between points
-    const dx = end.x - start.x;
-    const dy = end.y - start.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    // Control point distance is proportional to the segment length
-    // Adjust this factor (0.3) to control how "curvy" the lines are
-    const controlDistance = distance * 0.3;
-
-    // Get control point offsets based on station orientations
-    const startOffset = startStation ? this.getOrientationOffset(startStation.orientation, controlDistance) : { x: 0, y: 0 };
-    const endOffset = endStation ? this.getOrientationOffset(endStation.orientation, controlDistance) : { x: 0, y: 0 };
-
-    // Calculate control points based on station orientations
-    const cp1x = start.x + startOffset.x;
-    const cp1y = start.y + startOffset.y;
-    const cp2x = end.x - endOffset.x;
-    const cp2y = end.y - endOffset.y;
-
-    // Create cubic bezier curve path
-    return `M ${start.x} ${start.y} C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${end.x} ${end.y}`;
-  }
-
-  private getOrientationOffset(orientation: StationOrientation, distance: number): Vector {
-    switch (orientation) {
-      case 'RIGHT': return { x: distance, y: 0 };
-      case 'LEFT': return { x: -distance, y: 0 };
-      case 'DOWN': return { x: 0, y: distance };
-      case 'UP': return { x: 0, y: -distance };
-    }
-  }
-
   public async moveSegmentsToBack(): Promise<void> {
     if (!this.model) return;
-
-    // Move parent line groups to the back using stored IDs
     const state = this.model.getState();
     for (const line of state.lines.values()) {
       if (line.figmaGroupId) {
@@ -221,9 +331,20 @@ export class LineRenderer {
               parent.insertChild(0, lineGroup as SceneNode);
             }
           }
-        } catch {
-          // Node doesn't exist anymore, that's fine
-        }
+        } catch {}
+      }
+    }
+  }
+
+  public async clearAllSegments(): Promise<void> {
+    if (!this.model) return;
+    const state = this.model.getState();
+    for (const line of state.lines.values()) {
+      if (line.figmaGroupId) {
+        try {
+          const node = await figma.getNodeByIdAsync(line.figmaGroupId);
+          if (node && !node.removed) node.remove();
+        } catch {}
       }
     }
   }

@@ -1,7 +1,7 @@
 import { ErrorChain } from "../error";
 
 export class RenderResult {
-  private readonly node: SceneNode;
+  public readonly node: SceneNode;
   private readonly render: () => Promise<void>;
   private readonly applyVisibility: () => void;
 

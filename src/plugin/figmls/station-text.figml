@@ -1,5 +1,5 @@
-<component prop:text="Station" prop:visible="true" prop:align="center,bottom">
-  <frame align="$$prop:align$$" name="Station text" width="0" height="0" flow="vertical" clip="false" visible="$$prop:visible$$">
+<component prop:text="Station" prop:visible="true" prop:align="center,bottom" prop:rotation="0">
+  <frame align="$$prop:align$$" name="Station text" width="0" height="0" flow="vertical" clip="false" visible="$$prop:visible$$" rotation="$$prop:rotation$$">
     <text align="$$prop:align$$" fontSize="10" fontFamily="NanumSquare Neo" fill="#000000" style="Heavy" width="hug" height="hug">
       $$prop:text$$
     </text>

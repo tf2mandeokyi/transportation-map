@@ -1,38 +1,36 @@
 import React, { useState } from 'react';
-import { StationOrientation } from '../../common/types';
+import { HVAlign, RoadSectionId } from '@/common/types';
 import { postMessageToPlugin } from '../figma';
+import { useNetworkContext } from '../contexts/NetworkContext';
 
 const StationsSection: React.FC = () => {
+  const { roads } = useNetworkContext();
   const [stationName, setStationName] = useState('');
-  const [orientation, setOrientation] = useState<StationOrientation | 'UP,DOWN' | 'LEFT,RIGHT'>('RIGHT');
-  const [hidden, setHidden] = useState(false);
+  const [textAlign, setTextAlign] = useState<HVAlign>('right');
+  const [roadSectionId, setRoadSectionId] = useState<RoadSectionId | ''>('');
+  const [interpT, setInterpT] = useState(0.5);
+
+  const allSections = roads.flatMap(road =>
+    road.sections.map(s => {
+      const sectionName = s.name ?? `Section ${s.index}`;
+      return {
+        id: s.id,
+        label: `${road.name ?? road.id} / ${sectionName}`
+      }
+    })
+  );
 
   const handleAddStation = () => {
-    const stationData = {
-      name: stationName,
-      hidden
-    };
-
-    const sendAddStationMessage = (orientation: StationOrientation) => {
-      postMessageToPlugin({
-        type: 'add-station',
-        station: { ...stationData, orientation }
-      });
-    }
-
-    if (orientation === 'UP,DOWN') {
-      sendAddStationMessage('UP');
-      sendAddStationMessage('DOWN');
-      return;
-    }
-    else if (orientation === 'LEFT,RIGHT') {
-      sendAddStationMessage('LEFT');
-      sendAddStationMessage('RIGHT');
-      return;
-    }
-    sendAddStationMessage(orientation);
+    postMessageToPlugin({
+      type: 'add-station',
+      station: {
+        name: stationName,
+        textAlign,
+        roadSectionId: roadSectionId || undefined,
+        interpT: roadSectionId ? interpT : undefined
+      }
+    });
     setStationName('');
-    setHidden(false);
   };
 
   return (
@@ -52,31 +50,60 @@ const StationsSection: React.FC = () => {
             />
           </div>
           <div>
-            <label htmlFor="station-orientation">Facing</label>
+            <label htmlFor="station-text-align">Text Side</label>
             <select
               className="input"
-              id="station-orientation"
-              value={orientation}
-              onChange={(e) => setOrientation(e.target.value as StationOrientation)}
+              id="station-text-align"
+              value={textAlign}
+              onChange={(e) => setTextAlign(e.target.value as HVAlign)}
             >
-              <option value="RIGHT">Right</option>
-              <option value="LEFT">Left</option>
-              <option value="UP">Up</option>
-              <option value="DOWN">Down</option>
-              <option value="UP,DOWN">Up and Down</option>
-              <option value="LEFT,RIGHT">Left and Right</option>
+              <option value="right">Right</option>
+              <option value="left">Left</option>
+              <option value="top">Top</option>
+              <option value="bottom">Bottom</option>
             </select>
           </div>
         </div>
-        <div className="checkbox-container">
-          <input
-            type="checkbox"
-            id="station-hidden"
-            checked={hidden}
-            onChange={(e) => setHidden(e.target.checked)}
-          />
-          <label htmlFor="station-hidden">Hidden (shaping point)</label>
+
+        <div>
+          <label htmlFor="station-road-section">Road Section</label>
+          {allSections.length === 0 ? (
+            <p style={{ color: '#999', fontSize: '11px', margin: '4px 0' }}>
+              No road sections — add them in the Network tab.
+            </p>
+          ) : (
+            <select
+              className="input"
+              id="station-road-section"
+              value={roadSectionId}
+              onChange={(e) => setRoadSectionId(e.target.value as RoadSectionId | '')}
+            >
+              <option value="">(unlinked)</option>
+              {allSections.map(s => (
+                <option key={s.id} value={s.id}>{s.label}</option>
+              ))}
+            </select>
+          )}
         </div>
+
+        {roadSectionId && (
+          <div>
+            <label htmlFor="station-interp-t">
+              Position on road: {interpT.toFixed(2)}
+            </label>
+            <input
+              id="station-interp-t"
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={interpT}
+              onChange={(e) => setInterpT(Number.parseFloat(e.target.value))}
+              style={{ width: '100%' }}
+            />
+          </div>
+        )}
+
         <button className="button button--primary" onClick={handleAddStation}>
           Add Station
         </button>

@@ -2,40 +2,55 @@ import { MapState } from "../models/structures";
 import { Model } from "../models";
 import { StationRenderer } from "./station";
 import { LineRenderer } from "./line";
+import { RoadRenderer } from "./road";
 import { ErrorChain } from "../error";
 
 export class View {
   readonly stationRenderer: StationRenderer;
   readonly lineSegmentRenderer: LineRenderer;
+  readonly roadRenderer: RoadRenderer;
+  public isRendering = false;
 
   constructor() {
     this.stationRenderer = new StationRenderer();
     this.lineSegmentRenderer = new LineRenderer(this.stationRenderer);
+    this.roadRenderer = new RoadRenderer();
   }
 
   public setModel(model: Model): void {
     this.stationRenderer.setModel(model);
     this.lineSegmentRenderer.setModel(model);
+    this.roadRenderer.setModel(model);
   }
 
   public async render(state: Readonly<MapState>): Promise<void> {
-    // Clear connection points to recalculate them
-    this.stationRenderer.clearConnectionPoints();
+    this.isRendering = true;
+    try {
+      // 1. Draw road sections (bezier curves) — rendered first so they sit at the back
+      await this.roadRenderer.renderAll(state)
+        .catch(ErrorChain.thrower('Error rendering road network'));
 
-    // First render all stations to calculate and store connection points
-    await Promise.all([...state.stations.values()].map(station =>
-      this.stationRenderer.renderStation(station, state)
-        .catch(ErrorChain.thrower(`Error rendering station ${station.name}`))
-    ));
+      // 2. Clear connection points, then render stations on top of the road sections
+      this.stationRenderer.clearConnectionPoints();
+      await Promise.all([...state.stations.values()].map(station =>
+        this.stationRenderer.renderStation(station, state)
+          .catch(ErrorChain.thrower(`Error rendering station ${station.name}`))
+      ));
 
-    // Then render ALL lines using the stored connection points (with bezier curves)
-    // Each line will clean up its own old group before rendering
-    await Promise.all([...state.lines.values()].map(line =>
-      this.lineSegmentRenderer.renderLine(line, state.stations)
-        .catch(ErrorChain.thrower(`Error rendering line ${line.name}`))
-    ));
+      // 3. Render line segments using stored connection points
+      await Promise.all([...state.lines.values()].map(line =>
+        this.lineSegmentRenderer.renderLine(line, state)
+          .catch(ErrorChain.thrower(`Error rendering line ${line.name}`))
+      ));
 
-    // Finally, move all line segments to the back so they appear behind stations
-    await this.lineSegmentRenderer.moveSegmentsToBack();
+      // 4. Move line segments behind stations
+      await this.lineSegmentRenderer.moveSegmentsToBack();
+
+      // 5. Move all road infrastructure (roads, junctions, node markers) to the very back
+      //    so they sit below line segments and stations.
+      this.roadRenderer.moveAllToBack();
+    } finally {
+      this.isRendering = false;
+    }
   }
 }

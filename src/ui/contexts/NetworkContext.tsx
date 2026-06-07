@@ -1,0 +1,78 @@
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { NetworkFocusedElement, NodeData, RoadData } from '@/common/messages';
+import { NodeId } from '@/common/types';
+import { postMessageToPlugin } from '../figma';
+import { useMessageManager } from './MessageContext';
+
+type RoadCreationStep = 'idle' | 'first' | 'second';
+
+interface NetworkContextValue {
+  nodes: NodeData[];
+  roads: RoadData[];
+  networkFocus: NetworkFocusedElement | null;
+  roadCreationStep: RoadCreationStep;
+  roadCreationFirstNode: { id: NodeId; name?: string } | null;
+  handleStartRoadCreation: () => void;
+  handleCancelRoadCreation: () => void;
+}
+
+const NetworkContext = createContext<NetworkContextValue | null>(null);
+
+export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const manager = useMessageManager();
+  const [nodes, setNodes] = useState<NodeData[]>([]);
+  const [roads, setRoads] = useState<RoadData[]>([]);
+  const [networkFocus, setNetworkFocus] = useState<NetworkFocusedElement | null>(null);
+  const [roadCreationStep, setRoadCreationStep] = useState<RoadCreationStep>('idle');
+  const [roadCreationFirstNode, setRoadCreationFirstNode] = useState<{ id: NodeId; name?: string } | null>(null);
+
+  useEffect(() => {
+    const unsub1 = manager.onMessage('network-data', msg => {
+      setNodes(msg.nodes);
+      setRoads(msg.roads);
+    });
+    const unsub2 = manager.onMessage('network-element-focused', msg => {
+      setNetworkFocus(msg.element);
+    });
+    const unsub3 = manager.onMessage('network-selection-cleared', () => {
+      setNetworkFocus(null);
+    });
+    const unsub4 = manager.onMessage('road-creation-first-node', msg => {
+      setRoadCreationFirstNode({ id: msg.nodeId, name: msg.name });
+      setRoadCreationStep('second');
+    });
+    const unsub5 = manager.onMessage('road-creation-exited', () => {
+      setRoadCreationStep('idle');
+      setRoadCreationFirstNode(null);
+    });
+    return () => { unsub1(); unsub2(); unsub3(); unsub4(); unsub5(); };
+  }, [manager]);
+
+  const handleStartRoadCreation = useCallback(() => {
+    setRoadCreationStep('first');
+    setRoadCreationFirstNode(null);
+    postMessageToPlugin({ type: 'start-adding-road-mode' });
+  }, []);
+
+  const handleCancelRoadCreation = useCallback(() => {
+    setRoadCreationStep('idle');
+    setRoadCreationFirstNode(null);
+    postMessageToPlugin({ type: 'cancel-adding-road-mode' });
+  }, []);
+
+  return (
+    <NetworkContext.Provider value={{
+      nodes, roads, networkFocus,
+      roadCreationStep, roadCreationFirstNode,
+      handleStartRoadCreation, handleCancelRoadCreation,
+    }}>
+      {children}
+    </NetworkContext.Provider>
+  );
+};
+
+export const useNetworkContext = (): NetworkContextValue => {
+  const ctx = useContext(NetworkContext);
+  if (!ctx) throw new Error('useNetworkContext must be used within NetworkProvider');
+  return ctx;
+};

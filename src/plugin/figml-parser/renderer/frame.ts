@@ -3,6 +3,7 @@ import { BaseRenderer } from './base';
 import { renderNode } from '..';
 import { RenderResult } from '../result';
 import { isRgbObject, StringTemplate } from '../template';
+import { hexToRgb } from '@/common/utils/color';
 
 export class FrameRenderer extends BaseRenderer {
   render(node: FigmlNode, props: FigmlProps): RenderResult {
@@ -11,15 +12,23 @@ export class FrameRenderer extends BaseRenderer {
 
     // Handle special case for children prop
     if (node.content?.onlyHasChildrenTemplate() && props.children) {
-      const children = props.children;
-      if (Array.isArray(children)) {
-        for (const child of children) {
-          frame.appendChild(child);
+      const propChildren = props.children;
+      if (Array.isArray(propChildren)) {
+        for (const child of propChildren) {
+          if (child instanceof RenderResult) {
+            frame.appendChild(child.node);
+            children.push(child);
+          } else {
+            frame.appendChild(child as SceneNode);
+          }
         }
-      } else if (typeof children === 'number' || typeof children === 'string' || typeof children === 'boolean' || isRgbObject(children)) {
-        throw new Error("Invalid type for children prop: " + typeof children);
+      } else if (propChildren instanceof RenderResult) {
+        frame.appendChild(propChildren.node);
+        children.push(propChildren);
+      } else if (typeof propChildren === 'number' || typeof propChildren === 'string' || typeof propChildren === 'boolean' || isRgbObject(propChildren)) {
+        throw new Error("Invalid type for children prop: " + typeof propChildren);
       } else {
-        frame.appendChild(children);
+        frame.appendChild(propChildren as SceneNode);
       }
     } else if (node.children.length > 0) {
       // Render normal children but defer appendChild
@@ -39,24 +48,29 @@ export class FrameRenderer extends BaseRenderer {
   }
 
   private applyFrameAttributes(frame: FrameNode, attributes: Record<string, StringTemplate | undefined>, props: FigmlProps) {
-    if (attributes.fill) {
-      const fill = attributes.fill.interpolate(props);
-      frame.fills = [{ type: 'SOLID', color: BaseRenderer.hexToRgb(fill) }];
+    const fill = attributes.fill?.interpolate(props);
+    const clip = attributes.clip?.interpolate(props);
+    const flow = attributes.flow?.interpolate(props);
+    const gap = Number(attributes.gap?.interpolate(props));
+    const padding = attributes.padding?.interpolate(props);
+    const align = attributes.align?.interpolate(props);
+    const stacking = attributes.stacking?.interpolate(props);
+
+    if (fill) {
+      frame.fills = [{ type: 'SOLID', color: hexToRgb(fill) }];
     } else {
       frame.fills = [];
     }
 
-    if (attributes.clip) {
-      const clip = attributes.clip.interpolate(props);
+    if (clip) {
       if (clip !== 'true' && clip !== 'false') {
-        throw Error(`Invalid value for clip attribute: ${clip}. Expected 'true' or 'false'.`);
+        throw new Error(`Invalid value for clip attribute: ${clip}. Expected 'true' or 'false'.`);
       }
       frame.clipsContent = (clip === 'true');
     }
 
     // Handle layout flow
-    if (attributes.flow) {
-      const flow = attributes.flow.interpolate(props);
+    if (flow) {
       if (flow === 'horizontal') {
         frame.layoutMode = 'HORIZONTAL';
       } else if (flow === 'vertical') {
@@ -65,16 +79,14 @@ export class FrameRenderer extends BaseRenderer {
     }
 
     // Handle layout gap
-    if (attributes.gap) {
-      const gap = Number(attributes.gap.interpolate(props));
-      if (!isNaN(gap) && frame.layoutMode !== 'NONE') {
+    if (gap) {
+      if (!Number.isNaN(gap) && frame.layoutMode !== 'NONE') {
         frame.itemSpacing = gap;
       }
     }
 
     // Handle padding
-    if (attributes.padding) {
-      const padding = attributes.padding.interpolate(props);
+    if (padding) {
       if (frame.layoutMode !== 'NONE') {
         const paddingValues = this.parsePadding(padding);
         frame.paddingLeft = paddingValues.l;
@@ -85,8 +97,7 @@ export class FrameRenderer extends BaseRenderer {
     }
 
     // Handle align (for auto layout)
-    if (attributes.align && frame.layoutMode !== 'NONE') {
-      const align = attributes.align.interpolate(props);
+    if (align && frame.layoutMode !== 'NONE') {
       const [h, v] = align.split(',');
 
       if (frame.layoutMode === 'HORIZONTAL') {
@@ -117,6 +128,15 @@ export class FrameRenderer extends BaseRenderer {
         }
       }
     }
+
+    // Handle canvas stacking order
+    if (stacking) {
+      if (stacking === 'first') {
+        frame.itemReverseZIndex = true;
+      } else if (stacking === 'last') {
+        frame.itemReverseZIndex = false;
+      }
+    }
   }
 
   private parsePadding(padding: string): { l: number, r: number, t: number, b: number } {
@@ -125,7 +145,7 @@ export class FrameRenderer extends BaseRenderer {
     for (const part of parts) {
       const [key, value] = part.trim().split('=');
       const parsed = Number(value) || 0;
-      if (isNaN(parsed)) continue;
+      if (Number.isNaN(parsed)) continue;
       if (key === 'h') values.l = values.r = parsed;
       if (key === 'v') values.t = values.b = parsed;
       if (key === 'l') values.l = parsed;
