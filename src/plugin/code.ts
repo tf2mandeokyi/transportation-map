@@ -52,9 +52,10 @@ async function createDemoMap(controller: Controller, model: Model) {
   const road1 = model.addRoad({
     name: 'West-Central',
     startNodeId: n1, endNodeId: n2,
+    bezierMidPoint: { x: (n1Pos.x + n2Pos.x) / 2, y: (n1Pos.y + n2Pos.y) / 2 },
     endpoints: [
-      { endpointPos: n1Pos, bezierPos: { x: n1Pos.x + 100, y: n1Pos.y }, bezierDirection: { x: 1, y: 0 }, groupNumber: 0 },
-      { endpointPos: n2Pos, bezierPos: { x: n2Pos.x - 100, y: n2Pos.y }, bezierDirection: { x: -1, y: 0 }, groupNumber: 0 },
+      { endpointPos: n1Pos, groupNumber: 0 },
+      { endpointPos: n2Pos, groupNumber: 0 },
     ],
     sections: new Map()
   });
@@ -62,9 +63,10 @@ async function createDemoMap(controller: Controller, model: Model) {
   const road2 = model.addRoad({
     name: 'Central-East',
     startNodeId: n2, endNodeId: n3,
+    bezierMidPoint: { x: (n2Pos.x + n3Pos.x) / 2, y: (n2Pos.y + n3Pos.y) / 2 },
     endpoints: [
-      { endpointPos: n2Pos, bezierPos: { x: n2Pos.x + 100, y: n2Pos.y }, bezierDirection: { x: 1, y: 0 }, groupNumber: 0 },
-      { endpointPos: n3Pos, bezierPos: { x: n3Pos.x - 100, y: n3Pos.y }, bezierDirection: { x: -1, y: 0 }, groupNumber: 0 },
+      { endpointPos: n2Pos, groupNumber: 0 },
+      { endpointPos: n3Pos, groupNumber: 0 },
     ],
     sections: new Map()
   });
@@ -72,9 +74,10 @@ async function createDemoMap(controller: Controller, model: Model) {
   const road3 = model.addRoad({
     name: 'Central-North',
     startNodeId: n2, endNodeId: n4,
+    bezierMidPoint: { x: (n2Pos.x + n4Pos.x) / 2, y: (n2Pos.y + n4Pos.y) / 2 },
     endpoints: [
-      { endpointPos: n2Pos, bezierPos: { x: n2Pos.x, y: n2Pos.y - 100 }, bezierDirection: { x: 0, y: -1 }, groupNumber: 0 },
-      { endpointPos: n4Pos, bezierPos: { x: n4Pos.x, y: n4Pos.y + 100 }, bezierDirection: { x: 0,  y: 1 }, groupNumber: 0 },
+      { endpointPos: n2Pos, groupNumber: 0 },
+      { endpointPos: n4Pos, groupNumber: 0 },
     ],
     sections: new Map()
   });

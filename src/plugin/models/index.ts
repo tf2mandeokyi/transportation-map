@@ -61,7 +61,6 @@ export class Model {
       road.endpoints[endpointIndex] = {
         ...conn,
         endpointPos: { x: conn.endpointPos.x + delta.x, y: conn.endpointPos.y + delta.y },
-        bezierPos:   { x: conn.bezierPos.x   + delta.x, y: conn.bezierPos.y   + delta.y },
       };
     }
   }
@@ -84,6 +83,11 @@ export class Model {
   public updateRoadEndpoints(id: RoadId, endpoints: [Connection, Connection]): void {
     const road = this.state.roads.get(id);
     if (road) road.endpoints = endpoints;
+  }
+
+  public updateRoadBezierMidPoint(id: RoadId, midPoint: Vector): void {
+    const road = this.state.roads.get(id);
+    if (road) road.bezierMidPoint = midPoint;
   }
 
   public removeRoad(id: RoadId): void {

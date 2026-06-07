@@ -2,10 +2,10 @@ import { NodeId, RoadId } from "@/common/types";
 import { MapState } from "../../models/structures";
 import { Model } from "../../models";
 import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_ROAD_ID } from "../../views/road";
-import { bezierPathData, offsetBezier, TRACK_SPACING } from "../../utils/bezier";
+import { elevateToCubic, bezierPathData, offsetBezier, TRACK_SPACING } from "../../utils/bezier";
 
 const ROAD_CONTROL_NODE_NAME = '_road-bezier-control';
-export const FIGMA_KEY_BEZIER_HANDLE   = 'mapBezierHandle';   // value: 'start' | 'end'
+export const FIGMA_KEY_BEZIER_HANDLE   = 'mapBezierHandle';   // value: 'mid'
 export const FIGMA_KEY_ENDPOINT_HANDLE = 'mapEndpointHandle'; // value: 'start' | 'end'
 
 const HANDLE_RADIUS = 5;
@@ -17,23 +17,15 @@ const STEM_STROKE:             RGB = { r: 0.6,  g: 0.75, b: 1    };
 
 interface StemLineIds {
   startNodeStem: string;
-  startStem:     string;
+  startToMid:    string;
   endNodeStem:   string;
-  endStem:       string;
-}
-
-interface HandleIds {
-  startEndpoint: string;
-  endEndpoint:   string;
-  startBezier:   string;
-  endBezier:     string;
+  endToMid:      string;
 }
 
 export class RoadControlManager {
   private controlledRoadId: RoadId | null = null;
   private controlElementIds: string[] = [];
   private stemLineIds: StemLineIds | null = null;
-  private handleIds: HandleIds | null = null;
   private lockedRoadNodeId: string | null = null;
   public suppressNextControlChanges = false;
 
@@ -56,10 +48,9 @@ export class RoadControlManager {
     const endNode   = state.nodes.get(road.endNodeId);
     if (!startNode || !endNode) return;
 
-    const p0 = road.endpoints[0].endpointPos;
-    const p1 = road.endpoints[0].bezierPos;
-    const p3 = road.endpoints[1].endpointPos;
-    const p2 = road.endpoints[1].bezierPos;
+    const p0  = road.endpoints[0].endpointPos;
+    const mid = road.bezierMidPoint;
+    const p2  = road.endpoints[1].endpointPos;
 
     const roadGroup = figma.currentPage.children.find(n =>
       n.getPluginData(FIGMA_KEY_ROAD_ID) === roadId && n.getPluginData(FIGMA_KEY_IS_ROAD_CONTROL) !== 'true'
@@ -71,42 +62,34 @@ export class RoadControlManager {
 
     const startCenter = this.computeNodeCenter(state, road.startNodeId);
     const endCenter   = this.computeNodeCenter(state, road.endNodeId);
-    const startNodeStem = this.buildStemLine(startCenter, p0, roadId);
-    const startStem     = this.buildStemLine(p0, p1, roadId);
-    const endNodeStem   = this.buildStemLine(endCenter, p3, roadId);
-    const endStem       = this.buildStemLine(p3, p2, roadId);
+    const startNodeStem = this.buildStemLine(startCenter, p0,  roadId);
+    const startToMid    = this.buildStemLine(p0, mid, roadId);
+    const endNodeStem   = this.buildStemLine(endCenter,   p2,  roadId);
+    const endToMid      = this.buildStemLine(p2, mid, roadId);
     figma.currentPage.appendChild(startNodeStem);
-    figma.currentPage.appendChild(startStem);
+    figma.currentPage.appendChild(startToMid);
     figma.currentPage.appendChild(endNodeStem);
-    figma.currentPage.appendChild(endStem);
+    figma.currentPage.appendChild(endToMid);
 
     const startEndpointHandle = this.buildEndpointHandle(p0, roadId, 'start');
-    const endEndpointHandle   = this.buildEndpointHandle(p3, roadId, 'end');
+    const endEndpointHandle   = this.buildEndpointHandle(p2, roadId, 'end');
     figma.currentPage.appendChild(startEndpointHandle);
     figma.currentPage.appendChild(endEndpointHandle);
 
-    const startHandle = this.buildBezierHandle(p1, roadId, 'start');
-    const endHandle   = this.buildBezierHandle(p2, roadId, 'end');
-    figma.currentPage.appendChild(startHandle);
-    figma.currentPage.appendChild(endHandle);
+    const midHandle = this.buildBezierHandle(mid, roadId);
+    figma.currentPage.appendChild(midHandle);
 
     this.controlledRoadId = roadId;
     this.stemLineIds = {
       startNodeStem: startNodeStem.id,
-      startStem:     startStem.id,
+      startToMid:    startToMid.id,
       endNodeStem:   endNodeStem.id,
-      endStem:       endStem.id,
-    };
-    this.handleIds = {
-      startEndpoint: startEndpointHandle.id,
-      endEndpoint:   endEndpointHandle.id,
-      startBezier:   startHandle.id,
-      endBezier:     endHandle.id,
+      endToMid:      endToMid.id,
     };
     this.controlElementIds = [
-      startNodeStem.id, startStem.id, endNodeStem.id, endStem.id,
+      startNodeStem.id, startToMid.id, endNodeStem.id, endToMid.id,
       startEndpointHandle.id, endEndpointHandle.id,
-      startHandle.id, endHandle.id,
+      midHandle.id,
     ];
     this.suppressNextControlChanges = true;
   }
@@ -123,7 +106,7 @@ export class RoadControlManager {
     }
     this.controlElementIds = [];
     this.stemLineIds = null;
-    this.handleIds = null;
+
     this.controlledRoadId = null;
   }
 
@@ -138,7 +121,7 @@ export class RoadControlManager {
       .forEach(n => { if (!n.removed) n.remove(); });
     this.controlElementIds = [];
     this.stemLineIds = null;
-    this.handleIds = null;
+
     this.controlledRoadId = null;
   }
 
@@ -149,65 +132,41 @@ export class RoadControlManager {
     if (!road) return;
 
     if (side === 'start') {
-      const oldEp = road.endpoints[0].endpointPos;
-      const delta = { x: handlePos.x - oldEp.x, y: handlePos.y - oldEp.y };
       this.model.updateRoadEndpoints(roadId, [
-        { ...road.endpoints[0], endpointPos: handlePos, bezierPos: { x: road.endpoints[0].bezierPos.x + delta.x, y: road.endpoints[0].bezierPos.y + delta.y } },
+        { ...road.endpoints[0], endpointPos: handlePos },
         road.endpoints[1],
       ]);
     } else {
-      const oldEp = road.endpoints[1].endpointPos;
-      const delta = { x: handlePos.x - oldEp.x, y: handlePos.y - oldEp.y };
       this.model.updateRoadEndpoints(roadId, [
         road.endpoints[0],
-        { ...road.endpoints[1], endpointPos: handlePos, bezierPos: { x: road.endpoints[1].bezierPos.x + delta.x, y: road.endpoints[1].bezierPos.y + delta.y } },
+        { ...road.endpoints[1], endpointPos: handlePos },
       ]);
     }
 
-    await this.updateRoadAndStems(roadId, 'endpoint', side);
+    await this.updateRoadAndStems(roadId);
   }
 
-  async onBezierHandleMoved(roadId: RoadId, side: 'start' | 'end', handle: EllipseNode): Promise<void> {
+  async onBezierHandleMoved(roadId: RoadId, handle: EllipseNode): Promise<void> {
     const handlePos = { x: handle.x + HANDLE_RADIUS, y: handle.y + HANDLE_RADIUS };
-    const state = this.model.getState();
-    const road = state.roads.get(roadId);
-    if (!road) return;
-
-    if (side === 'start') {
-      this.model.updateRoadEndpoints(roadId, [
-        { ...road.endpoints[0], bezierPos: handlePos },
-        road.endpoints[1],
-      ]);
-    } else {
-      this.model.updateRoadEndpoints(roadId, [
-        road.endpoints[0],
-        { ...road.endpoints[1], bezierPos: handlePos },
-      ]);
-    }
-
-    await this.updateRoadAndStems(roadId, 'bezier', side);
+    this.model.updateRoadBezierMidPoint(roadId, handlePos);
+    await this.updateRoadAndStems(roadId);
   }
 
-  private async updateRoadAndStems(
-    roadId: RoadId,
-    movedType: 'endpoint' | 'bezier',
-    movedSide: 'start' | 'end',
-  ): Promise<void> {
+  private async updateRoadAndStems(roadId: RoadId): Promise<void> {
     const state = this.model.getState();
     const road = state.roads.get(roadId);
     if (!road) return;
 
-    const p0 = road.endpoints[0].endpointPos;
-    const p1 = road.endpoints[0].bezierPos;
-    const p3 = road.endpoints[1].endpointPos;
-    const p2 = road.endpoints[1].bezierPos;
+    const p0  = road.endpoints[0].endpointPos;
+    const mid = road.bezierMidPoint;
+    const p2  = road.endpoints[1].endpointPos;
+    const cubic = elevateToCubic({ p0, p1: mid, p2 });
 
     if (this.stemLineIds) {
       const ids = this.stemLineIds;
       const updateStem = async (id: string, from: Vector, to: Vector) => {
         const node = await figma.getNodeByIdAsync(id) as VectorNode | null;
         if (!node || node.removed) return;
-        // vectorPaths use local coordinates; subtract the node's absolute page origin to convert
         const tx = node.absoluteTransform[0][2];
         const ty = node.absoluteTransform[1][2];
         node.vectorPaths = [{
@@ -218,21 +177,9 @@ export class RoadControlManager {
       const startCenter = this.computeNodeCenter(state, road.startNodeId);
       const endCenter   = this.computeNodeCenter(state, road.endNodeId);
       await updateStem(ids.startNodeStem, startCenter, p0);
-      await updateStem(ids.startStem,     p0, p1);
-      await updateStem(ids.endNodeStem,   endCenter, p3);
-      await updateStem(ids.endStem,       p3, p2);
-    }
-
-    // When an endpoint moves, p1 or p2 shifts with it — reposition the corresponding bezier handle
-    if (movedType === 'endpoint' && this.handleIds) {
-      this.suppressNextControlChanges = true;
-      const bezierHandleId = movedSide === 'start' ? this.handleIds.startBezier : this.handleIds.endBezier;
-      const newPos = movedSide === 'start' ? p1 : p2;
-      const node = await figma.getNodeByIdAsync(bezierHandleId) as EllipseNode | null;
-      if (node && !node.removed) {
-        node.x = newPos.x - HANDLE_RADIUS;
-        node.y = newPos.y - HANDLE_RADIUS;
-      }
+      await updateStem(ids.startToMid,   p0,  mid);
+      await updateStem(ids.endNodeStem,   endCenter,   p2);
+      await updateStem(ids.endToMid,     p2,  mid);
     }
 
     const roadGroup = figma.currentPage.children.find(n =>
@@ -244,7 +191,6 @@ export class RoadControlManager {
     const sections = Array.from(road.sections.values()).sort((a, b) => a.index - b.index);
     const children = group.children;
 
-    // Helper: convert page-space bezier points to a VectorNode's local space using absoluteTransform
     const toLocalBezier = (child: VectorNode, pts: { p0: Vector; p1: Vector; p2: Vector; p3: Vector }) => {
       const tx = child.absoluteTransform[0][2];
       const ty = child.absoluteTransform[1][2];
@@ -257,14 +203,14 @@ export class RoadControlManager {
       if (child) {
         child.vectorPaths = [{
           windingRule: 'NONZERO',
-          data: bezierPathData(toLocalBezier(child, { p0, p1, p2, p3 })),
+          data: bezierPathData(toLocalBezier(child, cubic)),
         }];
       }
     } else {
       const center = (sections.length - 1) / 2;
       sections.forEach((section, i) => {
         const offset = (section.index - center) * TRACK_SPACING;
-        const o = offsetBezier({ p0, p1, p2, p3 }, offset);
+        const o = offsetBezier(cubic, offset);
         const child = children[i] as VectorNode | undefined;
         if (child) {
           child.vectorPaths = [{
@@ -305,7 +251,7 @@ export class RoadControlManager {
     return ellipse;
   }
 
-  private buildBezierHandle(pos: Vector, roadId: RoadId, side: 'start' | 'end'): EllipseNode {
+  private buildBezierHandle(pos: Vector, roadId: RoadId): EllipseNode {
     const ellipse = figma.createEllipse();
     ellipse.resize(HANDLE_RADIUS * 2, HANDLE_RADIUS * 2);
     ellipse.x = pos.x - HANDLE_RADIUS;
@@ -313,10 +259,10 @@ export class RoadControlManager {
     ellipse.fills   = [{ type: 'SOLID', color: BEZIER_HANDLE_FILL }];
     ellipse.strokes = [{ type: 'SOLID', color: BEZIER_HANDLE_STROKE }];
     ellipse.strokeWeight = 1.5;
-    ellipse.name = `Bezier: ${side}`;
+    ellipse.name = 'Bezier: mid';
     ellipse.setPluginData(FIGMA_KEY_ROAD_ID, roadId);
     ellipse.setPluginData(FIGMA_KEY_IS_ROAD_CONTROL, 'true');
-    ellipse.setPluginData(FIGMA_KEY_BEZIER_HANDLE, side);
+    ellipse.setPluginData(FIGMA_KEY_BEZIER_HANDLE, 'mid');
     return ellipse;
   }
 

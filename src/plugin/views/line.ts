@@ -3,10 +3,12 @@ import { Model } from "../models";
 import { StationRenderer } from "./station";
 import { RoadSectionId } from "@/common/types";
 import {
+  elevateToCubic,
   offsetBezierAdaptive,
-  subBezier,
+  subQuadBezier,
+  QuadBezierPoints,
+  CubicBezierPoints,
   TRACK_SPACING,
-  BezierPoints,
 } from "../utils/bezier";
 import { JunctionShape } from "../utils/junction-shape";
 import { PathBuilder } from "../utils/path";
@@ -18,17 +20,16 @@ interface BezierSegment {
   main: VectorNode;
 }
 
-function computeRoadBezier(road: Road, state: Readonly<MapState>): BezierPoints | null {
+function computeRoadBezier(road: Road, state: Readonly<MapState>): QuadBezierPoints | null {
   const startNode = state.nodes.get(road.startNodeId);
   const endNode = state.nodes.get(road.endNodeId);
   if (!startNode || !endNode) return null;
 
-  const p0 = road.endpoints[0].endpointPos;
-  const p1 = road.endpoints[0].bezierPos;
-  const p3 = road.endpoints[1].endpointPos;
-  const p2 = road.endpoints[1].bezierPos;
-
-  return { p0, p1, p2, p3 };
+  return {
+    p0: road.endpoints[0].endpointPos,
+    p1: road.bezierMidPoint,
+    p2: road.endpoints[1].endpointPos,
+  };
 }
 
 function findRoadForSection(sectionId: RoadSectionId, state: Readonly<MapState>): Road | null {
@@ -63,25 +64,29 @@ function computeSectionSegs(
   line: Line, road: Road, sectionId: RoadSectionId,
   t1: number, t2: number,
   state: Readonly<MapState>,
-): BezierPoints[] {
+): CubicBezierPoints[] {
   const centerline = computeRoadBezier(road, state);
   if (!centerline) return [];
 
-  const sub = subBezier(centerline, t1, t2);
+  // Elevate the quadratic sub-segment to cubic before offsetting so the cubic
+  // Tiller-Hanson approximation has full degrees of freedom.
+  const sub = elevateToCubic(subQuadBezier(centerline, t1, t2));
   const totalOffset = computeTotalOffset(line, road, sectionId, state);
   // Normalize offset to the road's canonical direction (t=0→1). When traversing
-  // in reverse (t1 > t2), subBezier flips the tangent, which would flip the
+  // in reverse (t1 > t2), subQuadBezier flips the tangent, which would flip the
   // perpendicular normal — negating here keeps all lines offset consistently.
   const directedOffset = t1 > t2 ? -totalOffset : totalOffset;
   return directedOffset === 0 ? [sub] : offsetBezierAdaptive(sub, directedOffset);
 }
 
-function appendJunctionCurve(pb: PathBuilder, prev: BezierPoints, next: BezierPoints): void {
+function appendJunctionCurve(pb: PathBuilder, prev: CubicBezierPoints, next: CubicBezierPoints): void {
+  // Tangent at t=1 of cubic: p3 - p2
   const exitLen = Math.hypot(prev.p3.x - prev.p2.x, prev.p3.y - prev.p2.y);
   const exitDir: Vector = exitLen < 0.001
     ? { x: 1, y: 0 }
     : { x: (prev.p3.x - prev.p2.x) / exitLen, y: (prev.p3.y - prev.p2.y) / exitLen };
 
+  // Tangent at t=0 of cubic: p1 - p0 (negated for "into junction" direction)
   const entryLen = Math.hypot(next.p1.x - next.p0.x, next.p1.y - next.p0.y);
   const entryDir: Vector = entryLen < 0.001
     ? { x: -1, y: 0 }
@@ -241,7 +246,7 @@ export class LineRenderer {
     }
 
     // Multi-road: collect offset segments per road, chain with smooth junction curves.
-    const entries: BezierPoints[][] = [];
+    const entries: CubicBezierPoints[][] = [];
 
     for (let i = 0; i < roadSeq.length; i++) {
       const road = roadSeq[i];

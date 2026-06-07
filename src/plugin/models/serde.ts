@@ -3,8 +3,6 @@ import { Connection, Line, LinePath, MapState, Node, Road, RoadSection, Station 
 
 interface SerializedConnection {
   ep: { x: number; y: number };  // endpointPos (absolute)
-  bp: { x: number; y: number };  // bezierPos (absolute)
-  bdir: { x: number; y: number }; // bezierDirection
   g: number; // groupNumber
 }
 
@@ -20,6 +18,7 @@ interface SerializedRoad {
   n?: string; // name
   sn: string; // startNodeId
   en: string; // endNodeId
+  bmp: { x: number; y: number }; // bezierMidPoint
   e0: SerializedConnection; // endpoints[0]
   e1: SerializedConnection; // endpoints[1]
   sec: SerializedRoadSection[]; // sections
@@ -68,14 +67,12 @@ interface SerializedMapState {
 }
 
 function serializeConnection(c: Connection): SerializedConnection {
-  return { ep: c.endpointPos, bp: c.bezierPos, bdir: c.bezierDirection, g: c.groupNumber };
+  return { ep: c.endpointPos, g: c.groupNumber };
 }
 
 function deserializeConnection(s: SerializedConnection): Connection {
   return {
     endpointPos: s.ep,
-    bezierPos: s.bp,
-    bezierDirection: s.bdir,
     groupNumber: s.g,
   };
 }
@@ -92,6 +89,7 @@ export function serializeMapState(state: MapState): string {
     n: r.name,
     sn: r.startNodeId,
     en: r.endNodeId,
+    bmp: r.bezierMidPoint,
     e0: serializeConnection(r.endpoints[0]),
     e1: serializeConnection(r.endpoints[1]),
     sec: Array.from(r.sections.values()).map(sec => ({
@@ -135,31 +133,39 @@ export function serializeMapState(state: MapState): string {
   return JSON.stringify(serialized);
 }
 
-// Migrates in-place from the old format (node.pos + relative displacements) to the new
-// format (absolute endpointPos / bezierPos), so old saves continue to load correctly.
+// Migrates in-place from legacy formats:
+// v1: node.pos + relative displacements → absolute endpointPos/bezierPos per connection
+// v2: absolute bezierPos per connection → single bezierMidPoint per road
 function migrateOldFormat(data: any): void {
   const firstRoad = data.rd?.[0];
-  if (!firstRoad || 'ep' in firstRoad.e0) return; // already new format
+  if (!firstRoad) return;
 
-  const nodePositions = new Map<string, { x: number; y: number }>();
-  for (const n of data.nd || []) {
-    if (n.p) nodePositions.set(n.i, n.p);
+  // v1 → v2: node.pos + relative offsets
+  if (!('ep' in firstRoad.e0)) {
+    const nodePositions = new Map<string, { x: number; y: number }>();
+    for (const n of data.nd || []) {
+      if (n.p) nodePositions.set(n.i, n.p);
+    }
+    for (const r of data.rd || []) {
+      const convertConn = (c: any, nodePos: { x: number; y: number }) => {
+        const ed = c.ed ?? { x: 0, y: 0 };
+        const ep = { x: nodePos.x + ed.x, y: nodePos.y + ed.y };
+        const bp = { x: ep.x + c.bd.x, y: ep.y + c.bd.y };
+        return { ep, bp, g: c.g };
+      };
+      r.e0 = convertConn(r.e0, nodePositions.get(r.sn) ?? { x: 0, y: 0 });
+      r.e1 = convertConn(r.e1, nodePositions.get(r.en) ?? { x: 0, y: 0 });
+    }
+    for (const n of data.nd || []) delete n.p;
   }
 
-  const convertConn = (c: any, nodePos: { x: number; y: number }) => {
-    const ed = c.ed ?? { x: 0, y: 0 };
-    const ep = { x: nodePos.x + ed.x, y: nodePos.y + ed.y };
-    const bp = { x: ep.x + c.bd.x, y: ep.y + c.bd.y };
-    return { ep, bp, bdir: c.bdir, g: c.g };
-  };
-
+  // v2 → v3: per-connection bezierPos → single bezierMidPoint on road
   for (const r of data.rd || []) {
-    r.e0 = convertConn(r.e0, nodePositions.get(r.sn) ?? { x: 0, y: 0 });
-    r.e1 = convertConn(r.e1, nodePositions.get(r.en) ?? { x: 0, y: 0 });
-  }
-
-  for (const n of data.nd || []) {
-    delete n.p;
+    if (!('bmp' in r) && r.e0?.bp && r.e1?.bp) {
+      r.bmp = { x: (r.e0.bp.x + r.e1.bp.x) / 2, y: (r.e0.bp.y + r.e1.bp.y) / 2 };
+    }
+    if (r.e0) { delete r.e0.bp; delete r.e0.bdir; }
+    if (r.e1) { delete r.e1.bp; delete r.e1.bdir; }
   }
 }
 
@@ -194,6 +200,7 @@ export function deserializeMapState(json: string): MapState | null {
         name: r.n,
         startNodeId: r.sn as NodeId,
         endNodeId: r.en as NodeId,
+        bezierMidPoint: r.bmp ?? { x: 0, y: 0 },
         endpoints: [deserializeConnection(r.e0), deserializeConnection(r.e1)],
         sections
       });

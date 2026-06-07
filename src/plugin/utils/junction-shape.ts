@@ -23,8 +23,8 @@ export class JunctionShape {
       const conn = road.endpoints[endpointIndex];
       const ep: Vector = conn.endpointPos;
 
-      const bDx = conn.bezierPos.x - conn.endpointPos.x;
-      const bDy = conn.bezierPos.y - conn.endpointPos.y;
+      const bDx = road.bezierMidPoint.x - ep.x;
+      const bDy = road.bezierMidPoint.y - ep.y;
       const bLen = Math.hypot(bDx, bDy);
       const dir: Vector = bLen < 0.001
         ? { x: 1, y: 0 }

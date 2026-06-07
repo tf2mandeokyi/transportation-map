@@ -1,4 +1,4 @@
-import { BezierPoints } from './bezier';
+import { CubicBezierPoints } from './bezier';
 
 export class PathBuilder {
   private readonly parts: string[] = [];
@@ -24,7 +24,7 @@ export class PathBuilder {
   }
 
   // Appends a connected chain of cubic bezier segments, starting with M at the first p0.
-  beziers(segs: BezierPoints[]): this {
+  beziers(segs: CubicBezierPoints[]): this {
     if (segs.length === 0) return this;
     this.moveTo(segs[0].p0);
     for (const { p1, p2, p3 } of segs) this.cubicTo(p1, p2, p3);

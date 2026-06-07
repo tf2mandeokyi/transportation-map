@@ -154,12 +154,12 @@ export class NetworkController extends BaseController {
         }
       }
 
-      const handleSide = figmaNode.getPluginData(FIGMA_KEY_BEZIER_HANDLE) as 'start' | 'end' | '';
-      if (!handleSide) continue;
+      const isMidBezier = figmaNode.getPluginData(FIGMA_KEY_BEZIER_HANDLE) === 'mid';
+      if (!isMidBezier) continue;
 
       const roadId = figmaNode.getPluginData(FIGMA_KEY_ROAD_ID) as RoadId;
       if (roadId) {
-        await this.roadControl.onBezierHandleMoved(roadId, handleSide, figmaNode as EllipseNode);
+        await this.roadControl.onBezierHandleMoved(roadId, figmaNode as EllipseNode);
         return;
       }
     }

@@ -52,15 +52,14 @@ export class RoadCreationStateMachine {
     model: Model,
     onRoadCreated: () => Promise<void>,
   ): Promise<void> {
-    const dx = endPos.x - startPos.x;
-    const dy = endPos.y - startPos.y;
     model.addRoad({
       name: undefined,
       startNodeId,
       endNodeId,
+      bezierMidPoint: { x: (startPos.x + endPos.x) / 2, y: (startPos.y + endPos.y) / 2 },
       endpoints: [
-        { endpointPos: startPos, bezierPos: { x: startPos.x + dx / 3, y: startPos.y + dy / 3 }, bezierDirection: { x: dx, y: dy }, groupNumber: 0 },
-        { endpointPos: endPos,   bezierPos: { x: endPos.x - dx / 3,   y: endPos.y - dy / 3   }, bezierDirection: { x: -dx, y: -dy }, groupNumber: 0 },
+        { endpointPos: startPos, groupNumber: 0 },
+        { endpointPos: endPos,   groupNumber: 0 },
       ],
       sections: new Map(),
     });

@@ -1,6 +1,6 @@
 import { MapState, Node, Road } from "../models/structures";
 import { Model } from "../models";
-import { offsetBezierAdaptive, bezierListPathData, TRACK_SPACING, ROAD_MIN_WIDTH } from "../utils/bezier";
+import { elevateToCubic, offsetBezierAdaptive, bezierListPathData, TRACK_SPACING, ROAD_MIN_WIDTH } from "../utils/bezier";
 import { JunctionShape } from "../utils/junction-shape";
 import { PathBuilder } from "../utils/path";
 import { getLinesForSection, sectionBandWidth } from "../utils/section";
@@ -101,16 +101,17 @@ export class RoadRenderer {
     const endNode   = state.nodes.get(road.endNodeId);
     if (!startNode || !endNode) return [];
 
-    const p0: Vector = road.endpoints[0].endpointPos;
-    const p1: Vector = road.endpoints[0].bezierPos;
-    const p3: Vector = road.endpoints[1].endpointPos;
-    const p2: Vector = road.endpoints[1].bezierPos;
+    const baseCurve = elevateToCubic({
+      p0: road.endpoints[0].endpointPos,
+      p1: road.bezierMidPoint,
+      p2: road.endpoints[1].endpointPos,
+    });
 
     const sections = Array.from(road.sections.values()).sort((a, b) => a.index - b.index);
     const result: SceneNode[] = [];
 
     if (sections.length === 0) {
-      const pathData = bezierListPathData([{ p0, p1, p2, p3 }]);
+      const pathData = bezierListPathData([baseCurve]);
       const node = this.makeVectorCurve(pathData, SECTION_COLOR, ROAD_MIN_WIDTH);
       node.name = 'centerline';
       node.setPluginData(FIGMA_KEY_ROAD_ID, road.id);
@@ -119,7 +120,6 @@ export class RoadRenderer {
     }
 
     const center = (sections.length - 1) / 2;
-    const baseCurve = { p0, p1, p2, p3 };
 
     const leftSection  = sections[0];
     const rightSection = sections[sections.length - 1];

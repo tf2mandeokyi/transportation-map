@@ -4,10 +4,10 @@ import { renderStation, renderStationLine } from "../figmls";
 import { HVAlign, LineId, RoadSectionId, StationId } from "@/common/types";
 import { getLineDirectionAtStop } from "../utils/section";
 import {
-  evalCubicBezier,
-  evalCubicBezierTangent,
+  evalQuadraticBezier,
+  evalQuadraticBezierTangent,
   TRACK_SPACING,
-  BezierPoints,
+  QuadBezierPoints,
 } from "../utils/bezier";
 
 export interface ConnectionPoints {
@@ -15,17 +15,16 @@ export interface ConnectionPoints {
   tail: Vector;
 }
 
-function computeRoadBezier(road: Road, state: Readonly<MapState>): BezierPoints | null {
+function computeRoadBezier(road: Road, state: Readonly<MapState>): QuadBezierPoints | null {
   const startNode = state.nodes.get(road.startNodeId);
   const endNode = state.nodes.get(road.endNodeId);
   if (!startNode || !endNode) return null;
 
   const p0 = road.endpoints[0].endpointPos;
-  const p1 = road.endpoints[0].bezierPos;
-  const p3 = road.endpoints[1].endpointPos;
-  const p2 = road.endpoints[1].bezierPos;
+  const p1 = road.bezierMidPoint;
+  const p2 = road.endpoints[1].endpointPos;
 
-  return { p0, p1, p2, p3 };
+  return { p0, p1, p2 };
 }
 
 function findRoadForSection(sectionId: RoadSectionId, state: Readonly<MapState>): Road | null {
@@ -50,10 +49,10 @@ function computeStationPosition(station: Station, state: Readonly<MapState>): Ve
   const center = (sections.length - 1) / 2;
   const offset = (section.index - center) * TRACK_SPACING;
 
-  const pos = evalCubicBezier(base, station.interpT);
+  const pos = evalQuadraticBezier(base, station.interpT);
   if (offset === 0) return pos;
 
-  const tangent = evalCubicBezierTangent(base, station.interpT);
+  const tangent = evalQuadraticBezierTangent(base, station.interpT);
   const len = Math.hypot(tangent.x, tangent.y);
   if (len < 0.001) return pos;
   return { x: pos.x + (-tangent.y / len) * offset, y: pos.y + (tangent.x / len) * offset };
@@ -67,7 +66,7 @@ function computeStationTangentAngle(station: Station, state: Readonly<MapState>)
   const base = computeRoadBezier(road, state);
   if (!base) return 0;
 
-  const tangent = evalCubicBezierTangent(base, station.interpT);
+  const tangent = evalQuadraticBezierTangent(base, station.interpT);
   return Math.atan2(tangent.y, tangent.x) * 180 / Math.PI;
 }
 

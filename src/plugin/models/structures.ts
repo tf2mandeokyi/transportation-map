@@ -1,9 +1,7 @@
 import { HVAlign, LineId, NodeId, RoadId, RoadSectionId, StationId } from "@/common/types";
 
 export interface Connection {
-  endpointPos: Vector;   // absolute position of road endpoint
-  bezierPos: Vector;     // absolute position of bezier control point
-  bezierDirection: Vector;
+  endpointPos: Vector;
   groupNumber: number;
 }
 
@@ -25,6 +23,7 @@ export interface Road {
   name?: string;
   startNodeId: NodeId;
   endNodeId: NodeId;
+  bezierMidPoint: Vector;
   endpoints: [Connection, Connection];
   sections: Map<RoadSectionId, RoadSection>;
 }
