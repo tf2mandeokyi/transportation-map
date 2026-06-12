@@ -42,6 +42,7 @@ export interface StationStop {
   kind: 'station-stop';
   index: number;
   stationId: StationId;
+  rank: number;
 }
 
 export interface RoadSectionEnter {

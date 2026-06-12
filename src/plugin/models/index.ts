@@ -246,8 +246,38 @@ export class Model {
     const line = this.state.lines.get(lineId);
     if (!line) return;
     const index = line.paths.length;
-    line.paths.push({ ...path, index });
+    if (path.kind === 'station-stop') {
+      line.paths.push({ kind: 'station-stop', index, stationId: path.stationId, rank: this._nextRankForStation(path.stationId) });
+    } else {
+      line.paths.push({ kind: 'road-section-enter', index, sourceRoadId: path.sourceRoadId, nodeId: path.nodeId, destRoadId: path.destRoadId });
+    }
     line.paths = validateLinePaths(line, this.state);
+  }
+
+  private _nextRankForStation(stationId: StationId): number {
+    let max = -1;
+    for (const line of this.state.lines.values()) {
+      for (const p of line.paths) {
+        if (p.kind === 'station-stop' && p.stationId === stationId) {
+          max = Math.max(max, p.rank);
+        }
+      }
+    }
+    return max + 1;
+  }
+
+  public updateStationStopRanks(
+    stationId: StationId,
+    stops: Array<{ lineId: LineId; pathIndex: number; rank: number }>
+  ): void {
+    for (const { lineId, pathIndex, rank } of stops) {
+      const line = this.state.lines.get(lineId);
+      if (!line) continue;
+      const path = line.paths.find(p => p.index === pathIndex);
+      if (path?.kind === 'station-stop' && path.stationId === stationId) {
+        path.rank = rank;
+      }
+    }
   }
 
   public removeLinePath(lineId: LineId, pathIndex: number): void {
@@ -260,7 +290,16 @@ export class Model {
   public replaceLinePaths(lineId: LineId, paths: LinePathInput[]): void {
     const line = this.state.lines.get(lineId);
     if (!line) return;
-    line.paths = paths.map((p, i) => ({ ...p, index: i }));
+    const existingRanks = new Map<StationId, number>();
+    for (const p of line.paths) {
+      if (p.kind === 'station-stop') existingRanks.set(p.stationId, p.rank);
+    }
+    line.paths = paths.map((p, i) => {
+      if (p.kind === 'station-stop') {
+        return { kind: 'station-stop', index: i, stationId: p.stationId, rank: existingRanks.get(p.stationId) ?? 0 };
+      }
+      return { kind: 'road-section-enter', index: i, sourceRoadId: p.sourceRoadId, nodeId: p.nodeId, destRoadId: p.destRoadId };
+    });
     line.paths = validateLinePaths(line, this.state);
   }
 

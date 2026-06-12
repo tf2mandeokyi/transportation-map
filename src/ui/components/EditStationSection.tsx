@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { LineData } from '@/common/messages';
+import { LineAtStationData } from '@/common/messages';
 import { HVAlign, StationId } from '@/common/types';
 import { postMessageToPlugin } from '../figma';
 import { useMessageManager } from '../contexts/MessageContext';
@@ -11,7 +11,8 @@ const EditStationSection: React.FC = () => {
   const [stationName, setStationName]       = useState<string | null>(null);
   const [stationTextAlign, setStationTextAlign] = useState<HVAlign | null>(null);
   const [stationTextRotation, setStationTextRotation] = useState<number | null>(null);
-  const [linesAtStation, setLinesAtStation] = useState<Array<LineData>>([]);
+  const [linesAtStation, setLinesAtStation] = useState<Array<LineAtStationData>>([]);
+  const [draggedLineIndex, setDraggedLineIndex] = useState<number | null>(null);
 
   const [name, setName]             = useState('');
   const [textAlign, setTextAlign]   = useState<HVAlign>('right');
@@ -181,12 +182,37 @@ const EditStationSection: React.FC = () => {
 
       {linesAtStation.length > 0 && (
         <div>
-          <label>Lines at this station</label>
+          <label>Lines at this station (drag to reorder)</label>
           <div style={{ maxHeight: '200px', overflowY: 'auto', marginTop: '8px' }}>
-            {linesAtStation.map((lineInfo) => (
-              <div key={lineInfo.id} className="station-path-item" style={{ alignItems: 'center' }}>
+            {linesAtStation.map((lineInfo, index) => (
+              <div
+                key={`${lineInfo.id}-${lineInfo.pathIndex}`}
+                className="station-path-item"
+                draggable
+                onDragStart={() => setDraggedLineIndex(index)}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (draggedLineIndex === null || draggedLineIndex === index) return;
+                  const next = [...linesAtStation];
+                  const [moved] = next.splice(draggedLineIndex, 1);
+                  next.splice(index, 0, moved);
+                  setLinesAtStation(next);
+                  setDraggedLineIndex(index);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (!stationId) return;
+                  setDraggedLineIndex(null);
+                  const stops = linesAtStation.map((l, i) => ({
+                    lineId: l.id, pathIndex: l.pathIndex, rank: i,
+                  }));
+                  postMessageToPlugin({ type: 'update-station-stop-ranks', stationId, stops });
+                }}
+                style={{ alignItems: 'center', cursor: 'grab' }}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                  <div style={{ width: '12px', height: '12px', backgroundColor: lineInfo.color, borderRadius: '2px', border: '1px solid rgba(0,0,0,0.1)' }} />
+                  <span style={{ color: '#999', fontSize: '12px' }}>⋮⋮</span>
+                  <div style={{ width: '12px', height: '12px', backgroundColor: lineInfo.color, borderRadius: '2px', border: '1px solid rgba(0,0,0,0.1)', flexShrink: 0 }} />
                   <span>{lineInfo.name}</span>
                 </div>
               </div>

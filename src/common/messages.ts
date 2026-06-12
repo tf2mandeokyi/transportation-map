@@ -34,11 +34,13 @@ export type UIToPluginMessage =
   | { type: 'update-line-path'; lineId: LineId; paths: LinePathInput[] }
   | { type: 'rotate-line-path'; lineId: LineId; steps: number }
   | { type: 'update-line-stacking-order'; lineIds: LineId[] }
+  | { type: 'update-station-stop-ranks'; stationId: StationId; stops: Array<{ lineId: LineId; pathIndex: number; rank: number }> }
   | { type: 'clear-plugin-data' }
   | { type: 'request-initial-data' }
   | { type: 'validate-line-paths' }
 
 export type LineData = { id: LineId; name: string; color: string };
+export type LineAtStationData = LineData & { pathIndex: number; rank: number };
 
 export type NetworkFocusedElement =
   | { kind: 'node'; nodeId: NodeId; name?: string; pos: { x: number; y: number } }
@@ -46,7 +48,7 @@ export type NetworkFocusedElement =
 
 // Messages from Plugin to UI
 export type PluginToUIMessage =
-  | { type: 'station-clicked'; stationId: StationId; stationName: string; textAlign: HVAlign; textRotation: number; lines: Array<LineData> }
+  | { type: 'station-clicked'; stationId: StationId; stationName: string; textAlign: HVAlign; textRotation: number; lines: Array<LineAtStationData> }
   | { type: 'line-added' } & LineData
   | { type: 'line-path-data'; lineId: LineId; paths: LinePath[]; stationNames: Record<StationId, string> }
   | { type: 'station-removed-from-line' }

@@ -82,6 +82,7 @@ export class Controller {
       case 'copy-station':             return this.stationController.handleCopyStation(msg.stationId, msg.direction);
       case 'combine-stations':         return this.stationController.handleCombineStations(msg.sourceStationId, msg.targetStationId);
       case 'select-station':           return this.stationController.handleSelectStation(msg.stationId);
+      case 'update-station-stop-ranks': return this.stationController.handleUpdateStationStopRanks(msg.stationId, msg.stops);
 
       // Road network actions
       case 'add-node':                 return this.networkController.handleAddNode(msg);

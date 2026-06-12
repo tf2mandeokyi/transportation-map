@@ -1,5 +1,5 @@
-import { Line, MapState, Road, RoadSection } from "../models/structures";
-import { LineId, RoadSectionId } from "@/common/types";
+import { Line, MapState, Road, RoadSection, Station } from "../models/structures";
+import { LineId, RoadSectionId, StationId } from "@/common/types";
 import { LINE_SPACING, ROAD_MARGIN, ROAD_MIN_WIDTH } from "./bezier";
 
 function findRoadForSection(sectionId: RoadSectionId, state: Readonly<MapState>): Road | null {
@@ -62,7 +62,14 @@ function getFirstStopIndexOnSection(line: Line, section: RoadSection): number {
   return -1;
 }
 
-export function getLinesForSection(section: RoadSection, state: Readonly<MapState>): Line[] {
+// referenceStationId: when supplied, uses that station's stop ranks to order lines
+// on the road (caller passes the segment's departure station). Falls back to the
+// section's first station (lowest interpT) when omitted.
+export function getLinesForSection(
+  section: RoadSection,
+  state: Readonly<MapState>,
+  referenceStationId?: StationId,
+): Line[] {
   const lineIds = new Set<LineId>();
   for (const stationId of section.stationIds) {
     for (const line of state.lines.values()) {
@@ -72,11 +79,43 @@ export function getLinesForSection(section: RoadSection, state: Readonly<MapStat
     }
   }
 
-  const inOrder = state.lineStackingOrder.filter(id => lineIds.has(id));
-  const notInOrder = [...lineIds].filter(id => !state.lineStackingOrder.includes(id));
-  const all = [...inOrder, ...notInOrder].map(id => state.lines.get(id)!).filter(Boolean);
+  const referenceStation: Station | undefined = referenceStationId
+    ? state.stations.get(referenceStationId)
+    : section.stationIds
+        .map(id => state.stations.get(id))
+        .filter((s): s is Station => s != null)
+        .sort((a, b) => a.interpT - b.interpT)[0];
 
-  // Forward lines first, reverse lines last — within each group the stacking order
+  let all: Line[];
+  if (referenceStation) {
+    // Collect ranks for lines that stop at the reference station
+    const rankMap = new Map<LineId, number>();
+    for (const line of state.lines.values()) {
+      if (!lineIds.has(line.id)) continue;
+      for (const p of line.paths) {
+        if (p.kind === 'station-stop' && p.stationId === referenceStation.id) {
+          rankMap.set(line.id, p.rank);
+        }
+      }
+    }
+    // Lines not stopping at reference station get rank Infinity (placed last)
+    all = [...lineIds]
+      .map(id => state.lines.get(id)!)
+      .filter(Boolean)
+      .sort((a, b) => {
+        const ra = rankMap.get(a.id) ?? Infinity;
+        const rb = rankMap.get(b.id) ?? Infinity;
+        if (ra !== rb) return ra - rb;
+        // Tie-break by global stacking order
+        return state.lineStackingOrder.indexOf(a.id) - state.lineStackingOrder.indexOf(b.id);
+      });
+  } else {
+    const inOrder = state.lineStackingOrder.filter(id => lineIds.has(id));
+    const notInOrder = [...lineIds].filter(id => !state.lineStackingOrder.includes(id));
+    all = [...inOrder, ...notInOrder].map(id => state.lines.get(id)!).filter(Boolean);
+  }
+
+  // Forward lines first, reverse lines last — within each group the rank order
   // is preserved. Combined with the directedOffset sign-flip in the line renderer,
   // this guarantees opposite-direction lines land on opposite canonical sides.
   const forward = all.filter(l => {

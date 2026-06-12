@@ -180,24 +180,20 @@ export class StationRenderer {
   private getLinesForStation(
     station: Station, state: Readonly<MapState>
   ): Array<{ line: Line; segmentIndex: number; facing: 'left' | 'right' }> {
-    const result: Array<{ lineId: LineId; segmentIndex: number }> = [];
+    const result: Array<{ lineId: LineId; segmentIndex: number; rank: number }> = [];
 
     for (const line of state.lines.values()) {
       for (let i = 0; i < line.paths.length; i++) {
         const path = line.paths[i];
         if (path.kind === 'station-stop' && path.stationId === station.id) {
-          result.push({ lineId: line.id, segmentIndex: i });
+          result.push({ lineId: line.id, segmentIndex: i, rank: path.rank });
         }
       }
     }
 
     const globalOrder = state.lineStackingOrder;
     result.sort((a, b) => {
-      const lineA = state.lines.get(a.lineId)!;
-      const lineB = state.lines.get(b.lineId)!;
-      const dirA = getLineDirectionAtStop(lineA, a.segmentIndex, state);
-      const dirB = getLineDirectionAtStop(lineB, b.segmentIndex, state);
-      if (dirA !== dirB) return dirA === 'forward' ? -1 : 1;
+      if (a.rank !== b.rank) return a.rank - b.rank;
       const oa = globalOrder.indexOf(a.lineId);
       const ob = globalOrder.indexOf(b.lineId);
       if (oa !== ob) return oa - ob;

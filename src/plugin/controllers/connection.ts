@@ -126,11 +126,13 @@ export class ConnectionController extends BaseController {
     if (station) {
       const lines = [];
       for (const line of this.model.getState().lines.values()) {
-        const hasStop = line.paths.some(p => p.kind === 'station-stop' && p.stationId === station.id);
-        if (hasStop) {
-          lines.push({ id: line.id, name: line.name, color: line.color });
+        for (const path of line.paths) {
+          if (path.kind === 'station-stop' && path.stationId === station.id) {
+            lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank });
+          }
         }
       }
+      lines.sort((a, b) => a.rank - b.rank);
       postMessageToUI({
         type: 'station-clicked',
         stationId: station.id,

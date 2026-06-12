@@ -138,8 +138,8 @@ export class NetworkController extends BaseController {
         }
         if (figmaNode.type === 'FRAME') {
           const frame = figmaNode as FrameNode;
-          const ox = parseFloat(frame.getPluginData(FIGMA_KEY_JUNCTION_OFFSET_X) || '0');
-          const oy = parseFloat(frame.getPluginData(FIGMA_KEY_JUNCTION_OFFSET_Y) || '0');
+          const ox = Number.parseFloat(frame.getPluginData(FIGMA_KEY_JUNCTION_OFFSET_X) || '0');
+          const oy = Number.parseFloat(frame.getPluginData(FIGMA_KEY_JUNCTION_OFFSET_Y) || '0');
           await this.onNodePositionChanged(nodeId, { x: frame.x + ox, y: frame.y + oy });
           return;
         }

@@ -1,5 +1,5 @@
-import { LineData } from "@/common/messages";
-import { HVAlign, RoadSectionId, StationId } from "@/common/types";
+import { LineAtStationData } from "@/common/messages";
+import { HVAlign, LineId, RoadSectionId, StationId } from "@/common/types";
 import { postMessageToUI } from "../figma";
 import { BaseController } from "./base";
 
@@ -19,19 +19,22 @@ export class StationController extends BaseController {
   }
 
   public async handleGetStationInfo(stationId: StationId): Promise<void> {
-    const station = this.model.getState().stations.get(stationId);
+    const state = this.model.getState();
+    const station = state.stations.get(stationId);
     if (!station) {
       console.warn(`Station ${stationId} not found`);
       return;
     }
 
-    const lines: Array<LineData> = [];
-    for (const line of this.model.getState().lines.values()) {
-      const hasStop = line.paths.some(p => p.kind === 'station-stop' && p.stationId === stationId);
-      if (hasStop) {
-        lines.push({ id: line.id, name: line.name, color: line.color });
+    const lines: Array<LineAtStationData> = [];
+    for (const line of state.lines.values()) {
+      for (const path of line.paths) {
+        if (path.kind === 'station-stop' && path.stationId === stationId) {
+          lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank });
+        }
       }
     }
+    lines.sort((a, b) => a.rank - b.rank);
 
     postMessageToUI({
       type: 'station-clicked',
@@ -41,6 +44,15 @@ export class StationController extends BaseController {
       textRotation: station.textRotation,
       lines
     });
+  }
+
+  public async handleUpdateStationStopRanks(
+    stationId: StationId,
+    stops: Array<{ lineId: LineId; pathIndex: number; rank: number }>
+  ): Promise<void> {
+    this.model.updateStationStopRanks(stationId, stops);
+    await this.save();
+    await this.handleGetStationInfo(stationId);
   }
 
   public async handleUpdateStation(stationId: StationId, name: string, textAlign: HVAlign, textRotation: number): Promise<void> {

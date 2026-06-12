@@ -44,6 +44,7 @@ interface SerializedLinePath {
   k: 'ss' | 're';
   x: number;
   id?: string;  // 'ss': stationId; 're' legacy: old roadSectionId (ignored on load)
+  r?: number;   // 'ss': rank (absent = 0)
   s?: string;   // 're': sourceRoadId
   n?: string;   // 're': nodeId
   d?: string;   // 're': destRoadId
@@ -116,7 +117,7 @@ export function serializeMapState(state: MapState): string {
     c: l.color,
     ci: l.isCircular,
     p: l.paths.map(p => p.kind === 'station-stop'
-      ? { k: 'ss' as const, x: p.index, id: p.stationId }
+      ? { k: 'ss' as const, x: p.index, id: p.stationId, r: p.rank || undefined }
       : { k: 're' as const, x: p.index, s: p.sourceRoadId, n: p.nodeId, d: p.destRoadId }
     ),
     g: l.figmaGroupId
@@ -223,7 +224,7 @@ export function deserializeMapState(json: string): MapState | null {
     for (const l of typed.ln || []) {
       const paths: LinePath[] = (l.p || []).flatMap((p): LinePath[] => {
         if (p.k === 'ss') {
-          return [{ kind: 'station-stop', index: p.x, stationId: p.id as StationId }];
+          return [{ kind: 'station-stop', index: p.x, stationId: p.id as StationId, rank: p.r ?? 0 }];
         }
         // Old saves used a single `id` (roadSectionId); skip and let the validator regenerate.
         if (!p.s || !p.n || !p.d) return [];
