@@ -27,6 +27,7 @@ interface SerializedRoad {
 interface SerializedNode {
   i: string; // id
   n?: string; // name
+  ip?: { x: number; y: number }; // isolatedPos
   rc: Array<{ r: string; e: 0 | 1 }>; // roadConnections
 }
 
@@ -82,6 +83,7 @@ export function serializeMapState(state: MapState): string {
   const nodes: SerializedNode[] = Array.from(state.nodes.values()).map(n => ({
     i: n.id,
     n: n.name,
+    ip: n.isolatedPos,
     rc: n.roadConnections.map(rc => ({ r: rc.roadId, e: rc.endpointIndex }))
   }));
 
@@ -181,6 +183,7 @@ export function deserializeMapState(json: string): MapState | null {
       nodes.set(n.i as NodeId, {
         id: n.i as NodeId,
         name: n.n,
+        isolatedPos: n.ip,
         roadConnections: n.rc.map(rc => ({ roadId: rc.r as RoadId, endpointIndex: rc.e }))
       });
     }

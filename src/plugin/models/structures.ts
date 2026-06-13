@@ -8,6 +8,7 @@ export interface Connection {
 export interface Node {
   id: NodeId;
   name?: string;
+  isolatedPos?: Vector;
   roadConnections: Array<{ roadId: RoadId; endpointIndex: 0 | 1 }>;
 }
 

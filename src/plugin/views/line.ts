@@ -17,10 +17,9 @@ import { PathBuilder } from "../utils/path";
 import { getLinesForSection, lineOffsetInSection } from "../utils/section";
 import { hexToRgb } from "@/common/utils/color";
 
-interface BezierSegment {
-  outline: VectorNode;
-  main: VectorNode;
-}
+type SegmentResult =
+  | { kind: 'normal'; outline: VectorNode; main: VectorNode }
+  | { kind: 'dashed'; node: VectorNode };
 
 function computeRoadBezier(road: Road, state: Readonly<MapState>): QuadBezierPoints | null {
   const startNode = state.nodes.get(road.startNodeId);
@@ -192,26 +191,20 @@ export class LineRenderer {
     for (let si = 0; si < stops.length - 1; si++) {
       const { pathIdx: startPathIdx, station: startStation } = stops[si];
       const { pathIdx: endPathIdx, station: endStation } = stops[si + 1];
-      // RSEs that appeared between these two station stops.
       const rseBetween = rsesBefore[si + 1];
 
-      const outlineNodes: VectorNode[] = [];
-      const mainNodes: VectorNode[] = [];
-
-      const segment = this.renderLineSegment(
+      const result = this.renderLineSegment(
         line, startPathIdx, endPathIdx,
         startStation, endStation, rseBetween, color, state
       );
-      if (segment) {
-        outlineNodes.push(segment.outline);
-        mainNodes.push(segment.main);
-      }
-
-      if (outlineNodes.length > 0) {
+      if (!result) continue;
+      if (result.kind === 'normal') {
         segmentNodes.push(
-          figma.group(outlineNodes, figma.currentPage),
-          figma.group(mainNodes, figma.currentPage)
+          figma.group([result.outline], figma.currentPage),
+          figma.group([result.main], figma.currentPage)
         );
+      } else {
+        segmentNodes.push(figma.group([result.node], figma.currentPage));
       }
     }
 
@@ -235,6 +228,19 @@ export class LineRenderer {
     }
   }
 
+  private isInvalidJump(
+    startStation: Station,
+    endStation: Station,
+    rseBetween: RoadSectionEnter[],
+    state: Readonly<MapState>
+  ): boolean {
+    if (!startStation.roadSectionId || !endStation.roadSectionId) return false;
+    const startRoad = findRoadForSection(startStation.roadSectionId, state);
+    const endRoad   = findRoadForSection(endStation.roadSectionId,   state);
+    if (!startRoad || !endRoad || startRoad.id === endRoad.id) return false;
+    return rseBetween.length === 0;
+  }
+
   private renderLineSegment(
     line: Line,
     startPathIdx: number,
@@ -244,7 +250,7 @@ export class LineRenderer {
     rseBetween: RoadSectionEnter[],
     color: RGB,
     state: Readonly<MapState>
-  ): BezierSegment | null {
+  ): SegmentResult | null {
     const startPoints = this.stationRenderer.getConnectionPoint(startStation.id, line.id, startPathIdx);
     const endPoints   = this.stationRenderer.getConnectionPoint(endStation.id,   line.id, endPathIdx);
 
@@ -253,11 +259,15 @@ export class LineRenderer {
       return null;
     }
 
+    if (this.isInvalidJump(startStation, endStation, rseBetween, state)) {
+      return { kind: 'dashed', node: this.createDashedLine(startPoints.head, endPoints.tail, color) };
+    }
+
     const pathData = this.buildSegmentPath(
       line, startStation, endStation, rseBetween,
       startPoints.head, endPoints.tail, state
     );
-    return this.bezierPathToSegments(pathData, color);
+    return { ...this.bezierPathToSegments(pathData, color)!, kind: 'normal' };
   }
 
   private buildSegmentPath(
@@ -360,7 +370,18 @@ export class LineRenderer {
     return pb.build();
   }
 
-  private bezierPathToSegments(pathData: string, color: RGB): BezierSegment | null {
+  private createDashedLine(from: Vector, to: Vector, color: RGB): VectorNode {
+    const path = `M ${from.x} ${from.y} L ${to.x} ${to.y}`;
+    const node = figma.createVector();
+    node.vectorPaths = [{ windingRule: 'NONZERO', data: path }];
+    node.strokes = [{ type: 'SOLID', color }];
+    node.strokeWeight = 2;
+    node.strokeCap = 'ROUND';
+    node.dashPattern = [4, 5];
+    return node;
+  }
+
+  private bezierPathToSegments(pathData: string, color: RGB): { outline: VectorNode; main: VectorNode } | null {
     const outlineNode = figma.createVector();
     outlineNode.vectorPaths = [{ windingRule: 'NONZERO', data: pathData }];
     outlineNode.strokes = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];

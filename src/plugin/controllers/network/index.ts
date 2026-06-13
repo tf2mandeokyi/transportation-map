@@ -4,7 +4,7 @@ import { postMessageToUI } from "../../figma";
 import { Model } from "../../models";
 import { View } from "../../views";
 import { BaseController } from "../base";
-import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_NODE_ID, FIGMA_KEY_ROAD_ID, FIGMA_KEY_JUNCTION_OFFSET_X, FIGMA_KEY_JUNCTION_OFFSET_Y, NODE_RADIUS } from "../../views/road";
+import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_NODE_ID, FIGMA_KEY_ROAD_ID, FIGMA_KEY_JUNCTION_OFFSET_X, FIGMA_KEY_JUNCTION_OFFSET_Y } from "../../views/road";
 import { RoadControlManager, FIGMA_KEY_BEZIER_HANDLE, FIGMA_KEY_ENDPOINT_HANDLE } from "./road-control";
 import { RoadCreationStateMachine } from "./road-creation";
 
@@ -27,13 +27,23 @@ export class NetworkController extends BaseController {
   // ── Public message handlers (node/road CRUD) ────────────────────────────
 
   public async handleAddNode(msg: Extract<UIToPluginMessage, { type: 'add-node' }>): Promise<void> {
-    const id = this.model.addNode({ name: msg.node.name, roadConnections: [] });
-    this.nodePositionCache.set(id, msg.node.pos);
+    const pos = msg.node.pos ?? figma.viewport.center;
+    console.log(`[handleAddNode] pos =`, pos);
+    const id = this.model.addNode({ name: msg.node.name, isolatedPos: pos, roadConnections: [] });
+    this.nodePositionCache.set(id, pos);
+    this.isRendering = true;
+    try { await this.render(); await this.save(); } finally { this.isRendering = false; }
+    this.syncNetworkToUI();
+  }
+
+  public async handleUpdateNodeName(nodeId: NodeId, name: string | undefined): Promise<void> {
+    this.model.updateNodeName(nodeId, name);
     await this.save();
     this.syncNetworkToUI();
   }
 
   public async handleRemoveNode(nodeId: NodeId): Promise<void> {
+    this.nodePositionCache.delete(nodeId);
     this.model.removeNode(nodeId);
     await this.save();
     this.syncNetworkToUI();
@@ -199,7 +209,7 @@ export class NetworkController extends BaseController {
   // ── Private helpers ─────────────────────────────────────────────────────
 
   private async onNodeMarkerMoved(nodeId: NodeId, ellipse: EllipseNode): Promise<void> {
-    await this.onNodePositionChanged(nodeId, { x: ellipse.x + NODE_RADIUS, y: ellipse.y + NODE_RADIUS });
+    await this.onNodePositionChanged(nodeId, { x: ellipse.x + ellipse.width / 2, y: ellipse.y + ellipse.height / 2 });
   }
 
   private async onNodePositionChanged(nodeId: NodeId, newPos: { x: number; y: number }): Promise<void> {
@@ -214,6 +224,7 @@ export class NetworkController extends BaseController {
       this.model.moveNodeConnections(nodeId, delta);
     } else {
       this.nodePositionCache.set(nodeId, newPos);
+      this.model.updateIsolatedNodePos(nodeId, newPos);
     }
     await this.roadControl.remove();
 
@@ -254,6 +265,7 @@ export class NetworkController extends BaseController {
         count++;
       }
       if (count > 0) return { x: sumX / count, y: sumY / count };
+      if (node.isolatedPos) return node.isolatedPos;
     }
     return this.nodePositionCache.get(nodeId) ?? { x: 0, y: 0 };
   }

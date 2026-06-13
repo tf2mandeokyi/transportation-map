@@ -5,19 +5,38 @@ import { useNetworkContext } from '../contexts/NetworkContext';
 
 // ─── Focused element panels ────────────────────────────────────────────────
 
-const FocusedNodePanel: React.FC<{ element: Extract<NetworkFocusedElement, { kind: 'node' }> }> = ({ element }) => (
-  <div style={{ padding: '8px', background: '#e8f4ff', borderRadius: '4px', marginBottom: '12px', fontSize: '12px' }}>
-    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
-      <span style={{ fontWeight: 600, flex: 1 }}>Selected Junction</span>
-      <button className="button button--secondary small-btn" onClick={() => postMessageToPlugin({ type: 'remove-node', nodeId: element.nodeId })}>
-        Delete
-      </button>
+const FocusedNodePanel: React.FC<{ element: Extract<NetworkFocusedElement, { kind: 'node' }> }> = ({ element }) => {
+  const [editName, setEditName] = useState(element.name ?? '');
+
+  const commitName = () => {
+    const trimmed = editName.trim() || undefined;
+    if (trimmed !== element.name) {
+      postMessageToPlugin({ type: 'update-node-name', nodeId: element.nodeId, name: trimmed });
+    }
+  };
+
+  return (
+    <div style={{ padding: '8px', background: '#e8f4ff', borderRadius: '4px', marginBottom: '12px', fontSize: '12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '6px' }}>
+        <span style={{ fontWeight: 600, flex: 1 }}>Selected Junction</span>
+        <button className="button button--secondary small-btn" onClick={() => postMessageToPlugin({ type: 'remove-node', nodeId: element.nodeId })}>
+          Delete
+        </button>
+      </div>
+      <input
+        className="input"
+        placeholder="Junction name (optional)"
+        value={editName}
+        onChange={e => setEditName(e.target.value)}
+        onBlur={commitName}
+        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+        style={{ marginBottom: '4px' }}
+      />
+      <div style={{ color: '#666', marginTop: '2px' }}>x: {element.pos.x.toFixed(1)},&nbsp; y: {element.pos.y.toFixed(1)}</div>
+      <div style={{ color: '#999', fontSize: '11px', marginTop: '4px' }}>Drag the junction marker on the canvas to move it.</div>
     </div>
-    <div>{element.name ?? element.nodeId}</div>
-    <div style={{ color: '#666', marginTop: '2px' }}>x: {element.pos.x.toFixed(1)},&nbsp; y: {element.pos.y.toFixed(1)}</div>
-    <div style={{ color: '#999', fontSize: '11px', marginTop: '4px' }}>Drag the junction marker on the canvas to move it.</div>
-  </div>
-);
+  );
+};
 
 const FocusedRoadPanel: React.FC<{
   element: Extract<NetworkFocusedElement, { kind: 'road' }>;
@@ -69,24 +88,15 @@ const FocusedRoadPanel: React.FC<{
 
 const NodeForm: React.FC = () => {
   const [name, setName] = useState('');
-  const [x, setX]       = useState('0');
-  const [y, setY]       = useState('0');
 
   const handleAdd = () => {
-    const px = Number.parseFloat(x);
-    const py = Number.parseFloat(y);
-    if (Number.isNaN(px) || Number.isNaN(py)) return;
-    postMessageToPlugin({ type: 'add-node', node: { name: name.trim() || undefined, pos: { x: px, y: py } } });
-    setName(''); setX('0'); setY('0');
+    postMessageToPlugin({ type: 'add-node', node: { name: name.trim() || undefined } });
+    setName('');
   };
 
   return (
     <div className="grid">
       <input className="input" placeholder="Junction name (optional)" value={name} onChange={e => setName(e.target.value)} />
-      <div className="two-column">
-        <div><label>X</label><input className="input" type="number" value={x} onChange={e => setX(e.target.value)} /></div>
-        <div><label>Y</label><input className="input" type="number" value={y} onChange={e => setY(e.target.value)} /></div>
-      </div>
       <button className="button button--primary" onClick={handleAdd}>Add Junction</button>
     </div>
   );
@@ -122,7 +132,7 @@ const NetworkSection: React.FC = () => {
 
   return (
     <div>
-      {networkFocus?.kind === 'node' && <FocusedNodePanel element={networkFocus} />}
+      {networkFocus?.kind === 'node' && <FocusedNodePanel key={networkFocus.nodeId} element={networkFocus} />}
       {networkFocus?.kind === 'road' && <FocusedRoadPanel element={networkFocus} nodes={nodes} />}
 
       <div className="section">

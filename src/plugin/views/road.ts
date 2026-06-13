@@ -92,7 +92,10 @@ export class RoadRenderer {
     for (const node of state.nodes.values()) {
       if (nodesWithJunction.has(node.id)) continue;
       const marker = this.buildNodeMarker(node, state);
-      if (marker) figma.currentPage.appendChild(marker);
+      if (marker) {
+        figma.currentPage.appendChild(marker);
+        console.log(`[renderAll] appended marker for node ${node.id} at (${marker.x}, ${marker.y})`);
+      }
     }
   }
 
@@ -185,9 +188,18 @@ export class RoadRenderer {
       y += road.endpoints[endpointIndex].endpointPos.y;
       count++;
     }
-    if (count === 0) return null;
-    x /= count;
-    y /= count;
+    if (count === 0) {
+      if (!node.isolatedPos) {
+        console.warn(`[buildNodeMarker] isolated node ${node.id} has no isolatedPos — skipping`);
+        return null;
+      }
+      console.log(`[buildNodeMarker] isolated node ${node.id} at isolatedPos`, node.isolatedPos);
+      x = node.isolatedPos.x;
+      y = node.isolatedPos.y;
+    } else {
+      x /= count;
+      y /= count;
+    }
 
     const ellipse = figma.createEllipse();
     ellipse.resize(NODE_RADIUS * 2, NODE_RADIUS * 2);

@@ -15,8 +15,9 @@ export type UIToPluginMessage =
   | { type: 'copy-station'; stationId: StationId; direction: 'forwards' | 'backwards' }
   | { type: 'combine-stations'; sourceStationId: StationId; targetStationId: StationId }
   | { type: 'select-station'; stationId: StationId }
-  | { type: 'add-node'; node: { name?: string; pos: { x: number; y: number } } }
+  | { type: 'add-node'; node: { name?: string; pos?: { x: number; y: number } } }
   | { type: 'remove-node'; nodeId: NodeId }
+  | { type: 'update-node-name'; nodeId: NodeId; name: string | undefined }
   | { type: 'start-adding-road-mode' }
   | { type: 'cancel-adding-road-mode' }
   | { type: 'remove-road'; roadId: RoadId }

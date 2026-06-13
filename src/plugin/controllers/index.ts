@@ -86,6 +86,7 @@ export class Controller {
 
       // Road network actions
       case 'add-node':                 return this.networkController.handleAddNode(msg);
+      case 'update-node-name':         return this.networkController.handleUpdateNodeName(msg.nodeId, msg.name);
       case 'remove-node':              return this.networkController.handleRemoveNode(msg.nodeId);
       case 'start-adding-road-mode':   return this.networkController.startRoadCreationMode();
       case 'cancel-adding-road-mode':  return this.networkController.cancelRoadCreationMode();

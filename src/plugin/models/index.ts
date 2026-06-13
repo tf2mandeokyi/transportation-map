@@ -47,7 +47,23 @@ export class Model {
     return id;
   }
 
+  public updateIsolatedNodePos(id: NodeId, pos: Vector): void {
+    const node = this.state.nodes.get(id);
+    if (node && node.roadConnections.length === 0) node.isolatedPos = pos;
+  }
+
+  public updateNodeName(id: NodeId, name: string | undefined): void {
+    const node = this.state.nodes.get(id);
+    if (node) node.name = name;
+  }
+
   public removeNode(id: NodeId): void {
+    const node = this.state.nodes.get(id);
+    if (!node) return;
+    const roadIds = node.roadConnections.map(rc => rc.roadId);
+    for (const roadId of roadIds) {
+      this.removeRoad(roadId);
+    }
     this.state.nodes.delete(id);
   }
 
@@ -98,10 +114,9 @@ export class Model {
       node.roadConnections = node.roadConnections.filter(rc => rc.roadId !== id);
     }
 
-    // Remove all stations on this road's sections from the model
     for (const section of road.sections.values()) {
-      for (const stationId of section.stationIds) {
-        this.state.stations.delete(stationId);
+      for (const stationId of [...section.stationIds]) {
+        this.removeStation(stationId);
       }
     }
 
@@ -132,8 +147,8 @@ export class Model {
 
     const section = road.sections.get(sectionId);
     if (section) {
-      for (const stationId of section.stationIds) {
-        this.state.stations.delete(stationId);
+      for (const stationId of [...section.stationIds]) {
+        this.removeStation(stationId);
       }
     }
 
