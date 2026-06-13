@@ -59,7 +59,8 @@ export class RoadRenderer {
 
       // Temporarily place on page to read visual bounds, then reparent into the frame.
       figma.currentPage.appendChild(polygon);
-      const bounds = polygon.absoluteBoundingBox!;
+      const bounds = polygon.absoluteBoundingBox;
+      if (!bounds) { polygon.remove(); continue; }
 
       const frame = figma.createFrame();
       frame.x = bounds.x;

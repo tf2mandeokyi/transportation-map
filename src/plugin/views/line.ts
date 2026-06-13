@@ -14,31 +14,17 @@ import {
 } from "../utils/bezier";
 import { JunctionShape } from "../utils/junction-shape";
 import { PathBuilder } from "../utils/path";
-import { getLinesForSection, lineOffsetInSection } from "../utils/section";
+import {
+  computeRoadBezier,
+  findRoadForSection,
+  getLinesForSection,
+  lineOffsetInSection,
+} from "../utils/section";
 import { hexToRgb } from "@/common/utils/color";
 
 type SegmentResult =
   | { kind: 'normal'; outline: VectorNode; main: VectorNode }
   | { kind: 'dashed'; node: VectorNode };
-
-function computeRoadBezier(road: Road, state: Readonly<MapState>): QuadBezierPoints | null {
-  const startNode = state.nodes.get(road.startNodeId);
-  const endNode = state.nodes.get(road.endNodeId);
-  if (!startNode || !endNode) return null;
-
-  return {
-    p0: road.endpoints[0].endpointPos,
-    p1: road.bezierMidPoint,
-    p2: road.endpoints[1].endpointPos,
-  };
-}
-
-function findRoadForSection(sectionId: RoadSectionId, state: Readonly<MapState>): Road | null {
-  for (const road of state.roads.values()) {
-    if (road.sections.has(sectionId)) return road;
-  }
-  return null;
-}
 
 // Total lateral offset from the road centerline for this line on this section.
 // referenceStationId: which station's stop ranks to use for lane ordering (the
@@ -115,9 +101,9 @@ function computeSectionSegs(
   if (!centerline) return [];
 
   const offsetDep = computeTotalOffset(line, road, sectionId, state, departureStationId);
-  const offsetArr = arrivalStationId !== undefined
-    ? computeTotalOffset(line, road, sectionId, state, arrivalStationId)
-    : offsetDep;
+  const offsetArr = arrivalStationId === undefined
+    ? offsetDep
+    : computeTotalOffset(line, road, sectionId, state, arrivalStationId);
 
   // Normalize offsets for traversal direction (reverse → negate perpendicular).
   const directedDep = t1 > t2 ? -offsetDep : offsetDep;
@@ -224,7 +210,7 @@ export class LineRenderer {
       try {
         const oldGroup = await figma.getNodeByIdAsync(line.figmaGroupId);
         if (oldGroup && !oldGroup.removed) oldGroup.remove();
-      } catch {}
+      } catch { /* node may have been deleted */ }
     }
   }
 
@@ -267,7 +253,7 @@ export class LineRenderer {
       line, startStation, endStation, rseBetween,
       startPoints.head, endPoints.tail, state
     );
-    return { ...this.bezierPathToSegments(pathData, color)!, kind: 'normal' };
+    return { ...this.bezierPathToSegments(pathData, color), kind: 'normal' };
   }
 
   private buildSegmentPath(
@@ -381,7 +367,7 @@ export class LineRenderer {
     return node;
   }
 
-  private bezierPathToSegments(pathData: string, color: RGB): { outline: VectorNode; main: VectorNode } | null {
+  private bezierPathToSegments(pathData: string, color: RGB): { outline: VectorNode; main: VectorNode } {
     const outlineNode = figma.createVector();
     outlineNode.vectorPaths = [{ windingRule: 'NONZERO', data: pathData }];
     outlineNode.strokes = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];
@@ -425,7 +411,7 @@ export class LineRenderer {
         try {
           const node = await figma.getNodeByIdAsync(line.figmaGroupId);
           if (node && !node.removed) node.remove();
-        } catch {}
+        } catch { /* node may have been deleted */ }
       }
     }
   }

@@ -1,5 +1,6 @@
 import { LineId, StationId } from "@/common/types";
 import { LinePathInput } from "@/common/messages";
+import { LinePath } from "../models/structures";
 import { postMessageToUI } from "../figma";
 import { BaseController } from "./base";
 
@@ -70,15 +71,10 @@ export class ConnectionController extends BaseController {
     const normalized = ((steps % n) + n) % n;
     if (normalized === 0) return;
 
-    const toInput = (p: (typeof line.paths)[number]): LinePathInput =>
-      p.kind === 'station-stop'
-        ? { kind: 'station-stop', stationId: p.stationId }
-        : { kind: 'road-section-enter', sourceRoadId: p.sourceRoadId, nodeId: p.nodeId, destRoadId: p.destRoadId };
-
     const rotated = [
       ...line.paths.slice(normalized),
       ...line.paths.slice(0, normalized)
-    ].map(toInput);
+    ].map(p => this.pathToInput(p));
 
     this.model.replaceLinePaths(lineId, rotated);
 
@@ -95,16 +91,18 @@ export class ConnectionController extends BaseController {
     const insertAt = insertAfter ? refIndex + 1 : refIndex;
     const newStop: { kind: 'station-stop'; stationId: StationId } = { kind: 'station-stop', stationId: newStationId };
 
-    const toInput = (p: (typeof line.paths)[number]): LinePathInput =>
-      p.kind === 'station-stop'
-        ? { kind: 'station-stop', stationId: p.stationId }
-        : { kind: 'road-section-enter', sourceRoadId: p.sourceRoadId, nodeId: p.nodeId, destRoadId: p.destRoadId };
-
-    const before = line.paths.slice(0, insertAt).map(toInput);
-    const after = line.paths.slice(insertAt).map(toInput);
+    const before = line.paths.slice(0, insertAt).map(p => this.pathToInput(p));
+    const after = line.paths.slice(insertAt).map(p => this.pathToInput(p));
     this.model.replaceLinePaths(lineId, [...before, newStop, ...after]);
 
     return true;
+  }
+
+  private pathToInput(p: LinePath): LinePathInput {
+    if (p.kind === 'station-stop') {
+      return { kind: 'station-stop', stationId: p.stationId };
+    }
+    return { kind: 'road-section-enter', sourceRoadId: p.sourceRoadId, nodeId: p.nodeId, destRoadId: p.destRoadId };
   }
 
   public connectStationsWithLine(lineId: LineId, startStationId: StationId, endStationId: StationId): void {

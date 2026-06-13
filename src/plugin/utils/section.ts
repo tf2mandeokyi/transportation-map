@@ -1,12 +1,23 @@
 import { Line, MapState, Road, RoadSection, Station } from "../models/structures";
 import { LineId, RoadSectionId, StationId } from "@/common/types";
-import { LINE_SPACING, ROAD_MARGIN, ROAD_MIN_WIDTH } from "./bezier";
+import { LINE_SPACING, ROAD_MARGIN, ROAD_MIN_WIDTH, QuadBezierPoints } from "./bezier";
 
-function findRoadForSection(sectionId: RoadSectionId, state: Readonly<MapState>): Road | null {
+export function findRoadForSection(sectionId: RoadSectionId, state: Readonly<MapState>): Road | null {
   for (const road of state.roads.values()) {
     if (road.sections.has(sectionId)) return road;
   }
   return null;
+}
+
+export function computeRoadBezier(road: Road, state: Readonly<MapState>): QuadBezierPoints | null {
+  const startNode = state.nodes.get(road.startNodeId);
+  const endNode = state.nodes.get(road.endNodeId);
+  if (!startNode || !endNode) return null;
+  return {
+    p0: road.endpoints[0].endpointPos,
+    p1: road.bezierMidPoint,
+    p2: road.endpoints[1].endpointPos,
+  };
 }
 
 // Determines traversal direction for a line at a specific station stop (by path
@@ -100,8 +111,8 @@ export function getLinesForSection(
     }
     // Lines not stopping at reference station get rank Infinity (placed last)
     all = [...lineIds]
-      .map(id => state.lines.get(id)!)
-      .filter(Boolean)
+      .map(id => state.lines.get(id))
+      .filter((l): l is Line => l != null)
       .sort((a, b) => {
         const ra = rankMap.get(a.id) ?? Infinity;
         const rb = rankMap.get(b.id) ?? Infinity;
@@ -112,7 +123,9 @@ export function getLinesForSection(
   } else {
     const inOrder = state.lineStackingOrder.filter(id => lineIds.has(id));
     const notInOrder = [...lineIds].filter(id => !state.lineStackingOrder.includes(id));
-    all = [...inOrder, ...notInOrder].map(id => state.lines.get(id)!).filter(Boolean);
+    all = [...inOrder, ...notInOrder]
+      .map(id => state.lines.get(id))
+      .filter((l): l is Line => l != null);
   }
 
   // Forward lines first, reverse lines last — within each group the rank order

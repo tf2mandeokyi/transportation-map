@@ -13,7 +13,7 @@ function generateBase62(length: number): string {
   return result;
 }
 
-function generateUniqueId<T extends string>(map: Map<T, any>): T {
+function generateUniqueId<T extends string>(map: Map<T, unknown>): T {
   let length = 1;
   while (true) {
     const id = generateBase62(length) as T;
@@ -49,7 +49,7 @@ export class Model {
 
   public updateIsolatedNodePos(id: NodeId, pos: Vector): void {
     const node = this.state.nodes.get(id);
-    if (node && node.roadConnections.length === 0) node.isolatedPos = pos;
+    if (node?.roadConnections.length === 0) node.isolatedPos = pos;
   }
 
   public updateNodeName(id: NodeId, name: string | undefined): void {
@@ -115,7 +115,8 @@ export class Model {
     }
 
     for (const section of road.sections.values()) {
-      for (const stationId of [...section.stationIds]) {
+      const stationIds = [...section.stationIds];
+      for (const stationId of stationIds) {
         this.removeStation(stationId);
       }
     }
@@ -147,7 +148,8 @@ export class Model {
 
     const section = road.sections.get(sectionId);
     if (section) {
-      for (const stationId of [...section.stationIds]) {
+      const stationIds = [...section.stationIds];
+      for (const stationId of stationIds) {
         this.removeStation(stationId);
       }
     }
@@ -329,13 +331,6 @@ export class Model {
   }
 
   // ─── Helpers ───
-
-  public findRoadForSection(sectionId: RoadSectionId): Road | null {
-    for (const road of this.state.roads.values()) {
-      if (road.sections.has(sectionId)) return road;
-    }
-    return null;
-  }
 
   private _findSection(sectionId: RoadSectionId): RoadSection | null {
     for (const road of this.state.roads.values()) {

@@ -8,7 +8,8 @@ export class StationController extends BaseController {
     const { name, textAlign, textRotation = 0, roadSectionId = null, interpT = 0.5 } = stopData;
 
     const id = this.createStation(name, textAlign, textRotation, roadSectionId, interpT);
-    const station = this.model.getState().stations.get(id)!;
+    const station = this.model.getState().stations.get(id);
+    if (!station) return;
 
     await this.view.stationRenderer.renderStation(station, this.model.getState());
     await this.save();
@@ -104,7 +105,8 @@ export class StationController extends BaseController {
       interpT: newInterpT,
       roadSectionId: station.roadSectionId,
     });
-    const newStation = this.model.getState().stations.get(newStationId)!;
+    const newStation = this.model.getState().stations.get(newStationId);
+    if (!newStation) return;
 
     if (this.connectionController) {
       const linesAtStation = this.model.getLineStackingOrderForStation(stationId);

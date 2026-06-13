@@ -136,47 +136,56 @@ export function serializeMapState(state: MapState): string {
   return JSON.stringify(serialized);
 }
 
+type LegacyRaw = Record<string, unknown>;
+type Vec2 = { x: number; y: number };
+
 // Migrates in-place from legacy formats:
 // v1: node.pos + relative displacements → absolute endpointPos/bezierPos per connection
 // v2: absolute bezierPos per connection → single bezierMidPoint per road
-function migrateOldFormat(data: any): void {
-  const firstRoad = data.rd?.[0];
+function migrateOldFormat(data: LegacyRaw): void {
+  const rd = (data.rd as LegacyRaw[]) ?? [];
+  const firstRoad = rd[0];
   if (!firstRoad) return;
 
   // v1 → v2: node.pos + relative offsets
-  if (!('ep' in firstRoad.e0)) {
-    const nodePositions = new Map<string, { x: number; y: number }>();
-    for (const n of data.nd || []) {
-      if (n.p) nodePositions.set(n.i, n.p);
+  if (!('ep' in (firstRoad.e0 as LegacyRaw))) {
+    const nodePositions = new Map<string, Vec2>();
+    for (const n of (data.nd as LegacyRaw[]) ?? []) {
+      if (n.p) nodePositions.set(n.i as string, n.p as Vec2);
     }
-    for (const r of data.rd || []) {
-      const convertConn = (c: any, nodePos: { x: number; y: number }) => {
-        const ed = c.ed ?? { x: 0, y: 0 };
-        const ep = { x: nodePos.x + ed.x, y: nodePos.y + ed.y };
-        const bp = { x: ep.x + c.bd.x, y: ep.y + c.bd.y };
-        return { ep, bp, g: c.g };
-      };
-      r.e0 = convertConn(r.e0, nodePositions.get(r.sn) ?? { x: 0, y: 0 });
-      r.e1 = convertConn(r.e1, nodePositions.get(r.en) ?? { x: 0, y: 0 });
+    const convertConn = (c: LegacyRaw, nodePos: Vec2) => {
+      const ed = (c.ed ?? { x: 0, y: 0 }) as Vec2;
+      const ep = { x: nodePos.x + ed.x, y: nodePos.y + ed.y };
+      const bd = c.bd as Vec2;
+      const bp = { x: ep.x + bd.x, y: ep.y + bd.y };
+      return { ep, bp, g: c.g };
+    };
+    for (const r of rd) {
+      r.e0 = convertConn(r.e0 as LegacyRaw, nodePositions.get(r.sn as string) ?? { x: 0, y: 0 });
+      r.e1 = convertConn(r.e1 as LegacyRaw, nodePositions.get(r.en as string) ?? { x: 0, y: 0 });
     }
-    for (const n of data.nd || []) delete n.p;
+    for (const n of (data.nd as LegacyRaw[]) ?? []) delete n.p;
   }
 
   // v2 → v3: per-connection bezierPos → single bezierMidPoint on road
-  for (const r of data.rd || []) {
-    if (!('bmp' in r) && r.e0?.bp && r.e1?.bp) {
-      r.bmp = { x: (r.e0.bp.x + r.e1.bp.x) / 2, y: (r.e0.bp.y + r.e1.bp.y) / 2 };
+  for (const r of rd) {
+    const e0 = r.e0 as LegacyRaw | undefined;
+    const e1 = r.e1 as LegacyRaw | undefined;
+    if (!('bmp' in r) && e0?.bp && e1?.bp) {
+      const bp0 = e0.bp as Vec2;
+      const bp1 = e1.bp as Vec2;
+      r.bmp = { x: (bp0.x + bp1.x) / 2, y: (bp0.y + bp1.y) / 2 };
     }
-    if (r.e0) { delete r.e0.bp; delete r.e0.bdir; }
-    if (r.e1) { delete r.e1.bp; delete r.e1.bdir; }
+    if (e0) { delete e0.bp; delete e0.bdir; }
+    if (e1) { delete e1.bp; delete e1.bdir; }
   }
 }
 
 export function deserializeMapState(json: string): MapState | null {
   try {
-    const data: any = JSON.parse(json);
+    const data = JSON.parse(json) as LegacyRaw;
     migrateOldFormat(data);
-    const typed = data as SerializedMapState;
+    const typed = data as unknown as SerializedMapState;
 
     const nodes = new Map<NodeId, Node>();
     for (const n of typed.nd || []) {

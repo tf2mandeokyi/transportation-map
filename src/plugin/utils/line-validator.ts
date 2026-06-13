@@ -1,13 +1,6 @@
-import { Line, LinePath, MapState, Road, RoadSectionEnter, Station, StationStop } from "../models/structures";
+import { Line, LinePath, MapState, Road, RoadSectionEnter, StationStop } from "../models/structures";
 import { NodeId, RoadId } from "@/common/types";
-
-function findRoadForStation(station: Station, state: Readonly<MapState>): Road | null {
-  if (!station.roadSectionId) return null;
-  for (const road of state.roads.values()) {
-    if (road.sections.has(station.roadSectionId)) return road;
-  }
-  return null;
-}
+import { findRoadForSection } from "./section";
 
 function findSharedNode(roadA: Road, roadB: Road): NodeId | null {
   if (roadA.endNodeId === roadB.startNodeId || roadA.endNodeId === roadB.endNodeId) return roadA.endNodeId;
@@ -27,18 +20,18 @@ export function validateLinePaths(line: Line, state: Readonly<MapState>): LinePa
       const prevStation = state.stations.get(stops[i - 1].stationId);
       const currStation = state.stations.get(stops[i].stationId);
       if (prevStation && currStation) {
-        const prevRoad = findRoadForStation(prevStation, state);
-        const currRoad = findRoadForStation(currStation, state);
+        const prevRoad = prevStation.roadSectionId ? findRoadForSection(prevStation.roadSectionId, state) : null;
+        const currRoad = currStation.roadSectionId ? findRoadForSection(currStation.roadSectionId, state) : null;
         if (prevRoad && currRoad && prevRoad.id !== currRoad.id) {
           const nodeId = findSharedNode(prevRoad, currRoad);
           if (nodeId) {
             result.push({
               kind: 'road-section-enter',
               index: 0,
-              sourceRoadId: prevRoad.id as RoadId,
+              sourceRoadId: prevRoad.id,
               nodeId,
-              destRoadId: currRoad.id as RoadId,
-            } as RoadSectionEnter);
+              destRoadId: currRoad.id,
+            });
           }
         }
       }

@@ -1,37 +1,21 @@
-import { Line, MapState, Road, Station } from "../models/structures";
+import { Line, MapState, Station } from "../models/structures";
 import { Model } from "../models";
 import { renderStation, renderStationLine } from "../figmls";
-import { HVAlign, LineId, RoadSectionId, StationId } from "@/common/types";
-import { getLineDirectionAtStop } from "../utils/section";
+import { HVAlign, LineId, StationId } from "@/common/types";
+import {
+  computeRoadBezier,
+  findRoadForSection,
+  getLineDirectionAtStop,
+} from "../utils/section";
 import {
   evalQuadraticBezier,
   evalQuadraticBezierTangent,
   TRACK_SPACING,
-  QuadBezierPoints,
 } from "../utils/bezier";
 
 export interface ConnectionPoints {
   head: Vector;
   tail: Vector;
-}
-
-function computeRoadBezier(road: Road, state: Readonly<MapState>): QuadBezierPoints | null {
-  const startNode = state.nodes.get(road.startNodeId);
-  const endNode = state.nodes.get(road.endNodeId);
-  if (!startNode || !endNode) return null;
-
-  const p0 = road.endpoints[0].endpointPos;
-  const p1 = road.bezierMidPoint;
-  const p2 = road.endpoints[1].endpointPos;
-
-  return { p0, p1, p2 };
-}
-
-function findRoadForSection(sectionId: RoadSectionId, state: Readonly<MapState>): Road | null {
-  for (const road of state.roads.values()) {
-    if (road.sections.has(sectionId)) return road;
-  }
-  return null;
 }
 
 function computeStationPosition(station: Station, state: Readonly<MapState>): Vector {
@@ -83,7 +67,7 @@ export class StationRenderer {
     let frame: FrameNode | null = null;
     if (station.figmaNodeId) {
       try { frame = await figma.getNodeByIdAsync(station.figmaNodeId) as FrameNode; }
-      catch {}
+      catch { /* node may have been deleted */ }
     }
     if (!frame) {
       frame = figma.createFrame();
@@ -201,7 +185,7 @@ export class StationRenderer {
     });
 
     return result.map(({ lineId, segmentIndex }) => {
-      const line = state.lines.get(lineId)!;
+      const line = state.lines.get(lineId);
       if (!line) return null;
       const dir = getLineDirectionAtStop(line, segmentIndex, state);
       const facing: 'left' | 'right' = dir === 'forward' ? 'right' : 'left';
