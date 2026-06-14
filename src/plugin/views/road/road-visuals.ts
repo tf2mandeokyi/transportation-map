@@ -4,8 +4,6 @@ import { getLinesForSection, sectionBandWidth } from "../../utils/section";
 import { FIGMA_KEY_ROAD_ID } from "./constants";
 
 const SECTION_COLOR: RGB = { r: 0.82, g: 0.82, b: 0.82 };
-const DIVIDER_COLOR: RGB = { r: 0.65, g: 0.65, b: 0.65 };
-const DIVIDER_WIDTH = 1.5;
 
 function makeVectorCurve(pathData: string, color: RGB, weight: number): VectorNode {
   const node = figma.createVector();
@@ -35,27 +33,15 @@ export function buildRoadVisuals(road: Road, state: Readonly<MapState>): SceneNo
   }
 
   const center = (sections.length - 1) / 2;
-  const left  = sections[0];
-  const right = sections[sections.length - 1];
-  const leftEdge  = (left.index  - center) * TRACK_SPACING - sectionBandWidth(getLinesForSection(left,  state).length) / 2;
-  const rightEdge = (right.index - center) * TRACK_SPACING + sectionBandWidth(getLinesForSection(right, state).length) / 2;
-
-  const roadNode = makeVectorCurve(
-    bezierListPathData(offsetBezierAdaptive(baseCurve, (leftEdge + rightEdge) / 2)),
-    SECTION_COLOR, rightEdge - leftEdge
-  );
-  roadNode.name = 'band';
-  roadNode.setPluginData(FIGMA_KEY_ROAD_ID, road.id);
-
-  const result: SceneNode[] = [roadNode];
-  for (let i = 0; i < sections.length - 1; i++) {
-    const divOffset = ((sections[i].index + sections[i + 1].index) / 2 - center) * TRACK_SPACING;
-    const divNode   = makeVectorCurve(bezierListPathData(offsetBezierAdaptive(baseCurve, divOffset)), DIVIDER_COLOR, DIVIDER_WIDTH);
-    divNode.name = `divider-${i}`;
-    divNode.setPluginData(FIGMA_KEY_ROAD_ID, road.id);
-    result.push(divNode);
-  }
-  return result;
+  return sections.map(section => {
+    const offset = (section.index - center) * TRACK_SPACING;
+    const curve = offset === 0 ? [baseCurve] : offsetBezierAdaptive(baseCurve, offset);
+    const width = sectionBandWidth(getLinesForSection(section, state).length);
+    const node = makeVectorCurve(bezierListPathData(curve), SECTION_COLOR, width);
+    node.name = section.name ?? `section-${section.index}`;
+    node.setPluginData(FIGMA_KEY_ROAD_ID, road.id);
+    return node;
+  });
 }
 
 export function renderRoad(road: Road, state: Readonly<MapState>): void {

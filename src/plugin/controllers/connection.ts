@@ -1,6 +1,7 @@
-import { LineId, StationId } from "@/common/types";
+import { LineId, RoadId, StationId } from "@/common/types";
 import { LinePathInput } from "@/common/messages";
 import { LinePath } from "../models/structures";
+import { findRoadForSection } from "../utils/section";
 import { postMessageToUI } from "../figma";
 import { BaseController } from "./base";
 import { UIMessageRouter } from "./router";
@@ -31,14 +32,19 @@ export class ConnectionController extends BaseController {
     }
 
     const stationNames: Record<StationId, string> = {};
+    const stationRoadIds: Record<StationId, RoadId | null> = {};
     for (const path of line.paths) {
       if (path.kind === 'station-stop') {
         const station = this.model.getState().stations.get(path.stationId);
-        if (station) stationNames[path.stationId] = station.name;
+        if (station) {
+          stationNames[path.stationId] = station.name;
+          const road = station.roadSectionId ? findRoadForSection(station.roadSectionId, this.model.getState()) : null;
+          stationRoadIds[path.stationId] = road?.id ?? null;
+        }
       }
     }
 
-    postMessageToUI({ type: 'line-path-data', lineId, paths: line.paths, stationNames });
+    postMessageToUI({ type: 'line-path-data', lineId, paths: line.paths, stationNames, stationRoadIds });
   }
 
   public async handleRemoveStationFromLine(lineId: LineId, pathIndex: number): Promise<void> {

@@ -16,6 +16,7 @@ export class NetworkController extends BaseController {
   private readonly roadCreation: RoadCreationStateMachine;
   private isRendering = false;
   private renderDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private isAddingRseMode = false;
   // Caches the initial placement position for newly created isolated nodes
   // (nodes with no road connections yet) so road creation can use it.
   private readonly nodePositionCache = new Map<NodeId, { x: number; y: number }>();
@@ -35,6 +36,8 @@ export class NetworkController extends BaseController {
     router.register('remove-road', msg => this.handleRemoveRoad(msg.roadId));
     router.register('add-road-section', msg => this.handleAddRoadSection(msg));
     router.register('remove-road-section', msg => this.handleRemoveRoadSection(msg));
+    router.register('start-adding-rse-mode', async () => { this.isAddingRseMode = true; });
+    router.register('stop-adding-rse-mode',  async () => { this.isAddingRseMode = false; });
   }
 
   // ── Public message handlers (node/road CRUD) ────────────────────────────
@@ -114,6 +117,13 @@ export class NetworkController extends BaseController {
 
     if (selection.length === 0) {
       await this.clearNetworkFocus();
+      return;
+    }
+
+    // In RSE mode any road click is reported to the UI; all other interactions are suppressed.
+    if (this.isAddingRseMode) {
+      const roadId = first.getPluginData(FIGMA_KEY_ROAD_ID) as RoadId;
+      if (roadId) postMessageToUI({ type: 'road-clicked', roadId });
       return;
     }
 

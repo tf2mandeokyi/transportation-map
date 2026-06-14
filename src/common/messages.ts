@@ -42,6 +42,8 @@ export type UIToPluginMessage =
   | { type: 'clear-plugin-data' }
   | { type: 'request-initial-data' }
   | { type: 'validate-line-paths' }
+  | { type: 'start-adding-rse-mode' }
+  | { type: 'stop-adding-rse-mode' }
 
 export type LineData = { id: LineId; name: string; color: string };
 export type LineAtStationData = LineData & { pathIndex: number; rank: number };
@@ -54,10 +56,11 @@ export type NetworkFocusedElement =
 export type PluginToUIMessage =
   | { type: 'station-clicked'; stationId: StationId; stationName: string; textAlign: HVAlign; textRotation: number; lines: Array<LineAtStationData> }
   | { type: 'line-added' } & LineData
-  | { type: 'line-path-data'; lineId: LineId; paths: LinePath[]; stationNames: Record<StationId, string> }
+  | { type: 'line-path-data'; lineId: LineId; paths: LinePath[]; stationNames: Record<StationId, string>; stationRoadIds: Record<StationId, RoadId | null> }
   | { type: 'station-removed-from-line' }
   | { type: 'network-data'; nodes: NodeData[]; roads: RoadData[] }
   | { type: 'network-element-focused'; element: NetworkFocusedElement }
   | { type: 'network-selection-cleared' }
   | { type: 'road-creation-first-node'; nodeId: NodeId; name?: string }
   | { type: 'road-creation-exited' }
+  | { type: 'road-clicked'; roadId: RoadId }
