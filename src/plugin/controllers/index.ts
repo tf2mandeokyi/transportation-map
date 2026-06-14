@@ -1,8 +1,9 @@
 import { HVAlign, LineId, StationId } from "@/common/types";
-import { UIToPluginMessage } from "@/common/messages";
 import { setUIMessageHandler } from "../figma";
 import { Model } from "../models";
 import { View } from "../views";
+import { NodeChangeListener } from "./listener";
+import { UIMessageRouter } from "./router";
 import { ConnectionController } from "./connection";
 import { LineController } from "./line";
 import { NetworkController } from "./network";
@@ -12,6 +13,7 @@ import { StationController } from "./station";
 export class Controller {
   private readonly model: Model;
   private readonly view: View;
+  private readonly listener: NodeChangeListener;
   private readonly stationController: StationController;
   private readonly lineController: LineController;
   private readonly connectionController: ConnectionController;
@@ -21,12 +23,13 @@ export class Controller {
   constructor(model: Model, view: View) {
     this.model = model;
     this.view = view;
+    this.listener = new NodeChangeListener();
 
-    this.stationController    = new StationController(model, view);
-    this.lineController       = new LineController(model, view);
-    this.connectionController = new ConnectionController(model, view);
-    this.renderController     = new RenderController(model, view);
-    this.networkController    = new NetworkController(model, view);
+    this.stationController    = new StationController(model, view, this.listener);
+    this.lineController       = new LineController(model, view, this.listener);
+    this.connectionController = new ConnectionController(model, view, this.listener);
+    this.renderController     = new RenderController(model, view, this.listener);
+    this.networkController    = new NetworkController(model, view, this.listener);
 
     this.stationController.setConnectionController(this.connectionController);
   }
@@ -49,9 +52,19 @@ export class Controller {
   public async initialize(): Promise<void> {
     console.log("Controller initialized. Listening for user actions.");
 
+    const router = new UIMessageRouter();
+    this.stationController.registerMessages(router);
+    this.lineController.registerMessages(router);
+    this.connectionController.registerMessages(router);
+    this.renderController.registerMessages(router);
+    this.networkController.registerMessages(router);
+    router.register('validate-line-paths', () => this.handleValidateLinePaths());
+    router.register('clear-plugin-data',   () => this.handleClearPluginData());
+    router.register('request-initial-data', () => this.handleRequestInitialData());
+
     setUIMessageHandler(async (msg) => {
       try {
-        await this.handleUIMessage(msg);
+        await router.dispatch(msg);
       } catch (error) {
         console.error("Error handling UI message:", error);
       }
@@ -62,6 +75,9 @@ export class Controller {
       figma.on('documentchange', (event) => {
         this.renderController.handleDocumentChange(event).catch(console.error);
         this.networkController.handleDocumentChange(event).catch(console.error);
+        for (const change of event.documentChanges) {
+          this.listener.dispatch(change);
+        }
       });
     } catch (error) {
       console.warn("Could not load all pages or set up document change handler:", error);
@@ -71,52 +87,6 @@ export class Controller {
       this.connectionController.handleSelectionChange();
       this.networkController.handleSelectionChange().catch(console.error);
     });
-  }
-
-  private handleUIMessage(msg: UIToPluginMessage): Promise<void> {
-    switch (msg.type) {
-      // Station actions
-      case 'add-station':              return this.stationController.handleAddStation(msg.station);
-      case 'update-station':           return this.stationController.handleUpdateStation(msg.stationId, msg.name, msg.textAlign, msg.textRotation);
-      case 'delete-station':           return this.stationController.handleDeleteStation(msg.stationId);
-      case 'copy-station':             return this.stationController.handleCopyStation(msg.stationId, msg.direction);
-      case 'combine-stations':         return this.stationController.handleCombineStations(msg.sourceStationId, msg.targetStationId);
-      case 'select-station':           return this.stationController.handleSelectStation(msg.stationId);
-      case 'update-station-stop-ranks': return this.stationController.handleUpdateStationStopRanks(msg.stationId, msg.stops);
-
-      // Road network actions
-      case 'add-node':                 return this.networkController.handleAddNode(msg);
-      case 'update-node-name':         return this.networkController.handleUpdateNodeName(msg.nodeId, msg.name);
-      case 'remove-node':              return this.networkController.handleRemoveNode(msg.nodeId);
-      case 'start-adding-road-mode':   return this.networkController.startRoadCreationMode();
-      case 'cancel-adding-road-mode':  return this.networkController.cancelRoadCreationMode();
-      case 'remove-road':              return this.networkController.handleRemoveRoad(msg.roadId);
-      case 'add-road-section':         return this.networkController.handleAddRoadSection(msg);
-      case 'remove-road-section':      return this.networkController.handleRemoveRoadSection(msg);
-
-      // Line actions
-      case 'add-line':                       return this.lineController.handleAddLine(msg.line);
-      case 'remove-line':                    return this.lineController.handleRemoveLine(msg.lineId);
-      case 'update-line-name':               return this.lineController.handleUpdateLineName(msg.lineId, msg.name);
-      case 'update-line-color':              return this.lineController.handleUpdateLineColor(msg.lineId, msg.color);
-      case 'update-line-stacking-order':     return this.lineController.handleUpdateLineStackingOrder(msg.lineIds);
-
-      // Connection actions
-      case 'start-adding-stations-mode':     return this.connectionController.handleStartAddingStationsMode(msg.lineId);
-      case 'stop-adding-stations-mode':      return this.connectionController.handleStopAddingStationsMode();
-      case 'get-line-path':                  return this.connectionController.handleGetLinePath(msg.lineId);
-      case 'remove-station-from-line':       return this.connectionController.handleRemoveStationFromLine(msg.lineId, msg.pathIndex);
-      case 'update-line-path':               return this.connectionController.handleUpdateLinePath(msg.lineId, msg.paths);
-      case 'rotate-line-path':               return this.connectionController.handleRotateLinePath(msg.lineId, msg.steps);
-
-      // Render
-      case 'render-map':                     return this.renderController.handleRenderMap();
-
-      // Misc
-      case 'validate-line-paths':            return this.handleValidateLinePaths();
-      case 'clear-plugin-data':              return this.handleClearPluginData();
-      case 'request-initial-data':           return this.handleRequestInitialData();
-    }
   }
 
   private async handleValidateLinePaths(): Promise<void> {

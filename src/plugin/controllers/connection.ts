@@ -3,8 +3,18 @@ import { LinePathInput } from "@/common/messages";
 import { LinePath } from "../models/structures";
 import { postMessageToUI } from "../figma";
 import { BaseController } from "./base";
+import { UIMessageRouter } from "./router";
 
 export class ConnectionController extends BaseController {
+  public registerMessages(router: UIMessageRouter): void {
+    router.register('start-adding-stations-mode', msg => this.handleStartAddingStationsMode(msg.lineId));
+    router.register('stop-adding-stations-mode', () => this.handleStopAddingStationsMode());
+    router.register('get-line-path', msg => this.handleGetLinePath(msg.lineId));
+    router.register('remove-station-from-line', msg => this.handleRemoveStationFromLine(msg.lineId, msg.pathIndex));
+    router.register('update-line-path', msg => this.handleUpdateLinePath(msg.lineId, msg.paths));
+    router.register('rotate-line-path', msg => this.handleRotateLinePath(msg.lineId, msg.steps));
+  }
+
   public async handleStartAddingStationsMode(lineId: LineId): Promise<void> {
     console.log("Entered station-adding mode for line:", lineId);
   }

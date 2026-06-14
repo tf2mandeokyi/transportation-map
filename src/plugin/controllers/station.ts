@@ -1,9 +1,137 @@
 import { LineAtStationData } from "@/common/messages";
 import { HVAlign, LineId, RoadSectionId, StationId } from "@/common/types";
 import { postMessageToUI } from "../figma";
+import { findNearestRoadSection } from "../utils/snap";
 import { BaseController } from "./base";
+import { ListenerHandle } from "./listener";
+import { UIMessageRouter } from "./router";
+
+const HANDLE_SIZE = 16;
+const PREVIEW_SIZE = 10;
+const HANDLE_FILL:  RGB = { r: 1,    g: 0.65, b: 0   };
+const PREVIEW_FILL: RGB = { r: 0.08, g: 0.6,  b: 1   };
+const WHITE:        RGB = { r: 1,    g: 1,    b: 1   };
+
+interface PlacingState {
+  handleId: string;
+  previewId: string;
+  listenerHandle: ListenerHandle;
+  snap: { roadSectionId: RoadSectionId; interpT: number } | null;
+}
 
 export class StationController extends BaseController {
+  private placingState: PlacingState | null = null;
+
+  public registerMessages(router: UIMessageRouter): void {
+    router.register('start-placing-station-mode', () => this.startPlacingMode());
+    router.register('confirm-place-station', msg => this.confirmPlacingMode(msg.station.name, msg.station.textAlign, msg.station.textRotation));
+    router.register('cancel-placing-station-mode', () => this.cancelPlacingMode());
+    router.register('add-station', msg => this.handleAddStation(msg.station));
+    router.register('update-station', msg => this.handleUpdateStation(msg.stationId, msg.name, msg.textAlign, msg.textRotation));
+    router.register('delete-station', msg => this.handleDeleteStation(msg.stationId));
+    router.register('copy-station', msg => this.handleCopyStation(msg.stationId, msg.direction));
+    router.register('combine-stations', msg => this.handleCombineStations(msg.sourceStationId, msg.targetStationId));
+    router.register('select-station', msg => this.handleSelectStation(msg.stationId));
+    router.register('update-station-stop-ranks', msg => this.handleUpdateStationStopRanks(msg.stationId, msg.stops));
+  }
+
+  // ── Placing mode ──────────────────────────────────────────────────────────
+
+  public async startPlacingMode(): Promise<void> {
+    await this.cancelPlacingMode();
+
+    const center = figma.viewport.center;
+
+    const handle = figma.createEllipse();
+    handle.resize(HANDLE_SIZE, HANDLE_SIZE);
+    handle.x = center.x - HANDLE_SIZE / 2;
+    handle.y = center.y - HANDLE_SIZE / 2;
+    handle.fills = [{ type: 'SOLID', color: HANDLE_FILL }];
+    handle.strokes = [{ type: 'SOLID', color: WHITE }];
+    handle.strokeWeight = 2;
+    handle.name = '_station-placing-handle';
+    figma.currentPage.appendChild(handle);
+
+    const preview = figma.createEllipse();
+    preview.resize(PREVIEW_SIZE, PREVIEW_SIZE);
+    preview.fills = [{ type: 'SOLID', color: PREVIEW_FILL }];
+    preview.strokes = [{ type: 'SOLID', color: WHITE }];
+    preview.strokeWeight = 2;
+    preview.locked = true;
+    preview.name = '_station-placing-preview';
+    figma.currentPage.appendChild(preview);
+
+    const initialSnap = findNearestRoadSection(center, this.model.getState());
+    if (initialSnap) {
+      preview.x = initialSnap.pos.x - PREVIEW_SIZE / 2;
+      preview.y = initialSnap.pos.y - PREVIEW_SIZE / 2;
+    } else {
+      preview.x = center.x - PREVIEW_SIZE / 2;
+      preview.y = center.y - PREVIEW_SIZE / 2;
+    }
+
+    const handleId = handle.id;
+    const previewId = preview.id;
+
+    const listenerHandle = this.listener.register(handleId, async (change) => {
+      if (change.type !== 'PROPERTY_CHANGE') return;
+      if (!change.properties.includes('x') && !change.properties.includes('y')) return;
+      if (!this.placingState) return;
+
+      const handleNode = await figma.getNodeByIdAsync(handleId);
+      if (!handleNode || handleNode.removed) return;
+      const h = handleNode as EllipseNode;
+      const handleCenter = { x: h.x + h.width / 2, y: h.y + h.height / 2 };
+
+      const snap = findNearestRoadSection(handleCenter, this.model.getState());
+      if (!snap) return;
+
+      const previewNode = await figma.getNodeByIdAsync(previewId);
+      if (!previewNode || previewNode.removed) return;
+      const p = previewNode as EllipseNode;
+      p.x = snap.pos.x - p.width / 2;
+      p.y = snap.pos.y - p.height / 2;
+
+      this.placingState.snap = { roadSectionId: snap.roadSectionId, interpT: snap.interpT };
+    });
+
+    this.placingState = {
+      handleId,
+      previewId,
+      listenerHandle,
+      snap: initialSnap ? { roadSectionId: initialSnap.roadSectionId, interpT: initialSnap.interpT } : null,
+    };
+
+    figma.currentPage.selection = [handle];
+  }
+
+  public async confirmPlacingMode(name: string, textAlign: HVAlign, textRotation = 0): Promise<void> {
+    if (!this.placingState) return;
+    const snap = this.placingState.snap;
+    await this.cancelPlacingMode();
+
+    const id = this.createStation(name, textAlign, textRotation, snap?.roadSectionId ?? null, snap?.interpT ?? 0.5);
+    const station = this.model.getState().stations.get(id);
+    if (!station) return;
+
+    await this.view.stationRenderer.renderStation(station, this.model.getState());
+    await this.save();
+  }
+
+  public async cancelPlacingMode(): Promise<void> {
+    if (!this.placingState) return;
+    const { handleId, previewId, listenerHandle } = this.placingState;
+    listenerHandle.dispose();
+    this.placingState = null;
+
+    const handleNode = await figma.getNodeByIdAsync(handleId);
+    if (handleNode && !handleNode.removed) handleNode.remove();
+    const previewNode = await figma.getNodeByIdAsync(previewId);
+    if (previewNode && !previewNode.removed) previewNode.remove();
+  }
+
+  // ── Existing handlers ─────────────────────────────────────────────────────
+
   public async handleAddStation(stopData: { name: string; textAlign: HVAlign; textRotation?: number; roadSectionId?: RoadSectionId; interpT?: number }): Promise<void> {
     const { name, textAlign, textRotation = 0, roadSectionId = null, interpT = 0.5 } = stopData;
 

@@ -1,6 +1,11 @@
 import { BaseController } from "./base";
+import { UIMessageRouter } from "./router";
 
 export class RenderController extends BaseController {
+  public registerMessages(router: UIMessageRouter): void {
+    router.register('render-map', () => this.handleRenderMap());
+  }
+
   public async handleRenderMap(): Promise<void> {
     await this.render();
     await this.save();

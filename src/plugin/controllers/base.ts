@@ -1,15 +1,18 @@
 import { Model } from "../models";
 import { View } from "../views";
 import { ConnectionController } from "./connection";
+import { NodeChangeListener } from "./listener";
 
 export abstract class BaseController {
   protected readonly model: Model;
   protected readonly view: View;
+  protected readonly listener: NodeChangeListener;
   protected connectionController?: ConnectionController;
 
-  constructor(model: Model, view: View) {
+  constructor(model: Model, view: View, listener: NodeChangeListener) {
     this.model = model;
     this.view = view;
+    this.listener = listener;
   }
 
   public setConnectionController(connectionController: ConnectionController): void {

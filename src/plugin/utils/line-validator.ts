@@ -1,5 +1,5 @@
-import { Line, LinePath, MapState, Road, RoadSectionEnter, StationStop } from "../models/structures";
-import { NodeId, RoadId } from "@/common/types";
+import { Line, LinePath, MapState, Road, StationStop } from "../models/structures";
+import { NodeId } from "@/common/types";
 import { findRoadForSection } from "./section";
 
 function findSharedNode(roadA: Road, roadB: Road): NodeId | null {

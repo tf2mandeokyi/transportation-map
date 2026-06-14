@@ -1,8 +1,17 @@
 import { LineId } from "@/common/types";
 import { postMessageToUI } from "../figma";
 import { BaseController } from "./base";
+import { UIMessageRouter } from "./router";
 
 export class LineController extends BaseController {
+  public registerMessages(router: UIMessageRouter): void {
+    router.register('add-line', msg => this.handleAddLine(msg.line));
+    router.register('remove-line', msg => this.handleRemoveLine(msg.lineId));
+    router.register('update-line-name', msg => this.handleUpdateLineName(msg.lineId, msg.name));
+    router.register('update-line-color', msg => this.handleUpdateLineColor(msg.lineId, msg.color));
+    router.register('update-line-stacking-order', msg => this.handleUpdateLineStackingOrder(msg.lineIds));
+  }
+
   public async handleAddLine(lineData: { name: string; color: string; isCircular?: boolean }): Promise<void> {
     const { name, color, isCircular = false } = lineData;
     const lineId = this.model.addLine({ name, color, isCircular, paths: [] });

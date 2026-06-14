@@ -9,6 +9,9 @@ export type RoadData = { id: RoadId; name?: string; startNodeId: NodeId; endNode
 
 // Messages from UI to Plugin
 export type UIToPluginMessage =
+  | { type: 'start-placing-station-mode' }
+  | { type: 'confirm-place-station'; station: { name: string; textAlign: HVAlign; textRotation?: number } }
+  | { type: 'cancel-placing-station-mode' }
   | { type: 'add-station'; station: { name: string; textAlign: HVAlign; textRotation?: number; roadSectionId?: RoadSectionId; interpT?: number } }
   | { type: 'update-station'; stationId: StationId; name: string; textAlign: HVAlign; textRotation: number }
   | { type: 'delete-station'; stationId: StationId }

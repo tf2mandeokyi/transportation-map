@@ -4,6 +4,8 @@ import { postMessageToUI } from "../../figma";
 import { Model } from "../../models";
 import { View } from "../../views";
 import { BaseController } from "../base";
+import { NodeChangeListener } from "../listener";
+import { UIMessageRouter } from "../router";
 import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_NODE_ID, FIGMA_KEY_ROAD_ID, FIGMA_KEY_JUNCTION_OFFSET_X, FIGMA_KEY_JUNCTION_OFFSET_Y } from "../../views/road";
 import { RoadControlManager, FIGMA_KEY_BEZIER_HANDLE, FIGMA_KEY_ENDPOINT_HANDLE } from "./road-control";
 import { RoadCreationStateMachine } from "./road-creation";
@@ -18,10 +20,21 @@ export class NetworkController extends BaseController {
   // (nodes with no road connections yet) so road creation can use it.
   private readonly nodePositionCache = new Map<NodeId, { x: number; y: number }>();
 
-  constructor(model: Model, view: View) {
-    super(model, view);
+  constructor(model: Model, view: View, listener: NodeChangeListener) {
+    super(model, view, listener);
     this.roadControl  = new RoadControlManager(model);
     this.roadCreation = new RoadCreationStateMachine();
+  }
+
+  public registerMessages(router: UIMessageRouter): void {
+    router.register('add-node', msg => this.handleAddNode(msg));
+    router.register('update-node-name', msg => this.handleUpdateNodeName(msg.nodeId, msg.name));
+    router.register('remove-node', msg => this.handleRemoveNode(msg.nodeId));
+    router.register('start-adding-road-mode', () => this.startRoadCreationMode());
+    router.register('cancel-adding-road-mode', () => this.cancelRoadCreationMode());
+    router.register('remove-road', msg => this.handleRemoveRoad(msg.roadId));
+    router.register('add-road-section', msg => this.handleAddRoadSection(msg));
+    router.register('remove-road-section', msg => this.handleRemoveRoadSection(msg));
   }
 
   // ── Public message handlers (node/road CRUD) ────────────────────────────
