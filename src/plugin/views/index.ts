@@ -8,26 +8,23 @@ import { ErrorChain } from "../error";
 export class View {
   readonly stationRenderer: StationRenderer;
   readonly lineSegmentRenderer: LineRenderer;
-  readonly roadRenderer: RoadRenderer;
   public isRendering = false;
 
   constructor() {
     this.stationRenderer = new StationRenderer();
     this.lineSegmentRenderer = new LineRenderer(this.stationRenderer);
-    this.roadRenderer = new RoadRenderer();
   }
 
   public setModel(model: Model): void {
     this.stationRenderer.setModel(model);
     this.lineSegmentRenderer.setModel(model);
-    this.roadRenderer.setModel(model);
   }
 
   public async render(state: Readonly<MapState>): Promise<void> {
     this.isRendering = true;
     try {
       // 1. Draw road sections (bezier curves) — rendered first so they sit at the back
-      await this.roadRenderer.renderAll(state)
+      await RoadRenderer.renderAll(state)
         .catch(ErrorChain.thrower('Error rendering road network'));
 
       // 2. Clear connection points, then render stations on top of the road sections
@@ -48,7 +45,7 @@ export class View {
 
       // 5. Move all road infrastructure (roads, junctions, node markers) to the very back
       //    so they sit below line segments and stations.
-      this.roadRenderer.moveAllToBack();
+      RoadRenderer.moveAllToBack();
     } finally {
       this.isRendering = false;
     }
