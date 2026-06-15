@@ -1,29 +1,8 @@
 import { Line, MapState, Station } from "../../models/structures";
-import { HVAlign, LineId } from "@/common/types";
+import { LineId } from "@/common/types";
 import { getLineDirectionAtStop } from "../../utils/section";
 
-export function getLayoutParams(textAlign: HVAlign): {
-  rotation: number;
-  textLocation: 'left' | 'right' | 'top' | 'bottom';
-  reverseOrder: boolean;
-} {
-  switch (textAlign) {
-    case 'right':  return { rotation: 0, textLocation: 'right',  reverseOrder: false };
-    case 'left':   return { rotation: 0, textLocation: 'left',   reverseOrder: false };
-    case 'bottom': return { rotation: 0, textLocation: 'bottom', reverseOrder: false };
-    case 'top':    return { rotation: 0, textLocation: 'top',    reverseOrder: false };
-  }
-}
-
 type StopEntry = { lineId: LineId; segmentIndex: number; rank: number };
-
-function compareStopEntries(a: StopEntry, b: StopEntry, globalOrder: LineId[]): number {
-  if (a.rank !== b.rank) return a.rank - b.rank;
-  const oa = globalOrder.indexOf(a.lineId);
-  const ob = globalOrder.indexOf(b.lineId);
-  if (oa !== ob) return oa - ob;
-  return a.segmentIndex - b.segmentIndex;
-}
 
 export function getLinesForStation(
   station: Station, state: Readonly<MapState>
@@ -38,8 +17,7 @@ export function getLinesForStation(
     }
   }
 
-  const globalOrder = state.lineStackingOrder;
-  result.sort((a, b) => compareStopEntries(a, b, globalOrder));
+  result.sort((a, b) => a.rank - b.rank);
 
   return result.map(({ lineId, segmentIndex }) => {
     const line = state.lines.get(lineId);

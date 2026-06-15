@@ -1,21 +1,24 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { LineAtStationData } from '@/common/messages';
-import { HVAlign, StationId } from '@/common/types';
+import { HVAlign, StationId, TextHAlign } from '@/common/types';
 import { postMessageToPlugin } from '../figma';
 import { useMessageManager } from '../contexts/MessageContext';
 
 const EditStationSection: React.FC = () => {
   const manager = useMessageManager();
 
-  const [stationId, setStationId]           = useState<StationId | null>(null);
-  const [stationName, setStationName]       = useState<string | null>(null);
-  const [stationTextAlign, setStationTextAlign] = useState<HVAlign | null>(null);
+  const [stationId, setStationId]                   = useState<StationId | null>(null);
+  const [stationName, setStationName]               = useState<string | null>(null);
+  const [stationTextAlign, setStationTextAlign]     = useState<HVAlign | null>(null);
+  const [stationTextHAlign, setStationTextHAlign]   = useState<TextHAlign | null>(null);
   const [stationTextRotation, setStationTextRotation] = useState<number | null>(null);
   const [linesAtStation, setLinesAtStation] = useState<Array<LineAtStationData>>([]);
-  const [draggedLineIndex, setDraggedLineIndex] = useState<number | null>(null);
+  const linesAtStationRef = useRef<Array<LineAtStationData>>([]);
+  const draggedLineIndexRef = useRef<number | null>(null);
 
-  const [name, setName]             = useState('');
-  const [textAlign, setTextAlign]   = useState<HVAlign>('right');
+  const [name, setName]               = useState('');
+  const [textAlign, setTextAlign]     = useState<HVAlign>('right');
+  const [textHAlign, setTextHAlign]   = useState<TextHAlign>('left');
   const [textRotation, setTextRotation] = useState(0);
   const [isCombiningMode, setIsCombiningMode] = useState(false);
 
@@ -27,12 +30,18 @@ const EditStationSection: React.FC = () => {
 
   const nameUpdateTimerRef = useRef<number | null>(null);
 
+  const updateLinesAtStation = useCallback((next: Array<LineAtStationData>) => {
+    linesAtStationRef.current = next;
+    setLinesAtStation(next);
+  }, []);
+
   const onClose = () => {
     setStationId(null);
     setStationName(null);
     setStationTextAlign(null);
+    setStationTextHAlign(null);
     setStationTextRotation(null);
-    setLinesAtStation([]);
+    updateLinesAtStation([]);
     setIsCombiningMode(false);
   };
 
@@ -47,10 +56,11 @@ const EditStationSection: React.FC = () => {
         onClose();
       } else {
         setStationId(msg.stationId);
-        setStationName(msg.stationName);
-        setStationTextAlign(msg.textAlign);
-        setStationTextRotation(msg.textRotation);
-        setLinesAtStation(msg.lines);
+        setStationName(msg.station.name);
+        setStationTextAlign(msg.station.textAlign);
+        setStationTextHAlign(msg.station.textHAlign);
+        setStationTextRotation(msg.station.textRotation);
+        updateLinesAtStation(msg.lines);
         setIsCombiningMode(false);
       }
     });
@@ -61,34 +71,40 @@ const EditStationSection: React.FC = () => {
     };
   }, [manager]);
 
-  const onUpdateStation = (name: string, textAlign: HVAlign, textRotation: number) => {
+  const onUpdateStation = (name: string, textAlign: HVAlign, textHAlign: TextHAlign, textRotation: number) => {
     if (!stationId) return;
-    postMessageToPlugin({ type: 'update-station', stationId, name, textAlign, textRotation });
+    postMessageToPlugin({ type: 'update-station', stationId, station: { name, textAlign, textHAlign, textRotation } });
   };
 
   useEffect(() => {
     if (stationName !== null) setName(stationName);
     if (stationTextAlign) setTextAlign(stationTextAlign);
+    if (stationTextHAlign) setTextHAlign(stationTextHAlign);
     if (stationTextRotation !== null) setTextRotation(stationTextRotation);
-  }, [stationName, stationTextAlign, stationTextRotation]);
+  }, [stationName, stationTextAlign, stationTextHAlign, stationTextRotation]);
 
   useEffect(() => {
     if (!stationId || stationName === null) return;
     if (nameUpdateTimerRef.current) clearTimeout(nameUpdateTimerRef.current);
     if (name !== stationName) {
-      nameUpdateTimerRef.current = setTimeout(() => { onUpdateStation(name, textAlign, textRotation); }, 500);
+      nameUpdateTimerRef.current = setTimeout(() => { onUpdateStation(name, textAlign, textHAlign, textRotation); }, 500);
     }
     return () => { if (nameUpdateTimerRef.current) clearTimeout(nameUpdateTimerRef.current); };
   }, [name]);
 
   useEffect(() => {
     if (!stationId || stationTextAlign === null) return;
-    if (textAlign !== stationTextAlign) onUpdateStation(name, textAlign, textRotation);
+    if (textAlign !== stationTextAlign) onUpdateStation(name, textAlign, textHAlign, textRotation);
   }, [textAlign]);
 
   useEffect(() => {
+    if (!stationId || stationTextHAlign === null) return;
+    if (textHAlign !== stationTextHAlign) onUpdateStation(name, textAlign, textHAlign, textRotation);
+  }, [textHAlign]);
+
+  useEffect(() => {
     if (!stationId || stationTextRotation === null) return;
-    if (textRotation !== stationTextRotation) onUpdateStation(name, textAlign, textRotation);
+    if (textRotation !== stationTextRotation) onUpdateStation(name, textAlign, textHAlign, textRotation);
   }, [textRotation]);
 
   if (!stationId || stationName === null) {
@@ -131,6 +147,19 @@ const EditStationSection: React.FC = () => {
             <option value="left">Left</option>
             <option value="top">Top</option>
             <option value="bottom">Bottom</option>
+          </select>
+        </div>
+        <div style={{ marginBottom: '8px' }}>
+          <label htmlFor="edit-station-text-halign">Text Alignment</label>
+          <select
+            className="input"
+            id="edit-station-text-halign"
+            value={textHAlign}
+            onChange={(e) => setTextHAlign(e.target.value as TextHAlign)}
+          >
+            <option value="left">Left</option>
+            <option value="center">Center</option>
+            <option value="right">Right</option>
           </select>
         </div>
         <div style={{ marginBottom: '8px' }}>
@@ -189,25 +218,27 @@ const EditStationSection: React.FC = () => {
                 key={`${lineInfo.id}-${lineInfo.pathIndex}`}
                 className="station-path-item"
                 draggable
-                onDragStart={() => setDraggedLineIndex(index)}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  if (draggedLineIndex === null || draggedLineIndex === index) return;
-                  const next = [...linesAtStation];
-                  const [moved] = next.splice(draggedLineIndex, 1);
-                  next.splice(index, 0, moved);
-                  setLinesAtStation(next);
-                  setDraggedLineIndex(index);
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  if (!stationId) return;
-                  setDraggedLineIndex(null);
-                  const stops = linesAtStation.map((l, i) => ({
+                onDragStart={() => { draggedLineIndexRef.current = index; }}
+                onDragEnd={() => {
+                  draggedLineIndexRef.current = null;
+                  const sid = stationIdRef.current;
+                  if (!sid) return;
+                  const stops = linesAtStationRef.current.map((l, i) => ({
                     lineId: l.id, pathIndex: l.pathIndex, rank: i,
                   }));
-                  postMessageToPlugin({ type: 'update-station-stop-ranks', stationId, stops });
+                  postMessageToPlugin({ type: 'update-station-stop-ranks', stationId: sid, stops });
                 }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  const dragIdx = draggedLineIndexRef.current;
+                  if (dragIdx === null || dragIdx === index) return;
+                  const next = [...linesAtStationRef.current];
+                  const [moved] = next.splice(dragIdx, 1);
+                  next.splice(index, 0, moved);
+                  draggedLineIndexRef.current = index;
+                  updateLinesAtStation(next);
+                }}
+                onDrop={(e) => { e.preventDefault(); }}
                 style={{ alignItems: 'center', cursor: 'grab' }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
@@ -215,6 +246,9 @@ const EditStationSection: React.FC = () => {
                   <div style={{ width: '12px', height: '12px', backgroundColor: lineInfo.color, borderRadius: '2px', border: '1px solid rgba(0,0,0,0.1)', flexShrink: 0 }} />
                   <span>{lineInfo.name}</span>
                 </div>
+                <span style={{ color: '#999', fontSize: '12px', flexShrink: 0 }}>
+                  {lineInfo.facing === 'right' ? '→' : '←'}
+                </span>
               </div>
             ))}
           </div>

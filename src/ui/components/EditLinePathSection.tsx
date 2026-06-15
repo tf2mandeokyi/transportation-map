@@ -119,7 +119,7 @@ const EditLinePathSection: React.FC = () => {
     });
     const unsub3 = manager.onMessage('station-clicked', msg => {
       if (isAddingRef.current) {
-        setPendingStations(prev => [...prev, { id: msg.stationId, name: msg.stationName }]);
+        setPendingStations(prev => [...prev, { id: msg.stationId, name: msg.station.name }]);
       }
     });
     const unsub4 = manager.onMessage('road-clicked', msg => {

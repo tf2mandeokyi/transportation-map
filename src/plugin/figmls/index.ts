@@ -45,8 +45,10 @@ interface StationProps {
   textRotation: number,
   textLocation: 'left' | 'right' | 'top' | 'bottom',
   align: FigmlAlignment,
+  textHAlign: FigmlAlignment,
+  textFrameAlign: FigmlAlignment,
   children: RenderResult[]
 }
-export function renderStation({ text, visible, rotation, textRotation, textLocation, align, children }: StationProps): RenderResult {
-  return STATION_TEMPLATE.render({ text, visible, rotation, textRotation, align, children }, { textLocation });
+export function renderStation({ text, visible, rotation, textRotation, textLocation, align, textHAlign, textFrameAlign, children }: StationProps): RenderResult {
+  return STATION_TEMPLATE.render({ text, visible, rotation, textRotation, align, textHAlign, textFrameAlign, children }, { textLocation });
 }

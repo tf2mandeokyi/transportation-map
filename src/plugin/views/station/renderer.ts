@@ -3,7 +3,7 @@ import { Model } from "../../models";
 import { renderStation, renderStationLine } from "../../figmls";
 import { LineId, StationId } from "@/common/types";
 import { computeStationPosition, computeStationTangentAngle } from "./position";
-import { getLayoutParams, getLinesForStation } from "./layout";
+import { getLinesForStation } from "./layout";
 
 export interface ConnectionPoints {
   head: Vector;
@@ -23,26 +23,26 @@ async function renderStationWithTemplate(
   state: Readonly<MapState>,
   tangentAngle: number,
 ): Promise<{ line: Line; segmentIndex: number; node: SceneNode }[]> {
-  const { rotation, textLocation, reverseOrder } = getLayoutParams(station.textAlign);
-
   const lines = getLinesForStation(station, state);
   const children = lines.map(({ line, segmentIndex, facing }) => ({
     line,
     segmentIndex,
     result: renderStationLine({ text: line.name, color: line.color, stops: true, visible: true, facing }),
   }));
-  if (reverseOrder) children.reverse();
 
   const forwardFacing: 'left' | 'right' =
     (station.textAlign === 'right' || station.textAlign === 'bottom') ? 'left' : 'right';
+  const textFrameAlignV = station.textAlign === 'top' ? 'bottom' : station.textAlign === 'bottom' ? 'top' : 'center';
   const stationElement = await renderStation({
     text: station.name,
     visible: true,
-    rotation,
+    rotation: 0,
     textRotation: station.textRotation + tangentAngle,
     children: children.map(c => c.result),
     align: `${forwardFacing},center` as const,
-    textLocation,
+    textHAlign: `${station.textHAlign},center` as const,
+    textFrameAlign: `${station.textHAlign},${textFrameAlignV}` as const,
+    textLocation: station.textAlign,
   }).intoNode();
 
   parentFrame.appendChild(stationElement);

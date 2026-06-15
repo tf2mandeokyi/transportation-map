@@ -1,7 +1,7 @@
 import { LineId, RoadId, StationId } from "@/common/types";
 import { LinePathInput } from "@/common/messages";
 import { LinePath } from "../models/structures";
-import { findRoadForSection } from "../utils/section";
+import { findRoadForSection, getLineDirectionAtStop } from "../utils/section";
 import { postMessageToUI } from "../figma";
 import { BaseController } from "./base";
 import { UIMessageRouter } from "./router";
@@ -138,11 +138,14 @@ export class ConnectionController extends BaseController {
 
     const station = this.model.findStationFromNode(selection[0]);
     if (station) {
+      const state = this.model.getState();
       const lines = [];
-      for (const line of this.model.getState().lines.values()) {
+      for (const line of state.lines.values()) {
         for (const path of line.paths) {
           if (path.kind === 'station-stop' && path.stationId === station.id) {
-            lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank });
+            const dir = getLineDirectionAtStop(line, path.index, state);
+            const facing: 'left' | 'right' = dir === 'forward' ? 'right' : 'left';
+            lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing });
           }
         }
       }
@@ -150,9 +153,7 @@ export class ConnectionController extends BaseController {
       postMessageToUI({
         type: 'station-clicked',
         stationId: station.id,
-        stationName: station.name,
-        textAlign: station.textAlign,
-        textRotation: station.textRotation,
+        station: { name: station.name, textAlign: station.textAlign, textHAlign: station.textHAlign, textRotation: station.textRotation },
         lines
       });
     }

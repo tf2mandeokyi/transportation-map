@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { HVAlign } from '@/common/types';
+import { HVAlign, TextHAlign } from '@/common/types';
 import { postMessageToPlugin } from '../figma';
 
 const StationsSection: React.FC = () => {
   const [isPlacing, setIsPlacing] = useState(false);
   const [stationName, setStationName] = useState('');
   const [textAlign, setTextAlign] = useState<HVAlign>('right');
+  const [textHAlign, setTextHAlign] = useState<TextHAlign>('left');
 
   const handleStartPlacing = () => {
     setIsPlacing(true);
@@ -15,7 +16,7 @@ const StationsSection: React.FC = () => {
   const handleConfirm = () => {
     postMessageToPlugin({
       type: 'confirm-place-station',
-      station: { name: stationName, textAlign }
+      station: { name: stationName, textAlign, textHAlign, textRotation: 0 }
     });
     setIsPlacing(false);
     setStationName('');
@@ -71,6 +72,17 @@ const StationsSection: React.FC = () => {
               <option value="left">Left</option>
               <option value="top">Top</option>
               <option value="bottom">Bottom</option>
+            </select>
+            <label htmlFor="station-text-halign">Text Alignment</label>
+            <select
+              className="input"
+              id="station-text-halign"
+              value={textHAlign}
+              onChange={(e) => setTextHAlign(e.target.value as TextHAlign)}
+            >
+              <option value="left">Left</option>
+              <option value="center">Center</option>
+              <option value="right">Right</option>
             </select>
           </div>
         </div>

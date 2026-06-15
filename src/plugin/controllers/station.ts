@@ -1,7 +1,8 @@
-import { LineAtStationData } from "@/common/messages";
-import { HVAlign, LineId, RoadSectionId, StationId } from "@/common/types";
+import { LineAtStationData, StationParams } from "@/common/messages";
+import { HVAlign, LineId, RoadSectionId, StationId, TextHAlign } from "@/common/types";
 import { postMessageToUI } from "../figma";
 import { findNearestRoadSection } from "../utils/snap";
+import { getLineDirectionAtStop } from "../utils/section";
 import { BaseController } from "./base";
 import { ListenerHandle } from "./listener";
 import { UIMessageRouter } from "./router";
@@ -24,10 +25,10 @@ export class StationController extends BaseController {
 
   public registerMessages(router: UIMessageRouter): void {
     router.register('start-placing-station-mode', () => this.startPlacingMode());
-    router.register('confirm-place-station', msg => this.confirmPlacingMode(msg.station.name, msg.station.textAlign, msg.station.textRotation));
+    router.register('confirm-place-station', msg => this.confirmPlacingMode(msg.station));
     router.register('cancel-placing-station-mode', () => this.cancelPlacingMode());
     router.register('add-station', msg => this.handleAddStation(msg.station));
-    router.register('update-station', msg => this.handleUpdateStation(msg.stationId, msg.name, msg.textAlign, msg.textRotation));
+    router.register('update-station', msg => this.handleUpdateStation(msg.stationId, msg.station));
     router.register('delete-station', msg => this.handleDeleteStation(msg.stationId));
     router.register('copy-station', msg => this.handleCopyStation(msg.stationId, msg.direction));
     router.register('combine-stations', msg => this.handleCombineStations(msg.sourceStationId, msg.targetStationId));
@@ -105,12 +106,12 @@ export class StationController extends BaseController {
     figma.currentPage.selection = [handle];
   }
 
-  public async confirmPlacingMode(name: string, textAlign: HVAlign, textRotation = 0): Promise<void> {
+  public async confirmPlacingMode({ name, textAlign, textHAlign, textRotation }: StationParams): Promise<void> {
     if (!this.placingState) return;
     const snap = this.placingState.snap;
     await this.cancelPlacingMode();
 
-    const id = this.createStation(name, textAlign, textRotation, snap?.roadSectionId ?? null, snap?.interpT ?? 0.5);
+    const id = this.createStation(name, textAlign, textHAlign, textRotation, snap?.roadSectionId ?? null, snap?.interpT ?? 0.5);
     const station = this.model.getState().stations.get(id);
     if (!station) return;
 
@@ -132,10 +133,8 @@ export class StationController extends BaseController {
 
   // ── Existing handlers ─────────────────────────────────────────────────────
 
-  public async handleAddStation(stopData: { name: string; textAlign: HVAlign; textRotation?: number; roadSectionId?: RoadSectionId; interpT?: number }): Promise<void> {
-    const { name, textAlign, textRotation = 0, roadSectionId = null, interpT = 0.5 } = stopData;
-
-    const id = this.createStation(name, textAlign, textRotation, roadSectionId, interpT);
+  public async handleAddStation({ name, textAlign, textHAlign, textRotation, roadSectionId, interpT }: StationParams & { roadSectionId: RoadSectionId | null; interpT: number }): Promise<void> {
+    const id = this.createStation(name, textAlign, textHAlign, textRotation, roadSectionId, interpT);
     const station = this.model.getState().stations.get(id);
     if (!station) return;
 
@@ -143,8 +142,8 @@ export class StationController extends BaseController {
     await this.save();
   }
 
-  public createStation(name: string, textAlign: HVAlign = 'right', textRotation: number = 0, roadSectionId: RoadSectionId | null = null, interpT: number = 0.5): StationId {
-    return this.model.addStation({ name, textAlign, textRotation, interpT, roadSectionId });
+  public createStation(name: string, textAlign: HVAlign = 'right', textHAlign: TextHAlign = 'left', textRotation: number = 0, roadSectionId: RoadSectionId | null = null, interpT: number = 0.5): StationId {
+    return this.model.addStation({ name, textAlign, textHAlign, textRotation, interpT, roadSectionId });
   }
 
   public async handleGetStationInfo(stationId: StationId): Promise<void> {
@@ -159,7 +158,9 @@ export class StationController extends BaseController {
     for (const line of state.lines.values()) {
       for (const path of line.paths) {
         if (path.kind === 'station-stop' && path.stationId === stationId) {
-          lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank });
+          const dir = getLineDirectionAtStop(line, path.index, state);
+          const facing: 'left' | 'right' = dir === 'forward' ? 'right' : 'left';
+          lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing });
         }
       }
     }
@@ -168,9 +169,7 @@ export class StationController extends BaseController {
     postMessageToUI({
       type: 'station-clicked',
       stationId,
-      stationName: station.name,
-      textAlign: station.textAlign,
-      textRotation: station.textRotation,
+      station: { name: station.name, textAlign: station.textAlign, textHAlign: station.textHAlign, textRotation: station.textRotation },
       lines
     });
   }
@@ -180,11 +179,12 @@ export class StationController extends BaseController {
     stops: Array<{ lineId: LineId; pathIndex: number; rank: number }>
   ): Promise<void> {
     this.model.updateStationStopRanks(stationId, stops);
+    await this.render();
     await this.save();
     await this.handleGetStationInfo(stationId);
   }
 
-  public async handleUpdateStation(stationId: StationId, name: string, textAlign: HVAlign, textRotation: number): Promise<void> {
+  public async handleUpdateStation(stationId: StationId, { name, textAlign, textHAlign, textRotation }: StationParams): Promise<void> {
     const station = this.model.getState().stations.get(stationId);
     if (!station) {
       console.warn(`Station ${stationId} not found`);
@@ -193,6 +193,7 @@ export class StationController extends BaseController {
 
     station.name = name;
     station.textAlign = textAlign;
+    station.textHAlign = textHAlign;
     station.textRotation = textRotation;
 
     await this.save();
@@ -229,6 +230,7 @@ export class StationController extends BaseController {
     const newStationId = this.model.addStation({
       name: station.name,
       textAlign: station.textAlign,
+      textHAlign: station.textHAlign,
       textRotation: station.textRotation,
       interpT: newInterpT,
       roadSectionId: station.roadSectionId,

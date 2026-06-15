@@ -34,6 +34,7 @@ export interface Station {
   name: string;
   figmaNodeId: string | null;
   textAlign: HVAlign;
+  textHAlign: 'left' | 'center' | 'right';
   textRotation: number;
   interpT: number;
   roadSectionId: RoadSectionId | null;

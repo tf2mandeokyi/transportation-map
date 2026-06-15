@@ -1,4 +1,4 @@
-import { Connection, Line, MapState, Node, Road, RoadSection, Station } from "./structures";
+import { Connection, Line, MapState, Node, Road, RoadSection, Station, StationStop } from "./structures";
 import { deserializeMapState, serializeMapState } from "./serde";
 import { LineId, NodeId, RoadId, RoadSectionId, StationId } from "@/common/types";
 import { LinePathInput } from "@/common/messages";
@@ -295,6 +295,23 @@ export class Model {
         path.rank = rank;
       }
     }
+  }
+
+  public fixStationRankConflicts(stationId: StationId): void {
+    const stops: Array<{ path: StationStop; lineId: LineId }> = [];
+    for (const line of this.state.lines.values()) {
+      for (const p of line.paths) {
+        if (p.kind === 'station-stop' && p.stationId === stationId) {
+          stops.push({ path: p, lineId: line.id });
+        }
+      }
+    }
+    stops.sort((a, b) => {
+      if (a.path.rank !== b.path.rank) return a.path.rank - b.path.rank;
+      if (a.lineId !== b.lineId) return a.lineId < b.lineId ? -1 : 1;
+      return a.path.index - b.path.index;
+    });
+    stops.forEach(({ path }, i) => { path.rank = i; });
   }
 
   public removeLinePath(lineId: LineId, pathIndex: number): void {

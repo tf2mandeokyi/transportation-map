@@ -1,6 +1,6 @@
-<component prop:text="Station" prop:visible="true" prop:align="center,bottom" prop:rotation="0">
+<component prop:text="Station" prop:visible="true" prop:align="center,bottom" prop:rotation="0" prop:textHAlign="left,center">
   <frame align="$$prop:align$$" name="Station text" width="0" height="0" flow="vertical" clip="false" visible="$$prop:visible$$" rotation="$$prop:rotation$$">
-    <text align="$$prop:align$$" fontSize="10" fontFamily="NanumSquare Neo" fill="#000000" style="Heavy" width="hug" height="hug">
+    <text align="$$prop:textHAlign$$" fontSize="10" fontFamily="NanumSquare Neo" fill="#000000" style="Heavy" width="hug" height="hug">
       $$prop:text$$
     </text>
   </frame>

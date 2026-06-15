@@ -36,6 +36,7 @@ interface SerializedStation {
   n: string; // name
   f: string | null; // figmaNodeId
   t: HVAlign; // textAlign
+  ta?: 'left' | 'center' | 'right'; // textHAlign (absent in old saves → defaults to 'left')
   tr?: number; // textRotation (absent in old saves → defaults to 0)
   it: number; // interpT
   rs: string | null; // roadSectionId
@@ -108,6 +109,7 @@ export function serializeMapState(state: MapState): string {
     n: s.name,
     f: s.figmaNodeId,
     t: s.textAlign,
+    ta: s.textHAlign,
     tr: s.textRotation,
     it: s.interpT,
     rs: s.roadSectionId
@@ -226,6 +228,7 @@ export function deserializeMapState(json: string): MapState | null {
         name: s.n,
         figmaNodeId: s.f,
         textAlign: s.t,
+        textHAlign: s.ta ?? 'left',
         textRotation: s.tr ?? 0,
         interpT: s.it,
         roadSectionId: s.rs as RoadSectionId | null
