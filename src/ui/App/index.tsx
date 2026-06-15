@@ -1,42 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import StationsSection from './components/StationsSection';
-import LinesSection from './components/LinesSection';
-import EditLinePathSection from './components/EditLinePathSection';
-import EditStationSection from './components/EditStationSection';
-import NetworkSection from './components/NetworkSection';
-import SettingsSection from './components/SettingsSection';
-import { postMessageToPlugin } from './figma';
-import { useLinesContext } from './contexts/LinesContext';
+import StationsSection from '../components/StationsSection';
+import EditStationSection from '../components/EditStationSection';
+import NetworkSection from '../components/NetworkSection';
+import SettingsSection from '../components/SettingsSection';
+import { postMessageToPlugin } from '../figma';
+import NavButton from './NavButton';
+import LineTabContent from './LineTabContent';
 
 type Tab = 'stations' | 'lines' | 'network' | 'settings';
-
-interface NavButtonProps {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}
-
-const NavButton: React.FC<NavButtonProps> = ({ active, onClick, children }) => (
-  <button
-    onClick={onClick}
-    style={{
-      flex: 1,
-      padding: '12px',
-      border: 'none',
-      background: active ? '#18a0fb' : 'transparent',
-      color: active ? 'white' : '#333',
-      cursor: 'pointer',
-      fontWeight: active ? 'bold' : 'normal'
-    }}
-  >
-    {children}
-  </button>
-);
-
-const LineTabContent: React.FC = () => {
-  const { currentEditingLineId } = useLinesContext();
-  return currentEditingLineId ? <EditLinePathSection /> : <LinesSection />;
-};
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('stations');
