@@ -1,5 +1,6 @@
-import { LineAtStationData, StationParams } from "@/common/messages";
+import { LineAtStationData, StationParams, StationPatch } from "@/common/messages";
 import { HVAlign, LineId, RoadSectionId, StationId, TextHAlign } from "@/common/types";
+import { PlacingStationPluginSession } from "../sessions/placing-station";
 import { postMessageToUI } from "../figma";
 import { findNearestRoadSection } from "../utils/snap";
 import { getLineDirectionAtStop } from "../utils/section";
@@ -24,21 +25,23 @@ export class StationController extends BaseController {
   private placingState: PlacingState | null = null;
 
   public registerMessages(router: UIMessageRouter): void {
-    router.register('start-placing-station-mode', () => this.startPlacingMode());
-    router.register('confirm-place-station', msg => this.confirmPlacingMode(msg.station));
-    router.register('cancel-placing-station-mode', () => this.cancelPlacingMode());
+    router.register('start-placing-station-mode', () => this.startPlacingSession());
     router.register('add-station', msg => this.handleAddStation(msg.station));
-    router.register('update-station', msg => this.handleUpdateStation(msg.stationId, msg.station));
-    router.register('delete-station', msg => this.handleDeleteStation(msg.stationId));
-    router.register('copy-station', msg => this.handleCopyStation(msg.stationId, msg.direction));
-    router.register('combine-stations', msg => this.handleCombineStations(msg.sourceStationId, msg.targetStationId));
+    router.register('patch-station', msg => this.handlePatchStation(msg.stationId, msg.patch));
     router.register('select-station', msg => this.handleSelectStation(msg.stationId));
-    router.register('update-station-stop-ranks', msg => this.handleUpdateStationStopRanks(msg.stationId, msg.stops));
   }
 
   // ── Placing mode ──────────────────────────────────────────────────────────
 
-  public async startPlacingMode(): Promise<void> {
+  private async startPlacingSession(): Promise<void> {
+    await this.startPlacingMode();
+    this.sessionManager.create(new PlacingStationPluginSession(
+      station => this.confirmPlacingMode(station),
+      () => this.cancelPlacingMode(),
+    ));
+  }
+
+  private async startPlacingMode(): Promise<void> {
     await this.cancelPlacingMode();
 
     const center = figma.viewport.center;
@@ -131,7 +134,7 @@ export class StationController extends BaseController {
     if (previewNode && !previewNode.removed) previewNode.remove();
   }
 
-  // ── Existing handlers ─────────────────────────────────────────────────────
+  // ── Message handlers ──────────────────────────────────────────────────────
 
   public async handleAddStation({ name, textAlign, textHAlign, textRotation, roadSectionId, interpT }: StationParams & { roadSectionId: RoadSectionId | null; interpT: number }): Promise<void> {
     const id = this.createStation(name, textAlign, textHAlign, textRotation, roadSectionId, interpT);
@@ -141,6 +144,18 @@ export class StationController extends BaseController {
     await this.view.stationRenderer.renderStation(station, this.model.getState());
     await this.save();
   }
+
+  private async handlePatchStation(stationId: StationId, patch: StationPatch): Promise<void> {
+    switch (patch.op) {
+      case 'update':            return this.handleUpdateStation(stationId, patch.station);
+      case 'delete':            return this.handleDeleteStation(stationId);
+      case 'copy':              return this.handleCopyStation(stationId, patch.direction);
+      case 'combine':           return this.handleCombineStations(stationId, patch.targetStationId);
+      case 'update-stop-ranks': return this.handleUpdateStationStopRanks(stationId, patch.stops);
+    }
+  }
+
+  // ── Individual handlers ───────────────────────────────────────────────────
 
   public createStation(name: string, textAlign: HVAlign = 'right', textHAlign: TextHAlign = 'left', textRotation: number = 0, roadSectionId: RoadSectionId | null = null, interpT: number = 0.5): StationId {
     return this.model.addStation({ name, textAlign, textHAlign, textRotation, interpT, roadSectionId });
@@ -170,11 +185,11 @@ export class StationController extends BaseController {
       type: 'station-clicked',
       stationId,
       station: { name: station.name, textAlign: station.textAlign, textHAlign: station.textHAlign, textRotation: station.textRotation },
-      lines
+      lines,
     });
   }
 
-  public async handleUpdateStationStopRanks(
+  private async handleUpdateStationStopRanks(
     stationId: StationId,
     stops: Array<{ lineId: LineId; pathIndex: number; rank: number }>
   ): Promise<void> {
@@ -184,12 +199,9 @@ export class StationController extends BaseController {
     await this.handleGetStationInfo(stationId);
   }
 
-  public async handleUpdateStation(stationId: StationId, { name, textAlign, textHAlign, textRotation }: StationParams): Promise<void> {
+  private async handleUpdateStation(stationId: StationId, { name, textAlign, textHAlign, textRotation }: StationParams): Promise<void> {
     const station = this.model.getState().stations.get(stationId);
-    if (!station) {
-      console.warn(`Station ${stationId} not found`);
-      return;
-    }
+    if (!station) { console.warn(`Station ${stationId} not found`); return; }
 
     station.name = name;
     station.textAlign = textAlign;
@@ -200,12 +212,9 @@ export class StationController extends BaseController {
     await this.handleGetStationInfo(stationId);
   }
 
-  public async handleDeleteStation(stationId: StationId): Promise<void> {
+  private async handleDeleteStation(stationId: StationId): Promise<void> {
     const station = this.model.getState().stations.get(stationId);
-    if (!station) {
-      console.warn(`Station ${stationId} not found`);
-      return;
-    }
+    if (!station) { console.warn(`Station ${stationId} not found`); return; }
 
     if (station.figmaNodeId) {
       const node = await figma.getNodeByIdAsync(station.figmaNodeId);
@@ -216,14 +225,10 @@ export class StationController extends BaseController {
     await this.save();
   }
 
-  public async handleCopyStation(stationId: StationId, direction: 'forwards' | 'backwards'): Promise<void> {
+  private async handleCopyStation(stationId: StationId, direction: 'forwards' | 'backwards'): Promise<void> {
     const station = this.model.getState().stations.get(stationId);
-    if (!station) {
-      console.warn(`Station ${stationId} not found`);
-      return;
-    }
+    if (!station) { console.warn(`Station ${stationId} not found`); return; }
 
-    // Copy station with same road section but offset interpT
     const interpTOffset = direction === 'forwards' ? 0.1 : -0.1;
     const newInterpT = Math.max(0, Math.min(1, station.interpT + interpTOffset));
 
@@ -250,7 +255,7 @@ export class StationController extends BaseController {
     await this.handleSelectStation(newStationId);
   }
 
-  public async handleCombineStations(sourceStationId: StationId, targetStationId: StationId): Promise<void> {
+  private async handleCombineStations(sourceStationId: StationId, targetStationId: StationId): Promise<void> {
     const sourceStation = this.model.getState().stations.get(sourceStationId);
     const targetStation = this.model.getState().stations.get(targetStationId);
 
@@ -259,7 +264,6 @@ export class StationController extends BaseController {
       return;
     }
 
-    // Rewrite all StationStop entries pointing to source → target
     for (const line of this.model.getState().lines.values()) {
       for (const path of line.paths) {
         if (path.kind === 'station-stop' && path.stationId === sourceStationId) {
@@ -279,10 +283,7 @@ export class StationController extends BaseController {
 
   public async handleSelectStation(stationId: StationId): Promise<void> {
     const station = this.model.getState().stations.get(stationId);
-    if (!station) {
-      console.warn(`Station ${stationId} not found`);
-      return;
-    }
+    if (!station) { console.warn(`Station ${stationId} not found`); return; }
 
     if (station.figmaNodeId) {
       try {

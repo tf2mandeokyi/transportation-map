@@ -13,10 +13,7 @@ const LinesSection: React.FC = () => {
   const [draggedIndex, setDraggedIndex]   = useState<number | null>(null);
 
   const handleAddLine = () => {
-    postMessageToPlugin({
-      type: 'add-line',
-      line: { name: lineName || `Line_${lineCounter}`, color: lineColor, isCircular: lineIsCircular }
-    });
+    postMessageToPlugin({ type: 'add-line', line: { name: lineName || `Line_${lineCounter}`, color: lineColor, isCircular: lineIsCircular } });
     setLineName('');
     setLineIsCircular(false);
     setLineCounter(prev => prev + 1);

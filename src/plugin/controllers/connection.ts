@@ -1,5 +1,6 @@
 import { LineId, RoadId, StationId } from "@/common/types";
 import { LinePathInput } from "@/common/messages";
+import { AddingStationsPluginSession } from "../sessions/adding-stations";
 import { LinePath } from "../models/structures";
 import { findRoadForSection, getLineDirectionAtStop } from "../utils/section";
 import { postMessageToUI } from "../figma";
@@ -9,27 +10,17 @@ import { UIMessageRouter } from "./router";
 export class ConnectionController extends BaseController {
   public registerMessages(router: UIMessageRouter): void {
     router.register('start-adding-stations-mode', msg => this.handleStartAddingStationsMode(msg.lineId));
-    router.register('stop-adding-stations-mode', () => this.handleStopAddingStationsMode());
     router.register('get-line-path', msg => this.handleGetLinePath(msg.lineId));
-    router.register('remove-station-from-line', msg => this.handleRemoveStationFromLine(msg.lineId, msg.pathIndex));
-    router.register('update-line-path', msg => this.handleUpdateLinePath(msg.lineId, msg.paths));
-    router.register('rotate-line-path', msg => this.handleRotateLinePath(msg.lineId, msg.steps));
   }
 
   public async handleStartAddingStationsMode(lineId: LineId): Promise<void> {
     console.log("Entered station-adding mode for line:", lineId);
-  }
-
-  public async handleStopAddingStationsMode(): Promise<void> {
-    console.log("Exited station-adding mode");
+    this.sessionManager.create(new AddingStationsPluginSession());
   }
 
   public async handleGetLinePath(lineId: LineId): Promise<void> {
     const line = this.model.getState().lines.get(lineId);
-    if (!line) {
-      console.error("Line not found:", lineId);
-      return;
-    }
+    if (!line) { console.error("Line not found:", lineId); return; }
 
     const stationNames: Record<StationId, string> = {};
     const stationRoadIds: Record<StationId, RoadId | null> = {};
@@ -47,56 +38,6 @@ export class ConnectionController extends BaseController {
     postMessageToUI({ type: 'line-path-data', lineId, paths: line.paths, stationNames, stationRoadIds });
   }
 
-  public async handleRemoveStationFromLine(lineId: LineId, pathIndex: number): Promise<void> {
-    const line = this.model.getState().lines.get(lineId);
-    if (!line) {
-      console.warn(`Line ${lineId} not found`);
-      return;
-    }
-
-    this.model.removeLinePath(lineId, pathIndex);
-    await this.save();
-
-    postMessageToUI({ type: 'station-removed-from-line' });
-  }
-
-  public async handleUpdateLinePath(lineId: LineId, paths: LinePathInput[]): Promise<void> {
-    const line = this.model.getState().lines.get(lineId);
-    if (!line) {
-      console.error("Line not found:", lineId);
-      return;
-    }
-
-    this.model.replaceLinePaths(lineId, paths);
-    await this.save();
-  }
-
-  public async handleRotateLinePath(lineId: LineId, steps: number): Promise<void> {
-    const line = this.model.getState().lines.get(lineId);
-    if (!line) {
-      console.error("Line not found:", lineId);
-      return;
-    }
-
-    if (line.paths.length === 0) {
-      console.warn("Cannot rotate empty path");
-      return;
-    }
-
-    const n = line.paths.length;
-    const normalized = ((steps % n) + n) % n;
-    if (normalized === 0) return;
-
-    const rotated = [
-      ...line.paths.slice(normalized),
-      ...line.paths.slice(0, normalized)
-    ].map(p => this.pathToInput(p));
-
-    this.model.replaceLinePaths(lineId, rotated);
-
-    await this.save();
-  }
-
   public insertStationIntoLine(lineId: LineId, newStationId: StationId, relativeToStationId: StationId, insertAfter: boolean): boolean {
     const line = this.model.getState().lines.get(lineId);
     if (!line) return false;
@@ -108,17 +49,10 @@ export class ConnectionController extends BaseController {
     const newStop: { kind: 'station-stop'; stationId: StationId } = { kind: 'station-stop', stationId: newStationId };
 
     const before = line.paths.slice(0, insertAt).map(p => this.pathToInput(p));
-    const after = line.paths.slice(insertAt).map(p => this.pathToInput(p));
+    const after  = line.paths.slice(insertAt).map(p => this.pathToInput(p));
     this.model.replaceLinePaths(lineId, [...before, newStop, ...after]);
 
     return true;
-  }
-
-  private pathToInput(p: LinePath): LinePathInput {
-    if (p.kind === 'station-stop') {
-      return { kind: 'station-stop', stationId: p.stationId };
-    }
-    return { kind: 'road-section-enter', sourceRoadId: p.sourceRoadId, nodeId: p.nodeId, destRoadId: p.destRoadId };
   }
 
   public connectStationsWithLine(lineId: LineId, startStationId: StationId, endStationId: StationId): void {
@@ -154,8 +88,13 @@ export class ConnectionController extends BaseController {
         type: 'station-clicked',
         stationId: station.id,
         station: { name: station.name, textAlign: station.textAlign, textHAlign: station.textHAlign, textRotation: station.textRotation },
-        lines
+        lines,
       });
     }
+  }
+
+  private pathToInput(p: LinePath): LinePathInput {
+    if (p.kind === 'station-stop') return { kind: 'station-stop', stationId: p.stationId };
+    return { kind: 'road-section-enter', sourceRoadId: p.sourceRoadId, nodeId: p.nodeId, destRoadId: p.destRoadId };
   }
 }

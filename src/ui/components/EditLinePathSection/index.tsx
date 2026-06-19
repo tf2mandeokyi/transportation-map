@@ -22,12 +22,12 @@ const EditLinePathSection: React.FC = () => {
           line={currentLine}
           onUpdateName={(name) => {
             if (currentEditingLineId && name.trim()) {
-              postMessageToPlugin({ type: 'update-line-name', lineId: currentEditingLineId, name: name.trim() });
+              postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'update-name', name: name.trim() } });
             }
           }}
           onUpdateColor={(color) => {
             if (currentEditingLineId) {
-              postMessageToPlugin({ type: 'update-line-color', lineId: currentEditingLineId, color });
+              postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'update-color', color } });
             }
           }}
         />

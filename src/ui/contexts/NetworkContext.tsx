@@ -1,8 +1,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { NetworkFocusedElement, NodeData, RoadData } from '@/common/messages';
 import { NodeId } from '@/common/types';
-import { postMessageToPlugin } from '../figma';
 import { useMessageManager } from './MessageContext';
+import { AddingRoadUISession } from '../sessions/adding-road';
+import { useUISession } from '../sessions/useUISession';
 
 type RoadCreationStep = 'idle' | 'first' | 'second';
 
@@ -20,6 +21,8 @@ const NetworkContext = createContext<NetworkContextValue | null>(null);
 
 export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const manager = useMessageManager();
+  const { open, close } = useUISession<AddingRoadUISession>();
+
   const [nodes, setNodes] = useState<NodeData[]>([]);
   const [roads, setRoads] = useState<RoadData[]>([]);
   const [networkFocus, setNetworkFocus] = useState<NetworkFocusedElement | null>(null);
@@ -49,16 +52,16 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [manager]);
 
   const handleStartRoadCreation = useCallback(() => {
+    open(new AddingRoadUISession()).start(manager);
     setRoadCreationStep('first');
     setRoadCreationFirstNode(null);
-    postMessageToPlugin({ type: 'start-adding-road-mode' });
-  }, []);
+  }, [manager, open]);
 
   const handleCancelRoadCreation = useCallback(() => {
+    close(s => s.cancel());
     setRoadCreationStep('idle');
     setRoadCreationFirstNode(null);
-    postMessageToPlugin({ type: 'cancel-adding-road-mode' });
-  }, []);
+  }, [close]);
 
   return (
     <NetworkContext.Provider value={{

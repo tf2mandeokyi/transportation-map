@@ -2,6 +2,7 @@ import { HVAlign, LineId, StationId } from "@/common/types";
 import { setUIMessageHandler } from "../figma";
 import { Model } from "../models";
 import { View } from "../views";
+import { PluginSessionManager } from "../sessions/manager";
 import { NodeChangeListener } from "./listener";
 import { UIMessageRouter } from "./router";
 import { ConnectionController } from "./connection";
@@ -14,6 +15,7 @@ export class Controller {
   private readonly model: Model;
   private readonly view: View;
   private readonly listener: NodeChangeListener;
+  private readonly sessionManager: PluginSessionManager;
   private readonly stationController: StationController;
   private readonly lineController: LineController;
   private readonly connectionController: ConnectionController;
@@ -24,12 +26,13 @@ export class Controller {
     this.model = model;
     this.view = view;
     this.listener = new NodeChangeListener();
+    this.sessionManager = new PluginSessionManager();
 
-    this.stationController    = new StationController(model, view, this.listener);
-    this.lineController       = new LineController(model, view, this.listener);
-    this.connectionController = new ConnectionController(model, view, this.listener);
-    this.renderController     = new RenderController(model, view, this.listener);
-    this.networkController    = new NetworkController(model, view, this.listener);
+    this.stationController    = new StationController(model, view, this.listener, this.sessionManager);
+    this.lineController       = new LineController(model, view, this.listener, this.sessionManager);
+    this.connectionController = new ConnectionController(model, view, this.listener, this.sessionManager);
+    this.renderController     = new RenderController(model, view, this.listener, this.sessionManager);
+    this.networkController    = new NetworkController(model, view, this.listener, this.sessionManager);
 
     this.stationController.setConnectionController(this.connectionController);
   }
@@ -62,9 +65,13 @@ export class Controller {
     router.register('clear-plugin-data',   () => this.handleClearPluginData());
     router.register('request-initial-data', () => this.handleRequestInitialData());
 
-    setUIMessageHandler(async (msg) => {
+    setUIMessageHandler(async (payload) => {
       try {
-        await router.dispatch(msg);
+        if ('sessionId' in payload) {
+          await this.sessionManager.dispatch(payload.sessionId, payload.msg);
+        } else {
+          await router.dispatch(payload.msg);
+        }
       } catch (error) {
         console.error("Error handling UI message:", error);
       }

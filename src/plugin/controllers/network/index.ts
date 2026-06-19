@@ -1,5 +1,6 @@
 import { NodeId, RoadId } from "@/common/types";
-import { NetworkFocusedElement, NodeData, RoadData, RoadSectionData, UIToPluginMessage } from "@/common/messages";
+import { NetworkFocusedElement, NodeData, NodePatch, RoadData, RoadPatch, RoadSectionData, UIToPluginMessage } from "@/common/messages";
+import { PluginSessionManager } from "../../sessions/manager";
 import { postMessageToUI } from "../../figma";
 import { Model } from "../../models";
 import { View } from "../../views";
@@ -9,6 +10,8 @@ import { UIMessageRouter } from "../router";
 import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_NODE_ID, FIGMA_KEY_ROAD_ID, FIGMA_KEY_JUNCTION_OFFSET_X, FIGMA_KEY_JUNCTION_OFFSET_Y } from "../../views/road";
 import { RoadControlManager, FIGMA_KEY_BEZIER_HANDLE, FIGMA_KEY_ENDPOINT_HANDLE } from "./road-control";
 import { RoadCreationStateMachine } from "./road-creation";
+import { AddingRsePluginSession } from "../../sessions/adding-rse";
+import { AddingRoadPluginSession } from "../../sessions/adding-road";
 
 
 export class NetworkController extends BaseController {
@@ -21,23 +24,20 @@ export class NetworkController extends BaseController {
   // (nodes with no road connections yet) so road creation can use it.
   private readonly nodePositionCache = new Map<NodeId, { x: number; y: number }>();
 
-  constructor(model: Model, view: View, listener: NodeChangeListener) {
-    super(model, view, listener);
+  constructor(model: Model, view: View, listener: NodeChangeListener, sessionManager: PluginSessionManager) {
+    super(model, view, listener, sessionManager);
     this.roadControl  = new RoadControlManager(model);
     this.roadCreation = new RoadCreationStateMachine();
   }
 
   public registerMessages(router: UIMessageRouter): void {
     router.register('add-node', msg => this.handleAddNode(msg));
-    router.register('update-node-name', msg => this.handleUpdateNodeName(msg.nodeId, msg.name));
     router.register('remove-node', msg => this.handleRemoveNode(msg.nodeId));
-    router.register('start-adding-road-mode', () => this.startRoadCreationMode());
-    router.register('cancel-adding-road-mode', () => this.cancelRoadCreationMode());
+    router.register('patch-node', msg => this.handlePatchNode(msg.nodeId, msg.patch));
+    router.register('start-adding-road-mode', () => this.startRoadCreationSession());
     router.register('remove-road', msg => this.handleRemoveRoad(msg.roadId));
-    router.register('add-road-section', msg => this.handleAddRoadSection(msg));
-    router.register('remove-road-section', msg => this.handleRemoveRoadSection(msg));
-    router.register('start-adding-rse-mode', async () => { this.isAddingRseMode = true; });
-    router.register('stop-adding-rse-mode',  async () => { this.isAddingRseMode = false; });
+    router.register('patch-road', msg => this.handlePatchRoad(msg.roadId, msg.patch));
+    router.register('start-adding-rse-mode', async () => this.startAddingRseSession());
   }
 
   // ── Public message handlers (node/road CRUD) ────────────────────────────
@@ -52,10 +52,14 @@ export class NetworkController extends BaseController {
     this.syncNetworkToUI();
   }
 
-  public async handleUpdateNodeName(nodeId: NodeId, name: string | undefined): Promise<void> {
-    this.model.updateNodeName(nodeId, name);
-    await this.save();
-    this.syncNetworkToUI();
+  public async handlePatchNode(nodeId: NodeId, patch: NodePatch): Promise<void> {
+    switch (patch.op) {
+      case 'update-name':
+        this.model.updateNodeName(nodeId, patch.name);
+        await this.save();
+        this.syncNetworkToUI();
+        break;
+    }
   }
 
   public async handleRemoveNode(nodeId: NodeId): Promise<void> {
@@ -71,26 +75,33 @@ export class NetworkController extends BaseController {
     this.syncNetworkToUI();
   }
 
-  public async handleAddRoadSection(msg: Extract<UIToPluginMessage, { type: 'add-road-section' }>): Promise<void> {
-    this.model.addRoadSection(msg.roadId, { ...msg.section, stationIds: [] });
-    await this.save();
-    this.syncNetworkToUI();
-  }
-
-  public async handleRemoveRoadSection(msg: Extract<UIToPluginMessage, { type: 'remove-road-section' }>): Promise<void> {
-    this.model.removeRoadSection(msg.roadId, msg.sectionId);
+  public async handlePatchRoad(roadId: RoadId, patch: RoadPatch): Promise<void> {
+    switch (patch.op) {
+      case 'add-section':
+        this.model.addRoadSection(roadId, { ...patch.section, stationIds: [] });
+        break;
+      case 'remove-section':
+        this.model.removeRoadSection(roadId, patch.sectionId);
+        break;
+    }
     await this.save();
     this.syncNetworkToUI();
   }
 
   // ── Road creation mode ──────────────────────────────────────────────────
 
-  public async startRoadCreationMode(): Promise<void> {
+  private async startRoadCreationSession(): Promise<void> {
     this.roadCreation.start();
+    this.sessionManager.create(new AddingRoadPluginSession(
+      async () => this.roadCreation.cancel()
+    ));
   }
 
-  public async cancelRoadCreationMode(): Promise<void> {
-    this.roadCreation.cancel();
+  private async startAddingRseSession(): Promise<void> {
+    this.isAddingRseMode = true;
+    this.sessionManager.create(new AddingRsePluginSession(
+      () => { this.isAddingRseMode = false; }
+    ));
   }
 
   // ── Figma event entry points ────────────────────────────────────────────

@@ -1,29 +1,31 @@
 import React, { useState } from 'react';
 import { HVAlign, TextHAlign } from '@/common/types';
-import { postMessageToPlugin } from '../figma';
+import { useMessageManager } from '../contexts/MessageContext';
+import { PlacingStationUISession } from '../sessions/placing-station';
+import { useUISession } from '../sessions/useUISession';
 
 const StationsSection: React.FC = () => {
+  const manager = useMessageManager();
+  const { open, close } = useUISession<PlacingStationUISession>();
+
   const [isPlacing, setIsPlacing] = useState(false);
   const [stationName, setStationName] = useState('');
   const [textAlign, setTextAlign] = useState<HVAlign>('right');
   const [textHAlign, setTextHAlign] = useState<TextHAlign>('left');
 
   const handleStartPlacing = () => {
+    open(new PlacingStationUISession()).start(manager);
     setIsPlacing(true);
-    postMessageToPlugin({ type: 'start-placing-station-mode' });
   };
 
   const handleConfirm = () => {
-    postMessageToPlugin({
-      type: 'confirm-place-station',
-      station: { name: stationName, textAlign, textHAlign, textRotation: 0 }
-    });
+    close(s => s.confirm({ name: stationName, textAlign, textHAlign, textRotation: 0 }));
     setIsPlacing(false);
     setStationName('');
   };
 
   const handleCancel = () => {
-    postMessageToPlugin({ type: 'cancel-placing-station-mode' });
+    close(s => s.cancel());
     setIsPlacing(false);
     setStationName('');
   };

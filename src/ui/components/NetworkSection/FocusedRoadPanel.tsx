@@ -12,11 +12,7 @@ const FocusedRoadPanel: React.FC<{
   const endNode   = nodes.find(n => n.id === element.endNodeId);
 
   const handleAddSection = () => {
-    postMessageToPlugin({
-      type: 'add-road-section',
-      roadId: element.roadId,
-      section: { name: sectionName.trim() || undefined, index: element.sections.length },
-    });
+    postMessageToPlugin({ type: 'patch-road', roadId: element.roadId, patch: { op: 'add-section', section: { name: sectionName.trim() || undefined, index: element.sections.length } } });
     setSectionName('');
   };
 
@@ -38,7 +34,7 @@ const FocusedRoadPanel: React.FC<{
         {element.sections.map(section => (
           <div key={section.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
             <span style={{ flex: 1 }}>{section.name ?? `Section ${section.index}`}</span>
-            <button className="button button--secondary small-btn" onClick={() => postMessageToPlugin({ type: 'remove-road-section', roadId: element.roadId, sectionId: section.id })}>×</button>
+            <button className="button button--secondary small-btn" onClick={() => postMessageToPlugin({ type: 'patch-road', roadId: element.roadId, patch: { op: 'remove-section', sectionId: section.id } })}>×</button>
           </div>
         ))}
         <input className="input" placeholder="Section name (optional)" value={sectionName} onChange={e => setSectionName(e.target.value)} style={{ marginBottom: '4px', marginTop: '4px' }} />

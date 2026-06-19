@@ -6,6 +6,9 @@ import { postMessageToPlugin } from '../../figma';
 import { useLinesContext } from '../../contexts/LinesContext';
 import { useNetworkContext } from '../../contexts/NetworkContext';
 import { useMessageManager } from '../../contexts/MessageContext';
+import { AddingStationsUISession } from '../../sessions/adding-stations';
+import { AddingRseUISession } from '../../sessions/adding-rse';
+import { useUISession } from '../../sessions/useUISession';
 import PathItemsList from './PathItemsList';
 import InsertionButtons from './InsertionButtons';
 import StationAddingPanel from './StationAddingPanel';
@@ -25,6 +28,9 @@ const PathEditor: React.FC = () => {
   const currentLineIdRef  = useRef(currentEditingLineId);
   const linePathsRef      = useRef(linePaths);
   const stationRoadIdsRef = useRef(stationRoadIds);
+  const stationsSession   = useUISession<AddingStationsUISession>();
+  const rseSession        = useUISession<AddingRseUISession>();
+
   useEffect(() => { currentLineIdRef.current  = currentEditingLineId; }, [currentEditingLineId]);
   useEffect(() => { linePathsRef.current      = linePaths; },           [linePaths]);
   useEffect(() => { stationRoadIdsRef.current = stationRoadIds; },      [stationRoadIds]);
@@ -67,11 +73,10 @@ const PathEditor: React.FC = () => {
   // ─── Station adding ────────────────────────────────────────────────────────
 
   const handleStartAdding = (afterPathIndex: number) => {
+    if (!currentEditingLineId) return;
     setStationInsertAfterIndex(afterPathIndex);
     setAddingRseAfterPathIndex(null);
-    if (currentEditingLineId) {
-      postMessageToPlugin({ type: 'start-adding-stations-mode', lineId: currentEditingLineId });
-    }
+    stationsSession.open(new AddingStationsUISession()).start(currentEditingLineId, manager);
   };
 
   const handleFinishAdding = (stations: Array<{ id: StationId; name: string }>) => {
@@ -82,15 +87,15 @@ const PathEditor: React.FC = () => {
       : stationInsertAfterIndex === -1 ? 0
       : stationInsertAfterIndex + 1;
     const newPaths = [...fullPathInputs.slice(0, insertAt), ...newStopInputs, ...fullPathInputs.slice(insertAt)];
-    postMessageToPlugin({ type: 'update-line-path', lineId: currentEditingLineId, paths: newPaths });
-    postMessageToPlugin({ type: 'stop-adding-stations-mode' });
+    postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'update-path', paths: newPaths } });
+    stationsSession.close(s => s.stop());
     postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
     setStationInsertAfterIndex(null);
   };
 
   const handleCancelAdding = () => {
+    stationsSession.close(s => s.stop());
     setStationInsertAfterIndex(null);
-    postMessageToPlugin({ type: 'stop-adding-stations-mode' });
   };
 
   // ─── RSE adding ────────────────────────────────────────────────────────────
@@ -98,12 +103,12 @@ const PathEditor: React.FC = () => {
   const startRseMode = (afterPathIndex: number) => {
     setAddingRseAfterPathIndex(afterPathIndex);
     setStationInsertAfterIndex(null);
-    postMessageToPlugin({ type: 'start-adding-rse-mode' });
+    rseSession.open(new AddingRseUISession()).start(manager);
   };
 
   const stopRseMode = () => {
+    rseSession.close(s => s.stop());
     setAddingRseAfterPathIndex(null);
-    postMessageToPlugin({ type: 'stop-adding-rse-mode' });
   };
 
   const commitRse = (afterPathIndex: number, sourceRoadId: RoadId, nodeId: NodeId, destRoadId: RoadId) => {
@@ -111,7 +116,7 @@ const PathEditor: React.FC = () => {
     const fullPaths = toLinePathInputs(linePathsRef.current);
     const rse: LinePathInput = { kind: 'road-section-enter', sourceRoadId, nodeId, destRoadId };
     const newPaths = [...fullPaths.slice(0, afterPathIndex + 1), rse, ...fullPaths.slice(afterPathIndex + 1)];
-    postMessageToPlugin({ type: 'update-line-path', lineId: currentEditingLineId, paths: newPaths });
+    postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'update-path', paths: newPaths } });
     postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
     stopRseMode();
   };
@@ -120,19 +125,19 @@ const PathEditor: React.FC = () => {
 
   const handleRemovePath = (pathIndex: number) => {
     if (!currentEditingLineId) return;
-    postMessageToPlugin({ type: 'remove-station-from-line', lineId: currentEditingLineId, pathIndex });
+    postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'remove-station', pathIndex } });
   };
 
   const handleRemoveRse = (pathIndex: number) => {
     if (!currentEditingLineId) return;
     const newPaths = toLinePathInputs(linePaths.filter((_, i) => i !== pathIndex));
-    postMessageToPlugin({ type: 'update-line-path', lineId: currentEditingLineId, paths: newPaths });
+    postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'update-path', paths: newPaths } });
     postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
   };
 
   const handleRotatePath = (steps: number) => {
     if (!currentEditingLineId) return;
-    postMessageToPlugin({ type: 'rotate-line-path', lineId: currentEditingLineId, steps });
+    postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'rotate-path', steps } });
     postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
   };
 

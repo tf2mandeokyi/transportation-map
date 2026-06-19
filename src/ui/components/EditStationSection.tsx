@@ -48,11 +48,7 @@ const EditStationSection: React.FC = () => {
   useEffect(() => {
     const unsubscribe = manager.onMessage('station-clicked', msg => {
       if (isCombiningModeRef.current && stationIdRef.current && msg.stationId !== stationIdRef.current) {
-        postMessageToPlugin({
-          type: 'combine-stations',
-          sourceStationId: stationIdRef.current,
-          targetStationId: msg.stationId,
-        });
+        postMessageToPlugin({ type: 'patch-station', stationId: stationIdRef.current, patch: { op: 'combine', targetStationId: msg.stationId } });
         onClose();
       } else {
         setStationId(msg.stationId);
@@ -73,7 +69,7 @@ const EditStationSection: React.FC = () => {
 
   const onUpdateStation = (name: string, textAlign: HVAlign, textHAlign: TextHAlign, textRotation: number) => {
     if (!stationId) return;
-    postMessageToPlugin({ type: 'update-station', stationId, station: { name, textAlign, textHAlign, textRotation } });
+    postMessageToPlugin({ type: 'patch-station', stationId, patch: { op: 'update', station: { name, textAlign, textHAlign, textRotation } } });
   };
 
   useEffect(() => {
@@ -173,10 +169,10 @@ const EditStationSection: React.FC = () => {
           />
         </div>
         <div className="two-column" style={{ marginBottom: '8px' }}>
-          <button className="button button--secondary" onClick={() => postMessageToPlugin({ type: 'copy-station', stationId, direction: 'forwards' })}>
+          <button className="button button--secondary" onClick={() => postMessageToPlugin({ type: 'patch-station', stationId, patch: { op: 'copy', direction: 'forwards' } })}>
             Copy Forwards
           </button>
-          <button className="button button--secondary" onClick={() => postMessageToPlugin({ type: 'copy-station', stationId, direction: 'backwards' })}>
+          <button className="button button--secondary" onClick={() => postMessageToPlugin({ type: 'patch-station', stationId, patch: { op: 'copy', direction: 'backwards' } })}>
             Copy Backwards
           </button>
         </div>
@@ -199,7 +195,7 @@ const EditStationSection: React.FC = () => {
             if (!stationId) return;
             const displayName = stationName || '(unnamed station)';
             if (confirm(`Are you sure you want to delete "${displayName}"? This action cannot be undone.`)) {
-              postMessageToPlugin({ type: 'delete-station', stationId });
+              postMessageToPlugin({ type: 'patch-station', stationId, patch: { op: 'delete' } });
               onClose();
             }
           }}
@@ -226,7 +222,7 @@ const EditStationSection: React.FC = () => {
                   const stops = linesAtStationRef.current.map((l, i) => ({
                     lineId: l.id, pathIndex: l.pathIndex, rank: i,
                   }));
-                  postMessageToPlugin({ type: 'update-station-stop-ranks', stationId: sid, stops });
+                  postMessageToPlugin({ type: 'patch-station', stationId: sid, patch: { op: 'update-stop-ranks', stops } });
                 }}
                 onDragOver={(e) => {
                   e.preventDefault();

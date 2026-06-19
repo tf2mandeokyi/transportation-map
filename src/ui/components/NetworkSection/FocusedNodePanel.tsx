@@ -8,7 +8,7 @@ const FocusedNodePanel: React.FC<{ element: Extract<NetworkFocusedElement, { kin
   const commitName = () => {
     const trimmed = editName.trim() || undefined;
     if (trimmed !== element.name) {
-      postMessageToPlugin({ type: 'update-node-name', nodeId: element.nodeId, name: trimmed });
+      postMessageToPlugin({ type: 'patch-node', nodeId: element.nodeId, patch: { op: 'update-name', name: trimmed } });
     }
   };
 
