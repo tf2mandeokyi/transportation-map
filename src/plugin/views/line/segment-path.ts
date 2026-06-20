@@ -10,7 +10,7 @@ import {
   CubicBezierPoints,
   TRACK_SPACING,
 } from "../../utils/bezier";
-import { JunctionShape } from "../../utils/junction-shape";
+import { appendGapCurve } from "../../utils/curves";
 import { PathBuilder } from "../../utils/path";
 import {
   computeRoadBezier,
@@ -129,5 +129,5 @@ export function appendJunctionCurve(pb: PathBuilder, prev: CubicBezierPoints, ne
     ? { x: -1, y: 0 }
     : { x: -(next.p1.x - next.p0.x) / entryLen, y: -(next.p1.y - next.p0.y) / entryLen };
 
-  JunctionShape.appendGapCurve(pb, prev.p3, exitDir, next.p0, entryDir);
+  appendGapCurve(pb, prev.p3, exitDir, next.p0, entryDir);
 }
