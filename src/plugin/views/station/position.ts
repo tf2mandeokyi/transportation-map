@@ -1,6 +1,6 @@
 import { MapState, Station } from "../../models/structures";
-import { computeRoadBezier, findRoadForSection } from "../../utils/section";
-import { evalQuadraticBezier, evalQuadraticBezierTangent, TRACK_SPACING } from "../../utils/bezier";
+import { computeRoadBezier, computeSectionOffset, findRoadForSection } from "../../utils/section";
+import { evalQuadraticBezier, evalQuadraticBezierTangent } from "../../utils/bezier";
 
 export function computeStationPosition(station: Station, state: Readonly<MapState>): Vector {
   if (!station.roadSectionId) return { x: 0, y: 0 };
@@ -13,9 +13,7 @@ export function computeStationPosition(station: Station, state: Readonly<MapStat
   const section = road.sections.get(station.roadSectionId);
   if (!section) return { x: 0, y: 0 };
 
-  const sections = Array.from(road.sections.values());
-  const center = (sections.length - 1) / 2;
-  const offset = (section.index - center) * TRACK_SPACING;
+  const offset = computeSectionOffset(section, road, state);
 
   const pos = evalQuadraticBezier(base, station.interpT);
   if (offset === 0) return pos;

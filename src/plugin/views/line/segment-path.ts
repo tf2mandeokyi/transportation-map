@@ -8,12 +8,12 @@ import {
   subQuadBezier,
   QuadBezierPoints,
   CubicBezierPoints,
-  TRACK_SPACING,
 } from "../../utils/bezier";
 import { appendGapCurve } from "../../utils/curves";
 import { PathBuilder } from "../../utils/path";
 import {
   computeRoadBezier,
+  computeSectionOffset,
   getLinesForSection,
   lineOffsetInSection,
 } from "../../utils/section";
@@ -33,9 +33,7 @@ export function computeTotalOffset(
   const section = road.sections.get(sectionId);
   if (!section) return 0;
 
-  const sections = Array.from(road.sections.values());
-  const center = (sections.length - 1) / 2;
-  const sectionOffset = (section.index - center) * TRACK_SPACING;
+  const sectionOffset = computeSectionOffset(section, road, state);
 
   const lines = getLinesForSection(section, state, referenceStationId);
   const lineIndex = lines.findIndex(l => l.id === line.id);

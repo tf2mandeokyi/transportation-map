@@ -1,6 +1,6 @@
 import { MapState, Road } from "../../models/structures";
-import { elevateToCubic, offsetBezierAdaptive, bezierListPathData, TRACK_SPACING, ROAD_MIN_WIDTH } from "../../utils/bezier";
-import { getLinesForSection, sectionBandWidth } from "../../utils/section";
+import { elevateToCubic, offsetBezierAdaptive, bezierListPathData, ROAD_MIN_WIDTH } from "../../utils/bezier";
+import { getLinesForSection, sectionBandWidth, computeSectionOffset } from "../../utils/section";
 import { FIGMA_KEY_ROAD_ID } from "./constants";
 
 const SECTION_COLOR: RGB = { r: 0.82, g: 0.82, b: 0.82 };
@@ -32,9 +32,8 @@ export function buildRoadVisuals(road: Road, state: Readonly<MapState>): SceneNo
     return [node];
   }
 
-  const center = (sections.length - 1) / 2;
   return sections.map(section => {
-    const offset = (section.index - center) * TRACK_SPACING;
+    const offset = computeSectionOffset(section, road, state);
     const curve = offset === 0 ? [baseCurve] : offsetBezierAdaptive(baseCurve, offset);
     const width = sectionBandWidth(getLinesForSection(section, state).length);
     const node = makeVectorCurve(bezierListPathData(curve), SECTION_COLOR, width);

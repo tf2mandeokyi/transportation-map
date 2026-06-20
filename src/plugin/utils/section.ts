@@ -139,3 +139,23 @@ export function sectionBandWidth(numLines: number): number {
 export function lineOffsetInSection(lineIndex: number, numLines: number): number {
   return (lineIndex - (numLines - 1) / 2) * LINE_SPACING;
 }
+
+// Lateral offset of a section's centerline from the road centerline, computed
+// from cumulative section widths so sections never visually overlap regardless
+// of how many lines each section carries.
+export function computeSectionOffset(
+  section: RoadSection,
+  road: Road,
+  state: Readonly<MapState>,
+): number {
+  const sections = Array.from(road.sections.values()).sort((a, b) => a.index - b.index);
+  const widths = sections.map(s => sectionBandWidth(getLinesForSection(s, state).length));
+  const totalWidth = widths.reduce((a, b) => a + b, 0);
+  let cumulative = -totalWidth / 2;
+  for (let i = 0; i < sections.length; i++) {
+    const center = cumulative + widths[i] / 2;
+    if (sections[i].id === section.id) return center;
+    cumulative += widths[i];
+  }
+  return 0;
+}

@@ -1,7 +1,7 @@
 import { Node, MapState } from '../models/structures';
 import { RoadId } from '@/common/types';
-import { TRACK_SPACING, ROAD_MIN_WIDTH } from './bezier';
-import { getLinesForSection, sectionBandWidth } from './section';
+import { ROAD_MIN_WIDTH } from './bezier';
+import { computeSectionOffset, getLinesForSection, sectionBandWidth } from './section';
 import { PathBuilder } from './path';
 import { appendGapCurve } from './curves';
 
@@ -37,11 +37,10 @@ function buildArm(roadId: RoadId, endpointIndex: 0 | 1, state: Readonly<MapState
     posOff =  ROAD_MIN_WIDTH / 2;
     negOff = -ROAD_MIN_WIDTH / 2;
   } else {
-    const center = (sections.length - 1) / 2;
     posOff = -Infinity;
     negOff =  Infinity;
     for (const sec of sections) {
-      const sc = (sec.index - center) * TRACK_SPACING;
+      const sc = computeSectionOffset(sec, road, state);
       const numLines = getLinesForSection(sec, state).length;
       const hb = sectionBandWidth(numLines) / 2;
       if (sc + hb > posOff) posOff = sc + hb;

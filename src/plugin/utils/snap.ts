@@ -1,7 +1,7 @@
 import { MapState } from '../models/structures';
 import { RoadSectionId } from '@/common/types';
-import { QuadBezierPoints, evalQuadraticBezier, evalQuadraticBezierTangent, TRACK_SPACING } from './bezier';
-import { computeRoadBezier } from './section';
+import { QuadBezierPoints, evalQuadraticBezier, evalQuadraticBezierTangent } from './bezier';
+import { computeRoadBezier, computeSectionOffset } from './section';
 
 const SAMPLES = 20;
 
@@ -32,9 +32,7 @@ function nearestTOnQuadBezier(bezier: QuadBezierPoints, point: Vector): number {
   return (lo + hi) / 2;
 }
 
-function sectionPosAt(bezier: QuadBezierPoints, t: number, sectionIndex: number, numSections: number): Vector {
-  const center = (numSections - 1) / 2;
-  const offset = (sectionIndex - center) * TRACK_SPACING;
+function sectionPosAt(bezier: QuadBezierPoints, t: number, offset: number): Vector {
   const pos = evalQuadraticBezier(bezier, t);
   if (offset === 0) return pos;
   const tangent = evalQuadraticBezierTangent(bezier, t);
@@ -62,7 +60,7 @@ export function findNearestRoadSection(point: Vector, state: Readonly<MapState>)
     const t = nearestTOnQuadBezier(bezier, point);
 
     for (const section of sections) {
-      const pos = sectionPosAt(bezier, t, section.index, sections.length);
+      const pos = sectionPosAt(bezier, t, computeSectionOffset(section, road, state));
       const d = distSq(pos, point);
       if (d < bestDist) {
         bestDist = d;

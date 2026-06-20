@@ -2,7 +2,8 @@ import { NodeId, RoadId } from "@/common/types";
 import { MapState } from "../../models/structures";
 import { Model } from "../../models";
 import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_ROAD_ID } from "../../views/road";
-import { elevateToCubic, bezierPathData, offsetBezier, TRACK_SPACING } from "../../utils/bezier";
+import { elevateToCubic, bezierPathData, offsetBezier } from "../../utils/bezier";
+import { computeSectionOffset } from "../../utils/section";
 
 const ROAD_CONTROL_NODE_NAME = '_road-bezier-control';
 export const FIGMA_KEY_BEZIER_HANDLE   = 'mapBezierHandle';   // value: 'mid'
@@ -207,9 +208,8 @@ export class RoadControlManager {
         }];
       }
     } else {
-      const center = (sections.length - 1) / 2;
       sections.forEach((section, i) => {
-        const offset = (section.index - center) * TRACK_SPACING;
+        const offset = computeSectionOffset(section, road, state);
         const o = offsetBezier(cubic, offset);
         const child = children[i] as VectorNode | undefined;
         if (child) {
