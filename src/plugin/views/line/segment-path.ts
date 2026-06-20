@@ -64,11 +64,11 @@ export function computeCrossingSeg(
   const len1 = Math.hypot(tan1.x, tan1.y) || 1;
   const len2 = Math.hypot(tan2.x, tan2.y) || 1;
 
-  // Perpendicular (90° CCW from centerline tangent), flipped for reverse traversal.
-  const perp1x = -tan1.y / len1 * sign;
-  const perp1y =  tan1.x / len1 * sign;
-  const perp2x = -tan2.y / len2 * sign;
-  const perp2y =  tan2.x / len2 * sign;
+  // Perpendicular (90° CCW from centerline tangent), direction-independent.
+  const perp1x = -tan1.y / len1;
+  const perp1y =  tan1.x / len1;
+  const perp2x = -tan2.y / len2;
+  const perp2y =  tan2.x / len2;
 
   const p0 = { x: pos1.x + perp1x * offsetAtT1, y: pos1.y + perp1y * offsetAtT1 };
   const p3 = { x: pos2.x + perp2x * offsetAtT2, y: pos2.y + perp2y * offsetAtT2 };
@@ -101,7 +101,8 @@ export function computeSectionSegs(
     ? offsetDep
     : computeTotalOffset(line, road, sectionId, state, arrivalStationId);
 
-  // Normalize offsets for traversal direction (reverse → negate perpendicular).
+  // Negate offset for reverse traversal so the backward-parameterized bezier's
+  // flipped perpendicular lands on the correct physical side of the road.
   const directedDep = t1 > t2 ? -offsetDep : offsetDep;
   const directedArr = t1 > t2 ? -offsetArr : offsetArr;
 

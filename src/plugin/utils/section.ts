@@ -65,14 +65,6 @@ export function getLineDirectionAtStop(
   return 'forward';
 }
 
-function getFirstStopIndexOnSection(line: Line, section: RoadSection): number {
-  for (let i = 0; i < line.paths.length; i++) {
-    const p = line.paths[i];
-    if (p.kind === 'station-stop' && section.stationIds.includes(p.stationId)) return i;
-  }
-  return -1;
-}
-
 // referenceStationId: when supplied, uses that station's stop ranks to order lines
 // on the road (caller passes the segment's departure station). Falls back to the
 // section's first station (lowest interpT) when omitted.
@@ -137,18 +129,7 @@ export function getLinesForSection(
       .filter((l): l is Line => l != null);
   }
 
-  // Forward lines first, reverse lines last — within each group the rank order
-  // is preserved. Combined with the directedOffset sign-flip in the line renderer,
-  // this guarantees opposite-direction lines land on opposite canonical sides.
-  const forward = all.filter(l => {
-    const idx = getFirstStopIndexOnSection(l, section);
-    return idx < 0 || getLineDirectionAtStop(l, idx, state) === 'forward';
-  });
-  const reverse = all.filter(l => {
-    const idx = getFirstStopIndexOnSection(l, section);
-    return idx >= 0 && getLineDirectionAtStop(l, idx, state) === 'reverse';
-  });
-  return [...forward, ...reverse];
+  return all;
 }
 
 export function sectionBandWidth(numLines: number): number {
