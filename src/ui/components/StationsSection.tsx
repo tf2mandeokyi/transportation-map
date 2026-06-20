@@ -19,7 +19,7 @@ const StationsSection: React.FC = () => {
   };
 
   const handleConfirm = () => {
-    close(s => s.confirm({ name: stationName, textAlign, textHAlign, textRotation: 0 }));
+    close(s => s.confirm({ name: stationName, textAlign, textHAlign, textRotation: 0, flipped: false }));
     setIsPlacing(false);
     setStationName('');
   };

@@ -12,6 +12,7 @@ const EditStationSection: React.FC = () => {
   const [stationTextAlign, setStationTextAlign]     = useState<HVAlign | null>(null);
   const [stationTextHAlign, setStationTextHAlign]   = useState<TextHAlign | null>(null);
   const [stationTextRotation, setStationTextRotation] = useState<number | null>(null);
+  const [stationFlipped, setStationFlipped]         = useState<boolean | null>(null);
   const [linesAtStation, setLinesAtStation] = useState<Array<LineAtStationData>>([]);
   const linesAtStationRef = useRef<Array<LineAtStationData>>([]);
   const draggedLineIndexRef = useRef<number | null>(null);
@@ -20,6 +21,7 @@ const EditStationSection: React.FC = () => {
   const [textAlign, setTextAlign]     = useState<HVAlign>('right');
   const [textHAlign, setTextHAlign]   = useState<TextHAlign>('left');
   const [textRotation, setTextRotation] = useState(0);
+  const [flipped, setFlipped]         = useState(false);
   const [isCombiningMode, setIsCombiningMode] = useState(false);
 
   // Refs to avoid stale closures in the message subscription
@@ -41,6 +43,7 @@ const EditStationSection: React.FC = () => {
     setStationTextAlign(null);
     setStationTextHAlign(null);
     setStationTextRotation(null);
+    setStationFlipped(null);
     updateLinesAtStation([]);
     setIsCombiningMode(false);
   };
@@ -56,6 +59,7 @@ const EditStationSection: React.FC = () => {
         setStationTextAlign(msg.station.textAlign);
         setStationTextHAlign(msg.station.textHAlign);
         setStationTextRotation(msg.station.textRotation);
+        setStationFlipped(msg.station.flipped);
         updateLinesAtStation(msg.lines);
         setIsCombiningMode(false);
       }
@@ -67,9 +71,9 @@ const EditStationSection: React.FC = () => {
     };
   }, [manager]);
 
-  const onUpdateStation = (name: string, textAlign: HVAlign, textHAlign: TextHAlign, textRotation: number) => {
+  const onUpdateStation = (name: string, textAlign: HVAlign, textHAlign: TextHAlign, textRotation: number, flipped: boolean) => {
     if (!stationId) return;
-    postMessageToPlugin({ type: 'patch-station', stationId, patch: { op: 'update', station: { name, textAlign, textHAlign, textRotation } } });
+    postMessageToPlugin({ type: 'patch-station', stationId, patch: { op: 'update', station: { name, textAlign, textHAlign, textRotation, flipped } } });
   };
 
   useEffect(() => {
@@ -77,31 +81,37 @@ const EditStationSection: React.FC = () => {
     if (stationTextAlign) setTextAlign(stationTextAlign);
     if (stationTextHAlign) setTextHAlign(stationTextHAlign);
     if (stationTextRotation !== null) setTextRotation(stationTextRotation);
-  }, [stationName, stationTextAlign, stationTextHAlign, stationTextRotation]);
+    if (stationFlipped !== null) setFlipped(stationFlipped);
+  }, [stationName, stationTextAlign, stationTextHAlign, stationTextRotation, stationFlipped]);
 
   useEffect(() => {
     if (!stationId || stationName === null) return;
     if (nameUpdateTimerRef.current) clearTimeout(nameUpdateTimerRef.current);
     if (name !== stationName) {
-      nameUpdateTimerRef.current = setTimeout(() => { onUpdateStation(name, textAlign, textHAlign, textRotation); }, 500);
+      nameUpdateTimerRef.current = setTimeout(() => { onUpdateStation(name, textAlign, textHAlign, textRotation, flipped); }, 500);
     }
     return () => { if (nameUpdateTimerRef.current) clearTimeout(nameUpdateTimerRef.current); };
   }, [name]);
 
   useEffect(() => {
     if (!stationId || stationTextAlign === null) return;
-    if (textAlign !== stationTextAlign) onUpdateStation(name, textAlign, textHAlign, textRotation);
+    if (textAlign !== stationTextAlign) onUpdateStation(name, textAlign, textHAlign, textRotation, flipped);
   }, [textAlign]);
 
   useEffect(() => {
     if (!stationId || stationTextHAlign === null) return;
-    if (textHAlign !== stationTextHAlign) onUpdateStation(name, textAlign, textHAlign, textRotation);
+    if (textHAlign !== stationTextHAlign) onUpdateStation(name, textAlign, textHAlign, textRotation, flipped);
   }, [textHAlign]);
 
   useEffect(() => {
     if (!stationId || stationTextRotation === null) return;
-    if (textRotation !== stationTextRotation) onUpdateStation(name, textAlign, textHAlign, textRotation);
+    if (textRotation !== stationTextRotation) onUpdateStation(name, textAlign, textHAlign, textRotation, flipped);
   }, [textRotation]);
+
+  useEffect(() => {
+    if (!stationId || stationFlipped === null) return;
+    if (flipped !== stationFlipped) onUpdateStation(name, textAlign, textHAlign, textRotation, flipped);
+  }, [flipped]);
 
   if (!stationId || stationName === null) {
     return (
@@ -167,6 +177,14 @@ const EditStationSection: React.FC = () => {
             value={textRotation}
             onChange={(e) => setTextRotation(Number(e.target.value))}
           />
+        </div>
+        <div style={{ marginBottom: '8px' }}>
+          <button
+            className={`button full-width${flipped ? '' : ' button--secondary'}`}
+            onClick={() => setFlipped(f => !f)}
+          >
+            {flipped ? 'Flipped (180°)' : 'Flip 180°'}
+          </button>
         </div>
         <div className="two-column" style={{ marginBottom: '8px' }}>
           <button className="button button--secondary" onClick={() => postMessageToPlugin({ type: 'patch-station', stationId, patch: { op: 'copy', direction: 'forwards' } })}>

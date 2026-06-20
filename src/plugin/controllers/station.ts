@@ -110,12 +110,12 @@ export class StationController extends BaseController {
     figma.currentPage.selection = [handle];
   }
 
-  public async confirmPlacingMode({ name, textAlign, textHAlign, textRotation }: StationParams): Promise<void> {
+  public async confirmPlacingMode({ name, textAlign, textHAlign, textRotation, flipped }: StationParams): Promise<void> {
     if (!this.placingState) return;
     const snap = this.placingState.snap;
     await this.cancelPlacingMode();
 
-    const id = this.createStation(name, textAlign, textHAlign, textRotation, snap?.roadSectionId ?? null, snap?.interpT ?? 0.5);
+    const id = this.createStation(name, textAlign, textHAlign, textRotation, flipped, snap?.roadSectionId ?? null, snap?.interpT ?? 0.5);
     const station = this.model.getState().stations.get(id);
     if (!station) return;
 
@@ -137,8 +137,8 @@ export class StationController extends BaseController {
 
   // ── Message handlers ──────────────────────────────────────────────────────
 
-  public async handleAddStation({ name, textAlign, textHAlign, textRotation, roadSectionId, interpT }: StationParams & { roadSectionId: RoadSectionId | null; interpT: number }): Promise<void> {
-    const id = this.createStation(name, textAlign, textHAlign, textRotation, roadSectionId, interpT);
+  public async handleAddStation({ name, textAlign, textHAlign, textRotation, flipped, roadSectionId, interpT }: StationParams & { roadSectionId: RoadSectionId | null; interpT: number }): Promise<void> {
+    const id = this.createStation(name, textAlign, textHAlign, textRotation, flipped, roadSectionId, interpT);
     const station = this.model.getState().stations.get(id);
     if (!station) return;
 
@@ -158,8 +158,8 @@ export class StationController extends BaseController {
 
   // ── Individual handlers ───────────────────────────────────────────────────
 
-  public createStation(name: string, textAlign: HVAlign = 'right', textHAlign: TextHAlign = 'left', textRotation: number = 0, roadSectionId: RoadSectionId | null = null, interpT: number = 0.5): StationId {
-    return this.model.addStation({ name, textAlign, textHAlign, textRotation, interpT, roadSectionId });
+  public createStation(name: string, textAlign: HVAlign = 'right', textHAlign: TextHAlign = 'left', textRotation: number = 0, flipped: boolean = false, roadSectionId: RoadSectionId | null = null, interpT: number = 0.5): StationId {
+    return this.model.addStation({ name, textAlign, textHAlign, textRotation, flipped, interpT, roadSectionId });
   }
 
   public async handleGetStationInfo(stationId: StationId): Promise<void> {
@@ -185,7 +185,7 @@ export class StationController extends BaseController {
     postMessageToUI({
       type: 'station-clicked',
       stationId,
-      station: { name: station.name, textAlign: station.textAlign, textHAlign: station.textHAlign, textRotation: station.textRotation },
+      station: { name: station.name, textAlign: station.textAlign, textHAlign: station.textHAlign, textRotation: station.textRotation, flipped: station.flipped },
       lines,
     });
   }
@@ -200,7 +200,7 @@ export class StationController extends BaseController {
     await this.handleGetStationInfo(stationId);
   }
 
-  private async handleUpdateStation(stationId: StationId, { name, textAlign, textHAlign, textRotation }: StationParams): Promise<void> {
+  private async handleUpdateStation(stationId: StationId, { name, textAlign, textHAlign, textRotation, flipped }: StationParams): Promise<void> {
     const station = this.model.getState().stations.get(stationId);
     if (!station) { console.warn(`Station ${stationId} not found`); return; }
 
@@ -208,6 +208,7 @@ export class StationController extends BaseController {
     station.textAlign = textAlign;
     station.textHAlign = textHAlign;
     station.textRotation = textRotation;
+    station.flipped = flipped;
 
     await this.save();
     await this.handleGetStationInfo(stationId);
@@ -238,6 +239,7 @@ export class StationController extends BaseController {
       textAlign: station.textAlign,
       textHAlign: station.textHAlign,
       textRotation: station.textRotation,
+      flipped: station.flipped,
       interpT: newInterpT,
       roadSectionId: station.roadSectionId,
     });

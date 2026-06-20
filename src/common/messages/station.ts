@@ -1,6 +1,6 @@
 import { HVAlign, LineId, RoadSectionId, StationId, TextHAlign } from "../types";
 
-export type StationParams = { name: string; textAlign: HVAlign; textHAlign: TextHAlign; textRotation: number };
+export type StationParams = { name: string; textAlign: HVAlign; textHAlign: TextHAlign; textRotation: number; flipped: boolean };
 
 export type LineAtStationData = {
   id: LineId;

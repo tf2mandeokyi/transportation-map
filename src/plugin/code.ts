@@ -88,11 +88,11 @@ async function createDemoMap(controller: Controller, model: Model) {
   const sec3 = model.addRoadSection(road3, { name: 'Track A', index: 0, stationIds: [] });
 
   // Create stations on sections
-  const sWest   = model.addStation({ name: 'West Station',    textAlign: 'right',  textHAlign: 'left', textRotation: 0, interpT: 0.2,  roadSectionId: sec1 });
-  const sCentral = model.addStation({ name: 'Central Station', textAlign: 'bottom', textHAlign: 'left', textRotation: 0, interpT: 0.5,  roadSectionId: sec1 });
-  const sEast    = model.addStation({ name: 'East Station',   textAlign: 'right',  textHAlign: 'left', textRotation: 0, interpT: 0.8,  roadSectionId: sec2 });
-  const sNorth   = model.addStation({ name: 'North Station',  textAlign: 'right',  textHAlign: 'left', textRotation: 0, interpT: 0.7,  roadSectionId: sec3 });
-  const sMid     = model.addStation({ name: 'Midpoint',       textAlign: 'right',  textHAlign: 'left', textRotation: 0, interpT: 0.5,  roadSectionId: sec2 });
+  const sWest   = model.addStation({ name: 'West Station',    textAlign: 'right',  textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.2,  roadSectionId: sec1 });
+  const sCentral = model.addStation({ name: 'Central Station', textAlign: 'bottom', textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.5,  roadSectionId: sec1 });
+  const sEast    = model.addStation({ name: 'East Station',   textAlign: 'right',  textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.8,  roadSectionId: sec2 });
+  const sNorth   = model.addStation({ name: 'North Station',  textAlign: 'right',  textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.7,  roadSectionId: sec3 });
+  const sMid     = model.addStation({ name: 'Midpoint',       textAlign: 'right',  textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.5,  roadSectionId: sec2 });
 
   // Create lines
   const redLine = model.addLine({ name: 'Red Line', color: '#ff0000', isCircular: false, paths: [] });

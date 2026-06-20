@@ -36,6 +36,7 @@ export interface Station {
   textAlign: HVAlign;
   textHAlign: 'left' | 'center' | 'right';
   textRotation: number;
+  flipped: boolean;
   interpT: number;
   roadSectionId: RoadSectionId | null;
 }

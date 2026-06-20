@@ -38,6 +38,7 @@ interface SerializedStation {
   t: HVAlign; // textAlign
   ta?: 'left' | 'center' | 'right'; // textHAlign (absent in old saves → defaults to 'left')
   tr?: number; // textRotation (absent in old saves → defaults to 0)
+  fl?: boolean; // flipped (absent in old saves → defaults to false)
   it: number; // interpT
   rs: string | null; // roadSectionId
 }
@@ -111,6 +112,7 @@ export function serializeMapState(state: MapState): string {
     t: s.textAlign,
     ta: s.textHAlign,
     tr: s.textRotation,
+    fl: s.flipped || undefined,
     it: s.interpT,
     rs: s.roadSectionId
   }));
@@ -233,6 +235,7 @@ export function deserializeMapState(json: string): MapState | null {
         textAlign: s.t,
         textHAlign: s.ta ?? 'left',
         textRotation: s.tr ?? 0,
+        flipped: s.fl ?? false,
         interpT: s.it,
         roadSectionId: s.rs as RoadSectionId | null
       });

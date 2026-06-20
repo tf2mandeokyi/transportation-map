@@ -87,7 +87,7 @@ export class ConnectionController extends BaseController {
       postMessageToUI({
         type: 'station-clicked',
         stationId: station.id,
-        station: { name: station.name, textAlign: station.textAlign, textHAlign: station.textHAlign, textRotation: station.textRotation },
+        station: { name: station.name, textAlign: station.textAlign, textHAlign: station.textHAlign, textRotation: station.textRotation, flipped: station.flipped },
         lines,
       });
     }

@@ -5,11 +5,6 @@ import { LineId, StationId } from "@/common/types";
 import { computeStationPosition, computeStationTangentAngle } from "./position";
 import { getLinesForStation } from "./layout";
 
-export interface ConnectionPoints {
-  head: Vector;
-  tail: Vector;
-}
-
 function applyTransform(transform: Transform, point: Vector): Vector {
   return {
     x: transform[0][0] * point.x + transform[0][1] * point.y + transform[0][2],
@@ -23,12 +18,17 @@ async function renderStationWithTemplate(
   state: Readonly<MapState>,
   tangentAngle: number,
 ): Promise<{ line: Line; segmentIndex: number; node: SceneNode; passThrough: boolean }[]> {
+  const flipLR = (f: 'left' | 'right'): 'left' | 'right' => f === 'left' ? 'right' : 'left';
+
   const lines = getLinesForStation(station, state);
-  const children = lines.map(({ line, segmentIndex, facing, passThrough }) => ({
+  // When flipped, reverse line order and flip each facing so the content stays
+  // visually correct after the 180° frame rotation applied in renderStation.
+  const orderedLines = station.flipped ? [...lines].reverse() : lines;
+  const children = orderedLines.map(({ line, segmentIndex, facing, passThrough }) => ({
     line,
     segmentIndex,
     passThrough,
-    result: renderStationLine({ text: line.name, color: line.color, stops: !passThrough, visible: true, facing }),
+    result: renderStationLine({ text: line.name, color: line.color, stops: !passThrough, visible: true, facing: station.flipped ? flipLR(facing) : facing }),
   }));
 
   const forwardFacing: 'left' | 'right' =
@@ -38,7 +38,7 @@ async function renderStationWithTemplate(
     text: station.name,
     visible: true,
     rotation: 0,
-    textRotation: station.textRotation + tangentAngle,
+    textRotation: station.textRotation + tangentAngle + (station.flipped ? 180 : 0),
     children: children.map(c => c.result),
     align: `${forwardFacing},center` as const,
     textHAlign: `${station.textHAlign},center` as const,
@@ -54,7 +54,7 @@ async function renderStationWithTemplate(
 
 export class StationRenderer {
   private readonly figmaStationMap: Map<StationId, SceneNode> = new Map();
-  private readonly lineConnectionPoints: Map<string, ConnectionPoints> = new Map();
+  private readonly lineConnectionPoints: Map<string, Vector> = new Map();
   private model?: Model;
 
   public setModel(model: Model): void {
@@ -88,21 +88,21 @@ export class StationRenderer {
 
     // Figma's rotation is CCW on screen; atan2 gives a CW angle, so negate.
     // Center = R(θ) * [w/2, h/2]^T + [tx, ty], where R(-θ) is Figma's CCW rotation.
+    // When flipped, add 180° to rotate the entire station frame upside-down.
     const w = frame.width;
     const h = frame.height;
-    frame.rotation = -tangentAngle;
-    const θRad = tangentAngle * Math.PI / 180;
+    const effectiveAngle = station.flipped ? tangentAngle + 180 : tangentAngle;
+    frame.rotation = -effectiveAngle;
+    const θRad = effectiveAngle * Math.PI / 180;
     frame.x = position.x - Math.cos(θRad) * w / 2 + Math.sin(θRad) * h / 2;
     frame.y = position.y - Math.sin(θRad) * w / 2 - Math.cos(θRad) * h / 2;
 
-    const maxWidth = children.reduce((max, c) => Math.max(max, c.node.width), 0);
-    this.storeLineConnectionPoints(station, children, maxWidth);
+    this.storeLineConnectionPoints(station, children);
   }
 
   private storeLineConnectionPoints(
     station: Station,
     lines: Array<{ line: Line; segmentIndex: number; node: SceneNode; passThrough: boolean }>,
-    maxWidth: number
   ): void {
     for (const { line, node, segmentIndex, passThrough } of lines) {
       if (passThrough) continue;
@@ -110,28 +110,12 @@ export class StationRenderer {
       const width  = node.width;
       const height = node.height;
 
-      const centerLeft  = applyTransform(transform, { x: 0,     y: height / 2 });
-      const centerRight = applyTransform(transform, { x: width, y: height / 2 });
-
-      let head: Vector, tail: Vector;
-      switch (station.textAlign) {
-        case 'right':
-        case 'top':
-          head = centerLeft;
-          tail = applyTransform(transform, { x: maxWidth,          y: height / 2 });
-          break;
-        case 'left':
-        case 'bottom':
-          head = centerRight;
-          tail = applyTransform(transform, { x: width - maxWidth, y: height / 2 });
-          break;
-      }
-
-      this.lineConnectionPoints.set(`${station.id}-${line.id}-${segmentIndex}`, { head, tail });
+      const center = applyTransform(transform, { x: width / 2, y: height / 2 });
+      this.lineConnectionPoints.set(`${station.id}-${line.id}-${segmentIndex}`, center);
     }
   }
 
-  public getConnectionPoint(stationId: StationId, lineId: LineId, segmentIndex: number): ConnectionPoints | undefined {
+  public getConnectionPoint(stationId: StationId, lineId: LineId, segmentIndex: number): Vector | undefined {
     return this.lineConnectionPoints.get(`${stationId}-${lineId}-${segmentIndex}`);
   }
 

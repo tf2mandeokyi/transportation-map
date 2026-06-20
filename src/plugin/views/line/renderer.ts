@@ -93,19 +93,19 @@ export class LineRenderer {
     color: RGB,
     state: Readonly<MapState>
   ): SegmentResult | null {
-    const startPoints = this.stationRenderer.getConnectionPoint(startStation.id, line.id, startPathIdx);
-    const endPoints   = this.stationRenderer.getConnectionPoint(endStation.id,   line.id, endPathIdx);
-    if (!startPoints || !endPoints) {
+    const startPoint = this.stationRenderer.getConnectionPoint(startStation.id, line.id, startPathIdx);
+    const endPoint   = this.stationRenderer.getConnectionPoint(endStation.id,   line.id, endPathIdx);
+    if (!startPoint || !endPoint) {
       console.warn(`Missing connection points for line ${line.id}`);
       return null;
     }
 
     if (isInvalidJump(startStation, endStation, rseBetween, state)) {
-      return { kind: 'dashed', node: createDashedLine(startPoints.head, endPoints.tail, color) };
+      return { kind: 'dashed', node: createDashedLine(startPoint, endPoint, color) };
     }
 
     const pathData = buildSegmentPath(
-      line, startStation, endStation, rseBetween, startPoints.head, endPoints.tail, state
+      line, startStation, endStation, rseBetween, startPoint, endPoint, state
     );
     return { ...bezierPathToSegments(pathData, color), kind: 'normal' };
   }

@@ -1,1 +1,1 @@
-export { StationRenderer, ConnectionPoints } from './renderer';
+export { StationRenderer } from './renderer';
