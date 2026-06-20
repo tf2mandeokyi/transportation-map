@@ -24,6 +24,8 @@ export class TextRenderer extends BaseRenderer {
     let style = attributes.style?.interpolate(props);
     const fontSize = attributes.fontSize?.interpolate(props);
     const fill = attributes.fill?.interpolate(props);
+    const stroke = attributes.stroke?.interpolate(props);
+    const strokeWidth = attributes.strokeWidth?.interpolate(props);
     const align = attributes.align?.interpolate(props);
     
     if (fontFamily || style) {
@@ -45,6 +47,14 @@ export class TextRenderer extends BaseRenderer {
 
     if (fill) {
       text.fills = [{ type: 'SOLID', color: hexToRgb(fill) }];
+    }
+
+    if (stroke) {
+      text.strokes = [{ type: 'SOLID', color: hexToRgb(stroke) }];
+    }
+
+    if (strokeWidth) {
+      text.strokeWeight = Number(strokeWidth);
     }
 
     if (align) {
