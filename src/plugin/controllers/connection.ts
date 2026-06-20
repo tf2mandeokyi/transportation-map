@@ -79,7 +79,7 @@ export class ConnectionController extends BaseController {
           if (path.kind === 'station-stop' && path.stationId === station.id) {
             const dir = getLineDirectionAtStop(line, path.index, state);
             const facing: 'left' | 'right' = dir === 'forward' ? 'right' : 'left';
-            lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing });
+            lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing, stops: path.stops });
           }
         }
       }

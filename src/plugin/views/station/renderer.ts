@@ -22,12 +22,13 @@ async function renderStationWithTemplate(
   station: Station,
   state: Readonly<MapState>,
   tangentAngle: number,
-): Promise<{ line: Line; segmentIndex: number; node: SceneNode }[]> {
+): Promise<{ line: Line; segmentIndex: number; node: SceneNode; passThrough: boolean }[]> {
   const lines = getLinesForStation(station, state);
-  const children = lines.map(({ line, segmentIndex, facing }) => ({
+  const children = lines.map(({ line, segmentIndex, facing, passThrough }) => ({
     line,
     segmentIndex,
-    result: renderStationLine({ text: line.name, color: line.color, stops: true, visible: true, facing }),
+    passThrough,
+    result: renderStationLine({ text: line.name, color: line.color, stops: !passThrough, visible: true, facing }),
   }));
 
   const forwardFacing: 'left' | 'right' =
@@ -46,7 +47,9 @@ async function renderStationWithTemplate(
   }).intoNode();
 
   parentFrame.appendChild(stationElement);
-  return children.map(({ line, segmentIndex, result }) => ({ line, segmentIndex, node: result.node }));
+  return children.map(({ line, segmentIndex, passThrough, result }) => ({
+    line, segmentIndex, passThrough, node: result.node,
+  }));
 }
 
 export class StationRenderer {
@@ -81,7 +84,7 @@ export class StationRenderer {
 
     const position    = computeStationPosition(station, state);
     const tangentAngle = computeStationTangentAngle(station, state);
-    const children    = await renderStationWithTemplate(frame, station, state, tangentAngle);
+    const children = await renderStationWithTemplate(frame, station, state, tangentAngle);
 
     // Figma's rotation is CCW on screen; atan2 gives a CW angle, so negate.
     // Center = R(θ) * [w/2, h/2]^T + [tx, ty], where R(-θ) is Figma's CCW rotation.
@@ -98,10 +101,11 @@ export class StationRenderer {
 
   private storeLineConnectionPoints(
     station: Station,
-    lines: Array<{ line: Line; segmentIndex: number; node: SceneNode }>,
+    lines: Array<{ line: Line; segmentIndex: number; node: SceneNode; passThrough: boolean }>,
     maxWidth: number
   ): void {
-    for (const { line, node, segmentIndex } of lines) {
+    for (const { line, node, segmentIndex, passThrough } of lines) {
+      if (passThrough) continue;
       const transform = node.absoluteTransform;
       const width  = node.width;
       const height = node.height;

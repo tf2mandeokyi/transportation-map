@@ -29,6 +29,7 @@ export class StationController extends BaseController {
     router.register('add-station', msg => this.handleAddStation(msg.station));
     router.register('patch-station', msg => this.handlePatchStation(msg.stationId, msg.patch));
     router.register('select-station', msg => this.handleSelectStation(msg.stationId));
+    router.register('get-station-info', msg => this.handleGetStationInfo(msg.stationId));
   }
 
   // ── Placing mode ──────────────────────────────────────────────────────────
@@ -175,7 +176,7 @@ export class StationController extends BaseController {
         if (path.kind === 'station-stop' && path.stationId === stationId) {
           const dir = getLineDirectionAtStop(line, path.index, state);
           const facing: 'left' | 'right' = dir === 'forward' ? 'right' : 'left';
-          lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing });
+          lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing, stops: path.stops });
         }
       }
     }

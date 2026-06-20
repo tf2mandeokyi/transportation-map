@@ -264,7 +264,7 @@ export class Model {
     if (!line) return;
     const index = line.paths.length;
     if (path.kind === 'station-stop') {
-      line.paths.push({ kind: 'station-stop', index, stationId: path.stationId, rank: this._nextRankForStation(path.stationId) });
+      line.paths.push({ kind: 'station-stop', index, stationId: path.stationId, rank: this._nextRankForStation(path.stationId), stops: true });
     } else {
       line.paths.push({ kind: 'road-section-enter', index, sourceRoadId: path.sourceRoadId, nodeId: path.nodeId, destRoadId: path.destRoadId });
     }
@@ -275,7 +275,7 @@ export class Model {
     let max = -1;
     for (const line of this.state.lines.values()) {
       for (const p of line.paths) {
-        if (p.kind === 'station-stop' && p.stationId === stationId) {
+        if (p.kind === 'station-stop' && p.stationId === stationId && p.stops) {
           max = Math.max(max, p.rank);
         }
       }
@@ -314,6 +314,23 @@ export class Model {
     stops.forEach(({ path }, i) => { path.rank = i; });
   }
 
+  public setStationStopFlag(lineId: LineId, pathIndex: number, stops: boolean): void {
+    const line = this.state.lines.get(lineId);
+    if (!line) return;
+    const path = line.paths.find(p => p.index === pathIndex);
+    if (!path || path.kind !== 'station-stop') return;
+    if (stops) {
+      // Promote pass-through to explicit stop; keep its existing rank.
+      path.stops = true;
+      line.paths = validateLinePaths(line, this.state);
+    } else {
+      // Remove explicit stop; validator will re-insert as pass-through if bracketed.
+      line.paths = line.paths.filter(p => p.index !== pathIndex);
+      this._reindexLinePaths(line);
+      line.paths = validateLinePaths(line, this.state);
+    }
+  }
+
   public removeLinePath(lineId: LineId, pathIndex: number): void {
     const line = this.state.lines.get(lineId);
     if (!line) return;
@@ -330,7 +347,7 @@ export class Model {
     }
     line.paths = paths.map((p, i) => {
       if (p.kind === 'station-stop') {
-        return { kind: 'station-stop', index: i, stationId: p.stationId, rank: existingRanks.get(p.stationId) ?? 0 };
+        return { kind: 'station-stop', index: i, stationId: p.stationId, rank: existingRanks.get(p.stationId) ?? 0, stops: true };
       }
       return { kind: 'road-section-enter', index: i, sourceRoadId: p.sourceRoadId, nodeId: p.nodeId, destRoadId: p.destRoadId };
     });
@@ -378,6 +395,8 @@ export class Model {
     const state = deserializeMapState(data);
     if (!state) return null;
 
-    return new Model(state);
+    const model = new Model(state);
+    model.validateAllLinePaths();
+    return model;
   }
 }

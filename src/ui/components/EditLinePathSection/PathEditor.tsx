@@ -128,6 +128,12 @@ const PathEditor: React.FC = () => {
     postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'remove-station', pathIndex } });
   };
 
+  const handleToggleStops = (pathIndex: number, stops: boolean) => {
+    if (!currentEditingLineId) return;
+    postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'toggle-stops', pathIndex, stops } });
+    postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
+  };
+
   const handleRemoveRse = (pathIndex: number) => {
     if (!currentEditingLineId) return;
     const newPaths = toLinePathInputs(linePaths.filter((_, i) => i !== pathIndex));
@@ -163,6 +169,7 @@ const PathEditor: React.FC = () => {
           onRemoveStop={handleRemovePath}
           onRemoveRse={handleRemoveRse}
           onSelectStation={(stationId) => postMessageToPlugin({ type: 'select-station', stationId })}
+          onToggleStops={handleToggleStops}
           onStartAddingStation={handleStartAdding}
           onStartAddingRse={startRseMode}
         />

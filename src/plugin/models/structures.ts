@@ -45,6 +45,7 @@ export interface StationStop {
   index: number;
   stationId: StationId;
   rank: number;
+  stops: boolean; // false = passes through without stopping
 }
 
 export interface RoadSectionEnter {

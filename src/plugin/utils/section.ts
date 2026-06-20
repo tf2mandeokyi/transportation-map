@@ -82,10 +82,22 @@ export function getLinesForSection(
   referenceStationId?: StationId,
 ): Line[] {
   const lineIds = new Set<LineId>();
-  for (const stationId of section.stationIds) {
+
+  if (referenceStationId) {
+    // Only count lines that have a station-stop entry (stops: true or false) at the
+    // reference station. Pass-throughs are now first-class entries inserted by the
+    // validator, so this naturally excludes lines that end before this station.
     for (const line of state.lines.values()) {
-      if (line.paths.some(p => p.kind === 'station-stop' && p.stationId === stationId)) {
+      if (line.paths.some(p => p.kind === 'station-stop' && p.stationId === referenceStationId)) {
         lineIds.add(line.id);
+      }
+    }
+  } else {
+    for (const stationId of section.stationIds) {
+      for (const line of state.lines.values()) {
+        if (line.paths.some(p => p.kind === 'station-stop' && p.stationId === stationId)) {
+          lineIds.add(line.id);
+        }
       }
     }
   }
@@ -99,7 +111,6 @@ export function getLinesForSection(
 
   let all: Line[];
   if (referenceStation) {
-    // Collect ranks for lines that stop at the reference station
     const rankMap = new Map<LineId, number>();
     for (const line of state.lines.values()) {
       if (!lineIds.has(line.id)) continue;
@@ -109,7 +120,6 @@ export function getLinesForSection(
         }
       }
     }
-    // Lines not stopping at reference station get rank Infinity (placed last)
     all = [...lineIds]
       .map(id => state.lines.get(id))
       .filter((l): l is Line => l != null)
@@ -117,7 +127,6 @@ export function getLinesForSection(
         const ra = rankMap.get(a.id) ?? Infinity;
         const rb = rankMap.get(b.id) ?? Infinity;
         if (ra !== rb) return ra - rb;
-        // Tie-break by global stacking order
         return state.lineStackingOrder.indexOf(a.id) - state.lineStackingOrder.indexOf(b.id);
       });
   } else {

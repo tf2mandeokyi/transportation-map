@@ -32,6 +32,7 @@ export class LineController extends BaseController {
       case 'update-path':    return this.handleUpdateLinePath(lineId, patch.paths);
       case 'rotate-path':    return this.handleRotateLinePath(lineId, patch.steps);
       case 'remove-station': return this.handleRemoveStationFromLine(lineId, patch.pathIndex);
+      case 'toggle-stops':   return this.handleToggleStops(lineId, patch.pathIndex, patch.stops);
     }
   }
 
@@ -60,6 +61,12 @@ export class LineController extends BaseController {
     const line = this.model.getState().lines.get(lineId);
     if (!line) { console.warn(`Line ${lineId} not found`); return; }
     this.model.removeLinePath(lineId, pathIndex);
+    await this.save();
+    postMessageToUI({ type: 'station-removed-from-line' });
+  }
+
+  private async handleToggleStops(lineId: LineId, pathIndex: number, stops: boolean): Promise<void> {
+    this.model.setStationStopFlag(lineId, pathIndex, stops);
     await this.save();
     postMessageToUI({ type: 'station-removed-from-line' });
   }

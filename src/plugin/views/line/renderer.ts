@@ -18,7 +18,7 @@ function collectStopsAndRSEs(
   for (const p of line.paths) {
     if (p.kind === 'road-section-enter') {
       pendingRSEs.push(p);
-    } else if (p.kind === 'station-stop') {
+    } else if (p.kind === 'station-stop' && p.stops) {
       const station = state.stations.get(p.stationId);
       if (station) {
         stops.push({ pathIdx: p.index, station });

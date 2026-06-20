@@ -11,7 +11,8 @@ export type LinePatch =
   | { op: 'update-color'; color: string }
   | { op: 'update-path'; paths: LinePathInput[] }
   | { op: 'rotate-path'; steps: number }
-  | { op: 'remove-station'; pathIndex: number };
+  | { op: 'remove-station'; pathIndex: number }
+  | { op: 'toggle-stops'; pathIndex: number; stops: boolean };
 
 export type UIToPluginLineMessage =
   | { type: 'add-line'; line: { name: string; color: string; isCircular?: boolean } }

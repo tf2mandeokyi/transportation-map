@@ -213,18 +213,18 @@ const EditStationSection: React.FC = () => {
               <div
                 key={`${lineInfo.id}-${lineInfo.pathIndex}`}
                 className="station-path-item"
-                draggable
-                onDragStart={() => { draggedLineIndexRef.current = index; }}
-                onDragEnd={() => {
+                draggable={lineInfo.stops}
+                onDragStart={lineInfo.stops ? () => { draggedLineIndexRef.current = index; } : undefined}
+                onDragEnd={lineInfo.stops ? () => {
                   draggedLineIndexRef.current = null;
                   const sid = stationIdRef.current;
                   if (!sid) return;
-                  const stops = linesAtStationRef.current.map((l, i) => ({
-                    lineId: l.id, pathIndex: l.pathIndex, rank: i,
-                  }));
+                  const stops = linesAtStationRef.current
+                    .filter(l => l.stops)
+                    .map((l, i) => ({ lineId: l.id, pathIndex: l.pathIndex, rank: i }));
                   postMessageToPlugin({ type: 'patch-station', stationId: sid, patch: { op: 'update-stop-ranks', stops } });
-                }}
-                onDragOver={(e) => {
+                } : undefined}
+                onDragOver={lineInfo.stops ? (e) => {
                   e.preventDefault();
                   const dragIdx = draggedLineIndexRef.current;
                   if (dragIdx === null || dragIdx === index) return;
@@ -233,18 +233,31 @@ const EditStationSection: React.FC = () => {
                   next.splice(index, 0, moved);
                   draggedLineIndexRef.current = index;
                   updateLinesAtStation(next);
-                }}
+                } : undefined}
                 onDrop={(e) => { e.preventDefault(); }}
-                style={{ alignItems: 'center', cursor: 'grab' }}
+                style={{ alignItems: 'center', cursor: lineInfo.stops ? 'grab' : 'default' }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                  <span style={{ color: '#999', fontSize: '12px' }}>⋮⋮</span>
-                  <div style={{ width: '12px', height: '12px', backgroundColor: lineInfo.color, borderRadius: '2px', border: '1px solid rgba(0,0,0,0.1)', flexShrink: 0 }} />
-                  <span>{lineInfo.name}</span>
+                  <span style={{ color: '#999', fontSize: '12px', visibility: lineInfo.stops ? 'visible' : 'hidden' }}>⋮⋮</span>
+                  <div style={{ width: '12px', height: '12px', backgroundColor: lineInfo.color, borderRadius: '2px', border: '1px solid rgba(0,0,0,0.1)', flexShrink: 0, opacity: lineInfo.stops ? 1 : 0.5 }} />
+                  <span style={{ color: lineInfo.stops ? 'inherit' : '#999', fontStyle: lineInfo.stops ? 'normal' : 'italic' }}>{lineInfo.name}</span>
                 </div>
-                <span style={{ color: '#999', fontSize: '12px', flexShrink: 0 }}>
-                  {lineInfo.facing === 'right' ? '→' : '←'}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                  <span style={{ color: '#999', fontSize: '12px' }}>
+                    {lineInfo.facing === 'right' ? '→' : '←'}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={lineInfo.stops}
+                    title={lineInfo.stops ? 'Stops here' : 'Passes through'}
+                    onChange={(e) => {
+                      const sid = stationIdRef.current;
+                      if (!sid) return;
+                      postMessageToPlugin({ type: 'patch-line', lineId: lineInfo.id, patch: { op: 'toggle-stops', pathIndex: lineInfo.pathIndex, stops: e.target.checked } });
+                      postMessageToPlugin({ type: 'get-station-info', stationId: sid });
+                    }}
+                  />
+                </div>
               </div>
             ))}
           </div>

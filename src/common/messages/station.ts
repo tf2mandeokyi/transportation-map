@@ -9,6 +9,7 @@ export type LineAtStationData = {
   pathIndex: number;
   rank: number;
   facing: 'left' | 'right';
+  stops: boolean;
 };
 
 export type StationPatch =
@@ -22,4 +23,5 @@ export type UIToPluginStationMessage =
   | { type: 'start-placing-station-mode' }
   | { type: 'add-station'; station: StationParams & { roadSectionId: RoadSectionId | null; interpT: number } }
   | { type: 'patch-station'; stationId: StationId; patch: StationPatch }
-  | { type: 'select-station'; stationId: StationId };
+  | { type: 'select-station'; stationId: StationId }
+  | { type: 'get-station-info'; stationId: StationId };

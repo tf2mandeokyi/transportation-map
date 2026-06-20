@@ -12,13 +12,14 @@ interface PathItemsListProps {
   onRemoveStop: (pathIndex: number) => void;
   onRemoveRse: (pathIndex: number) => void;
   onSelectStation: (stationId: StationId) => void;
+  onToggleStops: (pathIndex: number, stops: boolean) => void;
   onStartAddingStation: (afterPathIndex: number) => void;
   onStartAddingRse: (afterPathIndex: number) => void;
 }
 
 const PathItemsList: React.FC<PathItemsListProps> = ({
   linePaths, stationNames, roads, inactive,
-  onRemoveStop, onRemoveRse, onSelectStation,
+  onRemoveStop, onRemoveRse, onSelectStation, onToggleStops,
   onStartAddingStation, onStartAddingRse,
 }) => {
   const elements: React.ReactNode[] = [];
@@ -50,8 +51,10 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
           key={`stop-${i}`}
           name={stationNames[path.stationId] ?? path.stationId}
           index={i}
+          stops={path.stops}
           onRemove={() => onRemoveStop(path.index)}
           onSelect={() => onSelectStation(path.stationId)}
+          onToggleStops={stops => onToggleStops(path.index, stops)}
         />
       );
     } else {
