@@ -104,8 +104,7 @@ export class StationRenderer {
     station: Station,
     lines: Array<{ line: Line; segmentIndex: number; node: SceneNode; passThrough: boolean }>,
   ): void {
-    for (const { line, node, segmentIndex, passThrough } of lines) {
-      if (passThrough) continue;
+    for (const { line, node, segmentIndex } of lines) {
       const transform = node.absoluteTransform;
       const width  = node.width;
       const height = node.height;
