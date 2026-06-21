@@ -2,6 +2,10 @@ import { Line, LinePath, MapState, Road, RoadSectionEnter, Station, StationStop 
 import { NodeId, RoadSectionId, StationId } from "@/common/types";
 import { findRoadForSection } from "./section";
 
+function findRoadForStation(station: Station, state: Readonly<MapState>): Road | null {
+  return station.roadSectionId ? findRoadForSection(station.roadSectionId, state) : null;
+}
+
 function findSharedNode(roadA: Road, roadB: Road): NodeId | null {
   if (roadA.endNodeId === roadB.startNodeId || roadA.endNodeId === roadB.endNodeId) return roadA.endNodeId;
   if (roadA.startNodeId === roadB.startNodeId || roadA.startNodeId === roadB.endNodeId) return roadA.startNodeId;
@@ -21,8 +25,8 @@ function getRoadSpans(
   rsesBetween: RoadSectionEnter[],
   state: Readonly<MapState>,
 ): RoadSpan[] {
-  const depRoad = depStation.roadSectionId ? findRoadForSection(depStation.roadSectionId, state) : null;
-  const arrRoad = arrStation.roadSectionId ? findRoadForSection(arrStation.roadSectionId, state) : null;
+  const depRoad = findRoadForStation(depStation, state);
+  const arrRoad = findRoadForStation(arrStation, state);
   if (!depRoad || !arrRoad) return [];
 
   if (rsesBetween.length === 0) {
@@ -79,20 +83,15 @@ function findIntermediateStations(
 ): Station[] {
   const tMin = Math.min(tEntry, tExit);
   const tMax = Math.max(tEntry, tExit);
-  const result: Station[] = [];
-  const sections = sectionId
-    ? [road.sections.get(sectionId)].filter(Boolean)
-    : road.sections.values();
-  for (const section of sections) {
-    if (!section) continue;
-    for (const stationId of section.stationIds) {
-      if (stoppingIds.has(stationId)) continue;
-      const st = state.stations.get(stationId);
-      if (st && st.interpT > tMin && st.interpT < tMax) result.push(st);
-    }
-  }
-  result.sort((a, b) => tEntry <= tExit ? a.interpT - b.interpT : b.interpT - a.interpT);
-  return result;
+  const section = sectionId ? road.sections.get(sectionId) : null;
+  const stationIds = section
+    ? section.stationIds
+    : [...road.sections.values()].flatMap(s => s.stationIds);
+  return stationIds
+    .filter(id => !stoppingIds.has(id))
+    .map(id => state.stations.get(id))
+    .filter((st): st is Station => st != null && st.interpT > tMin && st.interpT < tMax)
+    .sort((a, b) => tEntry <= tExit ? a.interpT - b.interpT : b.interpT - a.interpT);
 }
 
 // Inserts stops:false entries for every station a line passes through without stopping.
@@ -139,29 +138,33 @@ function insertPassThroughStops(paths: LinePath[], state: Readonly<MapState>): L
     // spans must be exactly rsesBetween.length + 1; otherwise skip.
     if (spans.length !== rsesBetween.length + 1) { i++; continue; }
 
-    if (rsesBetween.length === 0) {
-      // Same road: all pass-throughs follow the departure stop directly.
-      pushPassThroughs(spans[0], p.rank);
-      i++;
-    } else {
-      // Multi-road: interleave pass-throughs with RSEs so each pass-through sits
-      // between the RSE entering its road and the RSE leaving it. This lets
-      // getLineDirectionAtStop read direction from the preceding RSE.
-      pushPassThroughs(spans[0], p.rank);
-      for (let k = 0; k < rsesBetween.length - 1; k++) {
-        result.push(rsesBetween[k]);
-        pushPassThroughs(spans[k + 1], p.rank);
-      }
-      result.push(rsesBetween[rsesBetween.length - 1]);
-      pushPassThroughs(spans[spans.length - 1], p.rank);
-      i = j; // arr stop is processed next iteration
+    // Interleave pass-throughs with RSEs: spans[0] before rse[0], spans[k+1] after rse[k].
+    pushPassThroughs(spans[0], p.rank);
+    for (let k = 0; k < rsesBetween.length; k++) {
+      result.push(rsesBetween[k]);
+      pushPassThroughs(spans[k + 1], p.rank);
     }
+    i = j; // arr stop is processed next iteration
   }
 
   return result.map((p, idx) => ({ ...p, index: idx }));
 }
 
 // ── Main validator ────────────────────────────────────────────────────────────
+
+function tryAutoInsertRSE(
+  prevStop: StationStop, currStop: StationStop, state: Readonly<MapState>,
+): RoadSectionEnter | null {
+  const prevStation = state.stations.get(prevStop.stationId);
+  const currStation = state.stations.get(currStop.stationId);
+  if (!prevStation || !currStation) return null;
+  const prevRoad = findRoadForStation(prevStation, state);
+  const currRoad = findRoadForStation(currStation, state);
+  if (!prevRoad || !currRoad || prevRoad.id === currRoad.id) return null;
+  const nodeId = findSharedNode(prevRoad, currRoad);
+  if (!nodeId) return null;
+  return { kind: 'road-section-enter', index: 0, sourceRoadId: prevRoad.id, nodeId, destRoadId: currRoad.id };
+}
 
 // Validates and normalises RSE entries for a line:
 // - Preserves manually-placed RSEs between consecutive stops (multi-hop support).
@@ -181,19 +184,8 @@ export function validateLinePaths(line: Line, state: Readonly<MapState>): LinePa
       if (prevStopResultIdx >= 0) result.push(p);
     } else {
       if (prevStopResultIdx >= 0 && result.length === prevStopResultIdx + 1) {
-        const prevStop    = result[prevStopResultIdx] as StationStop;
-        const prevStation = state.stations.get(prevStop.stationId);
-        const currStation = state.stations.get(p.stationId);
-        if (prevStation && currStation) {
-          const prevRoad = prevStation.roadSectionId ? findRoadForSection(prevStation.roadSectionId, state) : null;
-          const currRoad = currStation.roadSectionId ? findRoadForSection(currStation.roadSectionId, state) : null;
-          if (prevRoad && currRoad && prevRoad.id !== currRoad.id) {
-            const nodeId = findSharedNode(prevRoad, currRoad);
-            if (nodeId) {
-              result.push({ kind: 'road-section-enter', index: 0, sourceRoadId: prevRoad.id, nodeId, destRoadId: currRoad.id });
-            }
-          }
-        }
+        const rse = tryAutoInsertRSE(result[prevStopResultIdx] as StationStop, p, state);
+        if (rse) result.push(rse);
       }
       prevStopResultIdx = result.length;
       result.push(p);
