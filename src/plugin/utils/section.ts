@@ -1,6 +1,6 @@
 import { Line, MapState, Road, RoadSection, Station } from "../models/structures";
 import { LineId, RoadSectionId, StationId } from "@/common/types";
-import { LINE_SPACING, ROAD_MARGIN, ROAD_MIN_WIDTH, QuadBezierPoints } from "./bezier";
+import { LINE_SPACING, ROAD_MARGIN, ROAD_MIN_WIDTH, SECTION_GAP, QuadBezierPoints } from "./bezier";
 
 export function findRoadForSection(sectionId: RoadSectionId, state: Readonly<MapState>): Road | null {
   for (const road of state.roads.values()) {
@@ -150,12 +150,13 @@ export function computeSectionOffset(
 ): number {
   const sections = Array.from(road.sections.values()).sort((a, b) => a.index - b.index);
   const widths = sections.map(s => sectionBandWidth(getLinesForSection(s, state).length));
-  const totalWidth = widths.reduce((a, b) => a + b, 0);
+  const gapTotal = Math.max(0, sections.length - 1) * SECTION_GAP;
+  const totalWidth = widths.reduce((a, b) => a + b, 0) + gapTotal;
   let cumulative = -totalWidth / 2;
   for (let i = 0; i < sections.length; i++) {
     const center = cumulative + widths[i] / 2;
     if (sections[i].id === section.id) return center;
-    cumulative += widths[i];
+    cumulative += widths[i] + SECTION_GAP;
   }
   return 0;
 }

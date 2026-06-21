@@ -3,6 +3,7 @@ import { PathBuilder } from './path';
 export const LINE_SPACING = 6;
 export const ROAD_MARGIN = 1;
 export const ROAD_MIN_WIDTH = 8;
+export const SECTION_GAP = 4;
 
 // Quadratic bezier — stored in Road.bezierMidPoint.
 // p1 is the single control point; the curve passes through p0 and p2.
