@@ -1,4 +1,4 @@
-import { Line, LinePath, MapState, Road, RoadSectionEnter, Station, StationStop } from "../models/structures";
+import { Line, LinePath, MapState, Road, RoadSectionChange, Station, StationStop } from "../models/structures";
 import { NodeId, RoadSectionId, StationId } from "@/common/types";
 import { findRoadForSection } from "./section";
 
@@ -22,7 +22,7 @@ type RoadSpan = { road: Road; tEntry: number; tExit: number; sectionId: RoadSect
 function getRoadSpans(
   depStation: Station,
   arrStation: Station,
-  rsesBetween: RoadSectionEnter[],
+  rsesBetween: RoadSectionChange[],
   state: Readonly<MapState>,
 ): RoadSpan[] {
   const depRoad = findRoadForStation(depStation, state);
@@ -37,35 +37,37 @@ function getRoadSpans(
   const spans: RoadSpan[] = [];
 
   // First span: departure station → first junction node.
-  const firstRse = rsesBetween[0];
+  const firstRsc = rsesBetween[0];
   spans.push({
     road: depRoad,
     tEntry: depStation.interpT,
-    tExit: firstRse.nodeId === depRoad.endNodeId ? 1 : 0,
+    tExit: firstRsc.nodeId === depRoad.endNodeId ? 1 : 0,
     sectionId: depStation.roadSectionId,
   });
 
-  // Middle spans: one per road entered by an RSE (all except the last).
+  // Middle spans: one per road entered by an RSC (all except the last).
   for (let k = 0; k < rsesBetween.length - 1; k++) {
-    const rse     = rsesBetween[k];
-    const nextRse = rsesBetween[k + 1];
-    const road = state.roads.get(rse.destRoadId);
-    if (!road) return spans; // incomplete — caller will skip pass-through insertion
+    const rsc     = rsesBetween[k];
+    const nextRsc = rsesBetween[k + 1];
+    if (!rsc.entering) return spans;
+    const road = findRoadForSection(rsc.entering, state);
+    if (!road) return spans;
     spans.push({
       road,
-      tEntry: rse.nodeId === road.startNodeId ? 0 : 1,
-      tExit:  nextRse.nodeId === road.endNodeId ? 1 : 0,
-      sectionId: null,
+      tEntry: rsc.nodeId === road.startNodeId ? 0 : 1,
+      tExit:  nextRsc.nodeId === road.endNodeId ? 1 : 0,
+      sectionId: rsc.entering,
     });
   }
 
   // Last span: last junction node → arrival station.
-  const lastRse  = rsesBetween[rsesBetween.length - 1];
-  const lastRoad = state.roads.get(lastRse.destRoadId);
+  const lastRsc  = rsesBetween[rsesBetween.length - 1];
+  if (!lastRsc.entering) return spans;
+  const lastRoad = findRoadForSection(lastRsc.entering, state);
   if (!lastRoad) return spans;
   spans.push({
     road: lastRoad,
-    tEntry: lastRse.nodeId === lastRoad.startNodeId ? 0 : 1,
+    tEntry: lastRsc.nodeId === lastRoad.startNodeId ? 0 : 1,
     tExit: arrStation.interpT,
     sectionId: arrStation.roadSectionId,
   });
@@ -98,15 +100,14 @@ function findIntermediateStations(
 // Pass-throughs are interleaved with the RSEs they belong between so that
 // getLineDirectionAtStop can infer direction from the preceding RSE.
 function insertPassThroughStops(paths: LinePath[], state: Readonly<MapState>): LinePath[] {
-  const stoppingIds = new Set(
-    paths.filter((p): p is StationStop => p.kind === 'station-stop').map(p => p.stationId)
-  );
-
   const result: LinePath[] = [];
   let i = 0;
 
-  const pushPassThroughs = (span: RoadSpan, rank: number) => {
-    for (const st of findIntermediateStations(span.road, span.tEntry, span.tExit, stoppingIds, state, span.sectionId)) {
+  // excludeIds contains only the two endpoints of the current segment (dep + arr).
+  // Stations that are explicit stops elsewhere in the path are still eligible to appear
+  // as pass-throughs here (e.g. B in A→B→C→B→A→C, where A→C passes through B).
+  const pushPassThroughs = (span: RoadSpan, rank: number, excludeIds: Set<StationId>) => {
+    for (const st of findIntermediateStations(span.road, span.tEntry, span.tExit, excludeIds, state, span.sectionId)) {
       result.push({ kind: 'station-stop', index: 0, stationId: st.id, rank, stops: false });
     }
   };
@@ -118,9 +119,9 @@ function insertPassThroughStops(paths: LinePath[], state: Readonly<MapState>): L
 
     // Collect the RSEs between this stop and the next stop.
     let j = i + 1;
-    const rsesBetween: RoadSectionEnter[] = [];
-    while (j < paths.length && paths[j].kind === 'road-section-enter') {
-      rsesBetween.push(paths[j] as RoadSectionEnter);
+    const rsesBetween: RoadSectionChange[] = [];
+    while (j < paths.length && paths[j].kind === 'road-section-change') {
+      rsesBetween.push(paths[j] as RoadSectionChange);
       j++;
     }
     const nextStop = (j < paths.length && paths[j].kind === 'station-stop')
@@ -139,10 +140,11 @@ function insertPassThroughStops(paths: LinePath[], state: Readonly<MapState>): L
     if (spans.length !== rsesBetween.length + 1) { i++; continue; }
 
     // Interleave pass-throughs with RSEs: spans[0] before rse[0], spans[k+1] after rse[k].
-    pushPassThroughs(spans[0], p.rank);
+    const segmentExclude = new Set<StationId>([p.stationId, nextStop.stationId]);
+    pushPassThroughs(spans[0], p.rank, segmentExclude);
     for (let k = 0; k < rsesBetween.length; k++) {
       result.push(rsesBetween[k]);
-      pushPassThroughs(spans[k + 1], p.rank);
+      pushPassThroughs(spans[k + 1], p.rank, segmentExclude);
     }
     i = j; // arr stop is processed next iteration
   }
@@ -152,9 +154,9 @@ function insertPassThroughStops(paths: LinePath[], state: Readonly<MapState>): L
 
 // ── Main validator ────────────────────────────────────────────────────────────
 
-function tryAutoInsertRSE(
+function tryAutoInsertRSC(
   prevStop: StationStop, currStop: StationStop, state: Readonly<MapState>,
-): RoadSectionEnter | null {
+): RoadSectionChange | null {
   const prevStation = state.stations.get(prevStop.stationId);
   const currStation = state.stations.get(currStop.stationId);
   if (!prevStation || !currStation) return null;
@@ -163,7 +165,7 @@ function tryAutoInsertRSE(
   if (!prevRoad || !currRoad || prevRoad.id === currRoad.id) return null;
   const nodeId = findSharedNode(prevRoad, currRoad);
   if (!nodeId) return null;
-  return { kind: 'road-section-enter', index: 0, sourceRoadId: prevRoad.id, nodeId, destRoadId: currRoad.id };
+  return { kind: 'road-section-change', index: 0, nodeId, exiting: prevStation.roadSectionId, entering: currStation.roadSectionId };
 }
 
 // Validates and normalises RSE entries for a line:
@@ -180,12 +182,12 @@ export function validateLinePaths(line: Line, state: Readonly<MapState>): LinePa
     // Pass-through entries are always recomputed below; discard any existing ones.
     if (p.kind === 'station-stop' && !p.stops) continue;
 
-    if (p.kind === 'road-section-enter') {
+    if (p.kind === 'road-section-change') {
       if (prevStopResultIdx >= 0) result.push(p);
     } else {
       if (prevStopResultIdx >= 0 && result.length === prevStopResultIdx + 1) {
-        const rse = tryAutoInsertRSE(result[prevStopResultIdx] as StationStop, p, state);
-        if (rse) result.push(rse);
+        const rsc = tryAutoInsertRSC(result[prevStopResultIdx] as StationStop, p, state);
+        if (rsc) result.push(rsc);
       }
       prevStopResultIdx = result.length;
       result.push(p);

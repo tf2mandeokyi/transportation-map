@@ -1,5 +1,6 @@
 import React from 'react';
-import { RoadId, StationId } from '@/common/types';
+import { StationId } from '@/common/types';
+import { RoadData } from '@/common/messages';
 import { LinePath } from '@/plugin/models/structures';
 import StationPathItem from './StationPathItem';
 import InsertionButtons from './InsertionButtons';
@@ -7,7 +8,7 @@ import InsertionButtons from './InsertionButtons';
 interface PathItemsListProps {
   linePaths: LinePath[];
   stationNames: Record<string, string>;
-  roads: Array<{ id: RoadId; name?: string }>;
+  roads: RoadData[];
   inactive: boolean;
   onRemoveStop: (pathIndex: number) => void;
   onRemoveRse: (pathIndex: number) => void;
@@ -58,11 +59,11 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
         />
       );
     } else {
-      const destRoad = roads.find(r => r.id === path.destRoadId);
+      const enteringRoad = path.entering ? roads.find(r => r.sections.some(s => s.id === path.entering)) : null;
       elements.push(
         <div key={`rse-${i}`} className="station-path-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span className="station-number" style={{ paddingLeft: '4px', paddingRight: '4px' }}>{i + 1}</span>
-          <span style={{ flex: 1, fontStyle: 'italic', color: '#666' }}>↪ {destRoad?.name ?? path.destRoadId}</span>
+          <span style={{ flex: 1, fontStyle: 'italic', color: '#666' }}>↪ {enteringRoad?.name ?? (path.entering ?? '?')}</span>
           {inactive && (
             <button className="button button--secondary small-btn" onClick={() => onRemoveRse(i)}>X</button>
           )}

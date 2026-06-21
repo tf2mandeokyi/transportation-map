@@ -4,6 +4,9 @@ import { renderStation, renderStationLine } from "../../figmls";
 import { LineId, StationId } from "@/common/types";
 import { computeStationPosition, computeStationTangentAngle } from "./position";
 import { getLinesForStation } from "./layout";
+import { getLinesForSection, findRoadForSection } from "../../utils/section";
+import { LINE_SPACING } from "../../utils/bezier";
+import { RenderResult } from "../../figml-parser/result";
 
 function applyTransform(transform: Transform, point: Vector): Vector {
   return {
@@ -17,19 +20,57 @@ async function renderStationWithTemplate(
   station: Station,
   state: Readonly<MapState>,
   tangentAngle: number,
-): Promise<{ line: Line; segmentIndex: number; node: SceneNode; passThrough: boolean }[]> {
+): Promise<{ line: Line; segmentIndex: number; node: SceneNode; passThrough: boolean; departureRole: boolean }[]> {
   const flipLR = (f: 'left' | 'right'): 'left' | 'right' => f === 'left' ? 'right' : 'left';
 
+  // Total directed runs on the section determines the lane band width.
+  // Using this as effectiveCount keeps each line at a fixed lateral position
+  // regardless of how many lines visit any particular station.
+  const road = station.roadSectionId ? findRoadForSection(station.roadSectionId, state) : null;
+  const section = road && station.roadSectionId ? road.sections.get(station.roadSectionId) : null;
+  const noRefCount = section ? getLinesForSection(section, state).length : 0;
+
   const lines = getLinesForStation(station, state);
-  // When flipped, reverse line order and flip each facing so the content stays
-  // visually correct after the 180° frame rotation applied in renderStation.
-  const orderedLines = station.flipped ? [...lines].reverse() : lines;
-  const children = orderedLines.map(({ line, segmentIndex, facing, passThrough }) => ({
+  // effectiveNoRef: reserve at least as many slots as visiting lines
+  const effectiveNoRef = Math.max(noRefCount, lines.length);
+
+  // Render each visiting line's indicator (in rank-sorted order, facing flipped for flipped stations).
+  const indicators = lines.map(({ line, segmentIndex, facing, passThrough, departureRole }) => ({
     line,
     segmentIndex,
     passThrough,
-    result: renderStationLine({ text: line.name, color: line.color, stops: !passThrough, visible: true, facing: station.flipped ? flipLR(facing) : facing }),
+    departureRole,
+    result: renderStationLine({
+      text: line.name,
+      color: line.color,
+      stops: !passThrough,
+      visible: true,
+      facing: station.flipped ? flipLR(facing) : facing,
+    }),
   }));
+
+  // Build slot items: indicators occupy slots 0..lines.length-1, with a trailing
+  // invisible spacer for the remaining empty slots so each indicator sits at the
+  // correct absolute lane offset for the full section band.
+  type SlotItem = { kind: 'indicator'; idx: number } | { kind: 'spacer'; height: number };
+  const items: SlotItem[] = indicators.map((_, idx) => ({ kind: 'indicator' as const, idx }));
+  const trailing = effectiveNoRef - lines.length;
+  if (trailing > 0) items.push({ kind: 'spacer', height: trailing * LINE_SPACING });
+
+  // Flipped stations are rotated 180°, so reverse the slot order to keep
+  // each indicator at the same physical lane position after rotation.
+  const orderedItems = station.flipped ? [...items].reverse() : items;
+
+  const stationChildren: RenderResult[] = orderedItems.map(item => {
+    if (item.kind === 'spacer') {
+      const spacerFrame = figma.createFrame();
+      spacerFrame.resize(7, item.height);
+      spacerFrame.fills = [];
+      spacerFrame.layoutMode = 'NONE';
+      return RenderResult.newNode(spacerFrame, () => {}, () => {});
+    }
+    return indicators[item.idx].result;
+  });
 
   const forwardFacing: 'left' | 'right' =
     (station.textAlign === 'right' || station.textAlign === 'bottom') ? 'left' : 'right';
@@ -39,7 +80,7 @@ async function renderStationWithTemplate(
     visible: true,
     rotation: 0,
     textRotation: station.textRotation + tangentAngle + (station.flipped ? 180 : 0),
-    children: children.map(c => c.result),
+    children: stationChildren,
     align: `${forwardFacing},center` as const,
     textHAlign: `${station.textHAlign},center` as const,
     textFrameAlign: `${station.textHAlign},${textFrameAlignV}` as const,
@@ -47,8 +88,8 @@ async function renderStationWithTemplate(
   }).intoNode();
 
   parentFrame.appendChild(stationElement);
-  return children.map(({ line, segmentIndex, passThrough, result }) => ({
-    line, segmentIndex, passThrough, node: result.node,
+  return indicators.map(({ line, segmentIndex, passThrough, departureRole, result }) => ({
+    line, segmentIndex, passThrough, departureRole, node: result.node,
   }));
 }
 
@@ -102,20 +143,26 @@ export class StationRenderer {
 
   private storeLineConnectionPoints(
     station: Station,
-    lines: Array<{ line: Line; segmentIndex: number; node: SceneNode; passThrough: boolean }>,
+    lines: Array<{ line: Line; segmentIndex: number; node: SceneNode; passThrough: boolean; departureRole: boolean }>,
   ): void {
-    for (const { line, node, segmentIndex } of lines) {
+    for (const { line, node, segmentIndex, departureRole } of lines) {
       const transform = node.absoluteTransform;
       const width  = node.width;
       const height = node.height;
 
       const center = applyTransform(transform, { x: width / 2, y: height / 2 });
-      this.lineConnectionPoints.set(`${station.id}-${line.id}-${segmentIndex}`, center);
+      const key = departureRole
+        ? `${station.id}-${line.id}-${segmentIndex}:dep`
+        : `${station.id}-${line.id}-${segmentIndex}`;
+      this.lineConnectionPoints.set(key, center);
     }
   }
 
-  public getConnectionPoint(stationId: StationId, lineId: LineId, segmentIndex: number): Vector | undefined {
-    return this.lineConnectionPoints.get(`${stationId}-${lineId}-${segmentIndex}`);
+  public getConnectionPoint(stationId: StationId, lineId: LineId, segmentIndex: number, isUturnDeparture?: boolean): Vector | undefined {
+    const key = isUturnDeparture
+      ? `${stationId}-${lineId}-${segmentIndex}:dep`
+      : `${stationId}-${lineId}-${segmentIndex}`;
+    return this.lineConnectionPoints.get(key);
   }
 
   public clearConnectionPoints(): void {

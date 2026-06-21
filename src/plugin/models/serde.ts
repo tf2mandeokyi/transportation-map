@@ -2,272 +2,208 @@ import { HVAlign, LineId, NodeId, RoadId, RoadSectionId, StationId } from "@/com
 import { Connection, Line, LinePath, MapState, Node, Road, RoadSection, Station } from "./structures";
 
 interface SerializedConnection {
-  ep: { x: number; y: number };  // endpointPos (absolute)
-  g: number; // groupNumber
+  p: { x: number; y: number };  // endpointPos
+  g: number;                    // groupNumber
 }
 
 interface SerializedRoadSection {
-  i: string; // id
-  n?: string; // name
-  x: number; // index
-  s: string[]; // stationIds
+  i: string;    // id
+  n?: string;   // name
+  x: number;    // index
+  s: string[];  // stationIds
 }
 
 interface SerializedRoad {
-  i: string; // id
-  n?: string; // name
-  sn: string; // startNodeId
-  en: string; // endNodeId
-  bmp: { x: number; y: number }; // bezierMidPoint
-  e0: SerializedConnection; // endpoints[0]
-  e1: SerializedConnection; // endpoints[1]
-  sec: SerializedRoadSection[]; // sections
+  i: string;                                     // id
+  n?: string;                                    // name
+  s: string;                                     // startNodeId
+  e: string;                                     // endNodeId
+  b: { x: number; y: number };                  // bezierMidPoint
+  p: [SerializedConnection, SerializedConnection]; // endpoints
+  c: SerializedRoadSection[];                    // sections
 }
 
 interface SerializedNode {
-  i: string; // id
-  n?: string; // name
-  ip?: { x: number; y: number }; // isolatedPos
-  rc: Array<{ r: string; e: 0 | 1 }>; // roadConnections
+  i: string;                          // id
+  n?: string;                         // name
+  p?: { x: number; y: number };       // isolatedPos
+  r: Array<{ r: string; e: 0 | 1 }>; // roadConnections
 }
 
 interface SerializedStation {
-  i: string; // id
-  n: string; // name
-  f: string | null; // figmaNodeId
-  t: HVAlign; // textAlign
-  ta?: 'left' | 'center' | 'right'; // textHAlign (absent in old saves → defaults to 'left')
-  tr?: number; // textRotation (absent in old saves → defaults to 0)
-  fl?: boolean; // flipped (absent in old saves → defaults to false)
-  it: number; // interpT
-  rs: string | null; // roadSectionId
+  i: string;                          // id
+  n: string;                          // name
+  f: string | null;                   // figmaNodeId
+  t: HVAlign;                         // textAlign
+  h?: 'left' | 'center' | 'right';   // textHAlign (absent → 'left')
+  r?: number;                         // textRotation (absent → 0)
+  l?: boolean;                        // flipped (absent → false)
+  p: number;                          // interpT
+  s: string | null;                   // roadSectionId
 }
 
 interface SerializedLinePath {
-  k: 'ss' | 're';
-  x: number;
-  id?: string;  // 'ss': stationId; 're' legacy: old roadSectionId (ignored on load)
-  r?: number;   // 'ss': rank (absent = 0)
-  s?: string;   // 're': sourceRoadId
-  n?: string;   // 're': nodeId
-  d?: string;   // 're': destRoadId
+  k: 'ss' | 'sc';  // kind
+  x: number;        // index
+  i?: string;       // 'ss': stationId
+  r?: number;       // 'ss': rank (absent → 0)
+  n?: string;       // 'sc': nodeId
+  e?: string;       // 'sc': exiting sectionId
+  a?: string;       // 'sc': entering sectionId
 }
 
 interface SerializedLine {
-  i: string; // id
-  n: string; // name
-  c: string; // color (hex)
-  ci: boolean; // isCircular
+  i: string;               // id
+  n: string;               // name
+  c: string;               // color (hex)
+  l: boolean;              // isCircular
   p: SerializedLinePath[]; // paths
-  g: string | null; // figmaGroupId
+  g: string | null;        // figmaGroupId
 }
 
 interface SerializedMapState {
-  nd: SerializedNode[]; // nodes
-  rd: SerializedRoad[]; // roads
-  st: SerializedStation[]; // stations
-  ln: SerializedLine[]; // lines
-  lo: string[]; // lineStackingOrder
+  n: SerializedNode[];
+  r: SerializedRoad[];
+  s: SerializedStation[];
+  l: SerializedLine[];
+  o: string[]; // lineStackingOrder
 }
 
 function serializeConnection(c: Connection): SerializedConnection {
-  return { ep: c.endpointPos, g: c.groupNumber };
+  return { p: c.endpointPos, g: c.groupNumber };
 }
 
-function deserializeConnection(s: SerializedConnection): Connection {
-  return {
-    endpointPos: s.ep,
-    groupNumber: s.g,
-  };
+function deserializeConnection(c: SerializedConnection): Connection {
+  return { endpointPos: c.p, groupNumber: c.g };
 }
 
 export function serializeMapState(state: MapState): string {
-  const nodes: SerializedNode[] = Array.from(state.nodes.values()).map(n => ({
-    i: n.id,
-    n: n.name,
-    ip: n.isolatedPos,
-    rc: n.roadConnections.map(rc => ({ r: rc.roadId, e: rc.endpointIndex }))
+  const nodes: SerializedNode[] = Array.from(state.nodes.values()).map(node => ({
+    i: node.id,
+    n: node.name,
+    p: node.isolatedPos,
+    r: node.roadConnections.map(rc => ({ r: rc.roadId, e: rc.endpointIndex })),
   }));
 
-  const roads: SerializedRoad[] = Array.from(state.roads.values()).map(r => ({
-    i: r.id,
-    n: r.name,
-    sn: r.startNodeId,
-    en: r.endNodeId,
-    bmp: r.bezierMidPoint,
-    e0: serializeConnection(r.endpoints[0]),
-    e1: serializeConnection(r.endpoints[1]),
-    sec: Array.from(r.sections.values()).map(sec => ({
+  const roads: SerializedRoad[] = Array.from(state.roads.values()).map(road => ({
+    i: road.id,
+    n: road.name,
+    s: road.startNodeId,
+    e: road.endNodeId,
+    b: road.bezierMidPoint,
+    p: [serializeConnection(road.endpoints[0]), serializeConnection(road.endpoints[1])],
+    c: Array.from(road.sections.values()).map(sec => ({
       i: sec.id,
       n: sec.name,
       x: sec.index,
-      s: sec.stationIds
-    }))
+      s: sec.stationIds,
+    })),
   }));
 
-  const stations: SerializedStation[] = Array.from(state.stations.values()).map(s => ({
-    i: s.id,
-    n: s.name,
-    f: s.figmaNodeId,
-    t: s.textAlign,
-    ta: s.textHAlign,
-    tr: s.textRotation,
-    fl: s.flipped || undefined,
-    it: s.interpT,
-    rs: s.roadSectionId
+  const stations: SerializedStation[] = Array.from(state.stations.values()).map(station => ({
+    i: station.id,
+    n: station.name,
+    f: station.figmaNodeId,
+    t: station.textAlign,
+    h: station.textHAlign,
+    r: station.textRotation || undefined,
+    l: station.flipped || undefined,
+    p: station.interpT,
+    s: station.roadSectionId,
   }));
 
-  const lines: SerializedLine[] = Array.from(state.lines.values()).map(l => ({
-    i: l.id,
-    n: l.name,
-    c: l.color,
-    ci: l.isCircular,
-    p: l.paths.flatMap((p): SerializedLinePath[] => {
-      if (p.kind === 'station-stop') {
-        if (!p.stops) return []; // pass-through entries are always regenerated by the validator
-        return [{ k: 'ss', x: p.index, id: p.stationId, r: p.rank || undefined }];
+  const lines: SerializedLine[] = Array.from(state.lines.values()).map(line => ({
+    i: line.id,
+    n: line.name,
+    c: line.color,
+    l: line.isCircular,
+    p: line.paths.flatMap((path): SerializedLinePath[] => {
+      if (path.kind === 'station-stop') {
+        if (!path.stops) return [];
+        return [{ k: 'ss', x: path.index, i: path.stationId, r: path.rank || undefined }];
       }
-      return [{ k: 're', x: p.index, s: p.sourceRoadId, n: p.nodeId, d: p.destRoadId }];
+      return [{ k: 'sc', x: path.index, n: path.nodeId, e: path.exiting ?? undefined, a: path.entering ?? undefined }];
     }),
-    g: l.figmaGroupId
+    g: line.figmaGroupId,
   }));
 
-  const serialized: SerializedMapState = {
-    nd: nodes,
-    rd: roads,
-    st: stations,
-    ln: lines,
-    lo: state.lineStackingOrder
-  };
-
-  return JSON.stringify(serialized);
-}
-
-type LegacyRaw = Record<string, unknown>;
-type Vec2 = { x: number; y: number };
-
-// Migrates in-place from legacy formats:
-// v1: node.pos + relative displacements → absolute endpointPos/bezierPos per connection
-// v2: absolute bezierPos per connection → single bezierMidPoint per road
-function migrateOldFormat(data: LegacyRaw): void {
-  const rd = (data.rd as LegacyRaw[]) ?? [];
-  const firstRoad = rd[0];
-  if (!firstRoad) return;
-
-  // v1 → v2: node.pos + relative offsets
-  if (!('ep' in (firstRoad.e0 as LegacyRaw))) {
-    const nodePositions = new Map<string, Vec2>();
-    for (const n of (data.nd as LegacyRaw[]) ?? []) {
-      if (n.p) nodePositions.set(n.i as string, n.p as Vec2);
-    }
-    const convertConn = (c: LegacyRaw, nodePos: Vec2) => {
-      const ed = (c.ed ?? { x: 0, y: 0 }) as Vec2;
-      const ep = { x: nodePos.x + ed.x, y: nodePos.y + ed.y };
-      const bd = c.bd as Vec2;
-      const bp = { x: ep.x + bd.x, y: ep.y + bd.y };
-      return { ep, bp, g: c.g };
-    };
-    for (const r of rd) {
-      r.e0 = convertConn(r.e0 as LegacyRaw, nodePositions.get(r.sn as string) ?? { x: 0, y: 0 });
-      r.e1 = convertConn(r.e1 as LegacyRaw, nodePositions.get(r.en as string) ?? { x: 0, y: 0 });
-    }
-    for (const n of (data.nd as LegacyRaw[]) ?? []) delete n.p;
-  }
-
-  // v2 → v3: per-connection bezierPos → single bezierMidPoint on road
-  for (const r of rd) {
-    const e0 = r.e0 as LegacyRaw | undefined;
-    const e1 = r.e1 as LegacyRaw | undefined;
-    if (!('bmp' in r) && e0?.bp && e1?.bp) {
-      const bp0 = e0.bp as Vec2;
-      const bp1 = e1.bp as Vec2;
-      r.bmp = { x: (bp0.x + bp1.x) / 2, y: (bp0.y + bp1.y) / 2 };
-    }
-    if (e0) { delete e0.bp; delete e0.bdir; }
-    if (e1) { delete e1.bp; delete e1.bdir; }
-  }
+  return JSON.stringify({ n: nodes, r: roads, s: stations, l: lines, o: state.lineStackingOrder });
 }
 
 export function deserializeMapState(json: string): MapState | null {
   try {
-    const data = JSON.parse(json) as LegacyRaw;
-    migrateOldFormat(data);
-    const typed = data as unknown as SerializedMapState;
+    const data = JSON.parse(json) as SerializedMapState;
 
     const nodes = new Map<NodeId, Node>();
-    for (const n of typed.nd || []) {
-      nodes.set(n.i as NodeId, {
-        id: n.i as NodeId,
-        name: n.n,
-        isolatedPos: n.ip,
-        roadConnections: n.rc.map(rc => ({ roadId: rc.r as RoadId, endpointIndex: rc.e }))
+    for (const node of data.n || []) {
+      nodes.set(node.i as NodeId, {
+        id: node.i as NodeId,
+        name: node.n,
+        isolatedPos: node.p,
+        roadConnections: node.r.map(rc => ({ roadId: rc.r as RoadId, endpointIndex: rc.e })),
       });
     }
 
     const roads = new Map<RoadId, Road>();
-    for (const r of typed.rd || []) {
+    for (const road of data.r || []) {
       const sections = new Map<RoadSectionId, RoadSection>();
-      for (const sec of r.sec || []) {
+      for (const sec of road.c || []) {
         sections.set(sec.i as RoadSectionId, {
           id: sec.i as RoadSectionId,
           name: sec.n,
           index: sec.x,
-          stationIds: (sec.s || []) as StationId[]
+          stationIds: (sec.s || []) as StationId[],
         });
       }
-      roads.set(r.i as RoadId, {
-        id: r.i as RoadId,
-        name: r.n,
-        startNodeId: r.sn as NodeId,
-        endNodeId: r.en as NodeId,
-        bezierMidPoint: r.bmp ?? { x: 0, y: 0 },
-        endpoints: [deserializeConnection(r.e0), deserializeConnection(r.e1)],
-        sections
+      roads.set(road.i as RoadId, {
+        id: road.i as RoadId,
+        name: road.n,
+        startNodeId: road.s as NodeId,
+        endNodeId: road.e as NodeId,
+        bezierMidPoint: road.b,
+        endpoints: [deserializeConnection(road.p[0]), deserializeConnection(road.p[1])],
+        sections,
       });
     }
 
     const stations = new Map<StationId, Station>();
-    for (const s of typed.st || []) {
-      stations.set(s.i as StationId, {
-        id: s.i as StationId,
-        name: s.n,
-        figmaNodeId: s.f,
-        textAlign: s.t,
-        textHAlign: s.ta ?? 'left',
-        textRotation: s.tr ?? 0,
-        flipped: s.fl ?? false,
-        interpT: s.it,
-        roadSectionId: s.rs as RoadSectionId | null
+    for (const station of data.s || []) {
+      stations.set(station.i as StationId, {
+        id: station.i as StationId,
+        name: station.n,
+        figmaNodeId: station.f,
+        textAlign: station.t,
+        textHAlign: station.h ?? 'left',
+        textRotation: station.r ?? 0,
+        flipped: station.l ?? false,
+        interpT: station.p,
+        roadSectionId: station.s as RoadSectionId | null,
       });
     }
 
     const lines = new Map<LineId, Line>();
-    for (const l of typed.ln || []) {
-      const paths: LinePath[] = (l.p || []).flatMap((p): LinePath[] => {
+    for (const line of data.l || []) {
+      const paths: LinePath[] = (line.p || []).flatMap((p): LinePath[] => {
         if (p.k === 'ss') {
-          return [{ kind: 'station-stop', index: p.x, stationId: p.id as StationId, rank: p.r ?? 0, stops: true }];
+          return [{ kind: 'station-stop', index: p.x, stationId: p.i as StationId, rank: p.r ?? 0, stops: true }];
         }
-        // Old saves used a single `id` (roadSectionId); skip and let the validator regenerate.
-        if (!p.s || !p.n || !p.d) return [];
-        return [{ kind: 'road-section-enter', index: p.x, sourceRoadId: p.s as RoadId, nodeId: p.n as NodeId, destRoadId: p.d as RoadId }];
+        if (p.k === 'sc') {
+          if (!p.n) return [];
+          return [{ kind: 'road-section-change' as const, index: p.x, nodeId: p.n as NodeId, exiting: (p.e ?? null) as RoadSectionId | null, entering: (p.a ?? null) as RoadSectionId | null }];
+        }
+        return [];
       });
-      lines.set(l.i as LineId, {
-        id: l.i as LineId,
-        name: l.n,
-        color: l.c,
-        isCircular: l.ci,
+      lines.set(line.i as LineId, {
+        id: line.i as LineId,
+        name: line.n,
+        color: line.c,
+        isCircular: line.l,
         paths,
-        figmaGroupId: l.g ?? null
+        figmaGroupId: line.g ?? null,
       });
     }
 
-    return {
-      nodes,
-      roads,
-      stations,
-      lines,
-      lineStackingOrder: (typed.lo || []) as LineId[]
-    };
+    return { nodes, roads, stations, lines, lineStackingOrder: (data.o || []) as LineId[] };
   } catch (error) {
     console.error('Failed to deserialize map state:', error);
     return null;

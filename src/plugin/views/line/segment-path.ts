@@ -15,6 +15,8 @@ import {
   computeRoadBezier,
   computeSectionOffset,
   getLinesForSection,
+  getLineDirectionAtStop,
+  getLineDepartureAtStop,
   lineOffsetInSection,
 } from "../../utils/section";
 
@@ -23,23 +25,38 @@ export type SegmentResult =
   | { kind: 'dashed'; node: VectorNode };
 
 // Total lateral offset from the road centerline for this line on this section.
-// referenceStationId: which station's stop ranks to use for lane ordering (the
-// departure station of the current inter-station segment).
+// referenceStationId: which station's stop ranks to use for lane ordering.
+// pathSegmentIndex: the path entry index of the station-stop; when the same line
+//   visits the reference station more than once (U-turn) this selects the right pass.
+// isUturnDeparture: true when computing the offset for the U-turn departure direction
+//   at a station where arrival and departure directions differ — selects the departure
+//   slot rather than the arrival slot for the same pathSegmentIndex.
 export function computeTotalOffset(
   line: Line, road: Road, sectionId: RoadSectionId,
   state: Readonly<MapState>,
   referenceStationId?: StationId,
+  pathSegmentIndex?: number,
+  isUturnDeparture?: boolean,
 ): number {
   const section = road.sections.get(sectionId);
   if (!section) return 0;
 
   const sectionOffset = computeSectionOffset(section, road, state);
 
-  const lines = getLinesForSection(section, state, referenceStationId);
-  const lineIndex = lines.findIndex(l => l.id === line.id);
-  const effectiveIdx   = lineIndex >= 0 ? lineIndex   : lines.length;
-  const effectiveCount = lineIndex >= 0 ? lines.length : lines.length + 1;
-  const lineOffset = lineOffsetInSection(effectiveIdx, Math.max(effectiveCount, 1));
+  const passes = getLinesForSection(section, state, referenceStationId);
+  const totalPasses = getLinesForSection(section, state);
+  let passIndex: number;
+  if (pathSegmentIndex !== undefined) {
+    const wantDep = isUturnDeparture ?? false;
+    passIndex = passes.findIndex(lp =>
+      lp.line.id === line.id && lp.segmentIndex === pathSegmentIndex && lp.departureRole === wantDep
+    );
+  } else {
+    passIndex = passes.findIndex(lp => lp.line.id === line.id && !lp.departureRole);
+  }
+  const effectiveIdx   = passIndex >= 0 ? passIndex : totalPasses.length;
+  const effectiveCount = Math.max(totalPasses.length, passes.length);
+  const lineOffset = lineOffsetInSection(effectiveIdx, effectiveCount);
 
   return sectionOffset + lineOffset;
 }
@@ -82,22 +99,35 @@ export function computeCrossingSeg(
 
 // Returns the offset bezier segments for one road-section sub-range.
 // departureStationId / arrivalStationId: the stations at t1 and t2 respectively.
-// When both are provided and the line's lateral offset differs between them, a
-// crossing cubic is returned so the line smoothly transitions lanes.
+// depPathSegIdx / arrPathSegIdx: path entry indices for the stations; disambiguates
+//   which pass to use when the same line visits a station more than once (U-turn).
+// When both offsets differ, a crossing cubic is returned for a smooth lane change.
 export function computeSectionSegs(
   line: Line, road: Road, sectionId: RoadSectionId,
   t1: number, t2: number,
   state: Readonly<MapState>,
   departureStationId?: StationId,
   arrivalStationId?: StationId,
+  depPathSegIdx?: number,
+  arrPathSegIdx?: number,
 ): CubicBezierPoints[] {
   const centerline = computeRoadBezier(road, state);
   if (!centerline) return [];
 
-  const offsetDep = computeTotalOffset(line, road, sectionId, state, departureStationId);
+  // Detect whether we're leaving from the departure station on its U-turn departure slot.
+  // This happens when the line arrives at the departure station from one direction and
+  // the current traversal (t1→t2) leaves in the opposite direction.
+  let isDepUturn = false;
+  if (departureStationId !== undefined && depPathSegIdx !== undefined) {
+    const arrDir = getLineDirectionAtStop(line, depPathSegIdx, state);
+    const depDir = getLineDepartureAtStop(line, depPathSegIdx, state);
+    isDepUturn = depDir !== null && depDir !== arrDir;
+  }
+
+  const offsetDep = computeTotalOffset(line, road, sectionId, state, departureStationId, depPathSegIdx, isDepUturn);
   const offsetArr = arrivalStationId === undefined
     ? offsetDep
-    : computeTotalOffset(line, road, sectionId, state, arrivalStationId);
+    : computeTotalOffset(line, road, sectionId, state, arrivalStationId, arrPathSegIdx);
 
   // Negate offset for reverse traversal so the backward-parameterized bezier's
   // flipped perpendicular lands on the correct physical side of the road.

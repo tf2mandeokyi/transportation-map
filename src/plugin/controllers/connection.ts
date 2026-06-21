@@ -1,8 +1,8 @@
-import { LineId, RoadId, StationId } from "@/common/types";
+import { LineId, RoadId, RoadSectionId, StationId } from "@/common/types";
 import { LinePathInput } from "@/common/messages";
 import { AddingStationsPluginSession } from "../sessions/adding-stations";
 import { LinePath } from "../models/structures";
-import { findRoadForSection, getLineDirectionAtStop } from "../utils/section";
+import { findRoadForSection, getLineDirectionAtStop, getLineDepartureAtStop } from "../utils/section";
 import { postMessageToUI } from "../figma";
 import { BaseController } from "./base";
 import { UIMessageRouter } from "./router";
@@ -24,6 +24,7 @@ export class ConnectionController extends BaseController {
 
     const stationNames: Record<StationId, string> = {};
     const stationRoadIds: Record<StationId, RoadId | null> = {};
+    const stationSectionIds: Record<StationId, RoadSectionId | null> = {};
     for (const path of line.paths) {
       if (path.kind === 'station-stop') {
         const station = this.model.getState().stations.get(path.stationId);
@@ -31,11 +32,12 @@ export class ConnectionController extends BaseController {
           stationNames[path.stationId] = station.name;
           const road = station.roadSectionId ? findRoadForSection(station.roadSectionId, this.model.getState()) : null;
           stationRoadIds[path.stationId] = road?.id ?? null;
+          stationSectionIds[path.stationId] = station.roadSectionId;
         }
       }
     }
 
-    postMessageToUI({ type: 'line-path-data', lineId, paths: line.paths, stationNames, stationRoadIds });
+    postMessageToUI({ type: 'line-path-data', lineId, paths: line.paths, stationNames, stationRoadIds, stationSectionIds });
   }
 
   public insertStationIntoLine(lineId: LineId, newStationId: StationId, relativeToStationId: StationId, insertAfter: boolean): boolean {
@@ -77,9 +79,14 @@ export class ConnectionController extends BaseController {
       for (const line of state.lines.values()) {
         for (const path of line.paths) {
           if (path.kind === 'station-stop' && path.stationId === station.id) {
-            const dir = getLineDirectionAtStop(line, path.index, state);
-            const facing: 'left' | 'right' = dir === 'forward' ? 'right' : 'left';
+            const arrDir = getLineDirectionAtStop(line, path.index, state);
+            const facing: 'left' | 'right' = arrDir === 'forward' ? 'right' : 'left';
             lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing, stops: path.stops });
+            const depDir = getLineDepartureAtStop(line, path.index, state);
+            if (depDir !== null && depDir !== arrDir) {
+              const depFacing: 'left' | 'right' = depDir === 'forward' ? 'right' : 'left';
+              lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing: depFacing, stops: false, departureRole: true });
+            }
           }
         }
       }
@@ -95,6 +102,6 @@ export class ConnectionController extends BaseController {
 
   private pathToInput(p: LinePath): LinePathInput {
     if (p.kind === 'station-stop') return { kind: 'station-stop', stationId: p.stationId };
-    return { kind: 'road-section-enter', sourceRoadId: p.sourceRoadId, nodeId: p.nodeId, destRoadId: p.destRoadId };
+    return { kind: 'road-section-change', nodeId: p.nodeId, exiting: p.exiting, entering: p.entering };
   }
 }

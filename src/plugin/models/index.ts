@@ -1,4 +1,4 @@
-import { Connection, Line, MapState, Node, Road, RoadSection, Station, StationStop } from "./structures";
+import { Connection, Line, MapState, Node, Road, RoadSection, RoadSectionChange, Station, StationStop } from "./structures";
 import { deserializeMapState, serializeMapState } from "./serde";
 import { LineId, NodeId, RoadId, RoadSectionId, StationId } from "@/common/types";
 import { LinePathInput } from "@/common/messages";
@@ -158,10 +158,14 @@ export class Model {
   }
 
   private _removeRoadFromLines(roadId: RoadId): void {
+    const road = this.state.roads.get(roadId);
+    const sectionIds = road ? new Set(road.sections.keys()) : new Set<RoadSectionId>();
     for (const line of this.state.lines.values()) {
-      line.paths = line.paths.filter(p =>
-        !(p.kind === 'road-section-enter' && (p.sourceRoadId === roadId || p.destRoadId === roadId))
-      );
+      line.paths = line.paths.filter(p => {
+        if (p.kind !== 'road-section-change') return true;
+        return !((p.exiting !== null && sectionIds.has(p.exiting)) ||
+                 (p.entering !== null && sectionIds.has(p.entering)));
+      });
       this._reindexLinePaths(line);
     }
   }
@@ -266,7 +270,7 @@ export class Model {
     if (path.kind === 'station-stop') {
       line.paths.push({ kind: 'station-stop', index, stationId: path.stationId, rank: this._nextRankForStation(path.stationId), stops: true });
     } else {
-      line.paths.push({ kind: 'road-section-enter', index, sourceRoadId: path.sourceRoadId, nodeId: path.nodeId, destRoadId: path.destRoadId });
+      line.paths.push({ kind: 'road-section-change', index, nodeId: path.nodeId, exiting: path.exiting, entering: path.entering });
     }
     line.paths = validateLinePaths(line, this.state);
   }
@@ -336,6 +340,7 @@ export class Model {
     if (!line) return;
     line.paths = line.paths.filter(p => p.index !== pathIndex);
     this._reindexLinePaths(line);
+    line.paths = validateLinePaths(line, this.state);
   }
 
   public replaceLinePaths(lineId: LineId, paths: LinePathInput[]): void {
@@ -349,7 +354,7 @@ export class Model {
       if (p.kind === 'station-stop') {
         return { kind: 'station-stop', index: i, stationId: p.stationId, rank: existingRanks.get(p.stationId) ?? 0, stops: true };
       }
-      return { kind: 'road-section-enter', index: i, sourceRoadId: p.sourceRoadId, nodeId: p.nodeId, destRoadId: p.destRoadId };
+      return { kind: 'road-section-change', index: i, nodeId: p.nodeId, exiting: p.exiting, entering: p.entering } as RoadSectionChange;
     });
     line.paths = validateLinePaths(line, this.state);
   }

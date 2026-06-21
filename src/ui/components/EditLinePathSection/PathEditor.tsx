@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { NodeId, RoadId, StationId } from '@/common/types';
+import { NodeId, RoadId, RoadSectionId, StationId } from '@/common/types';
 import { LinePathInput } from '@/common/messages';
 import { LinePath } from '@/plugin/models/structures';
 import { postMessageToPlugin } from '../../figma';
@@ -22,24 +22,28 @@ const PathEditor: React.FC = () => {
   const [linePaths, setLinePaths]           = useState<LinePath[]>([]);
   const [stationNames, setStationNames]     = useState<Record<string, string>>({});
   const [stationRoadIds, setStationRoadIds] = useState<Record<string, RoadId | null>>({});
+  const [stationSectionIds, setStationSectionIds] = useState<Record<string, RoadSectionId | null>>({});
   const [stationInsertAfterIndex, setStationInsertAfterIndex] = useState<number | null>(null);
   const [addingRseAfterPathIndex, setAddingRseAfterPathIndex] = useState<number | null>(null);
 
-  const currentLineIdRef  = useRef(currentEditingLineId);
-  const linePathsRef      = useRef(linePaths);
-  const stationRoadIdsRef = useRef(stationRoadIds);
+  const currentLineIdRef    = useRef(currentEditingLineId);
+  const linePathsRef        = useRef(linePaths);
+  const stationRoadIdsRef   = useRef(stationRoadIds);
+  const stationSectionIdsRef = useRef(stationSectionIds);
   const stationsSession   = useUISession<AddingStationsUISession>();
   const rseSession        = useUISession<AddingRseUISession>();
 
-  useEffect(() => { currentLineIdRef.current  = currentEditingLineId; }, [currentEditingLineId]);
-  useEffect(() => { linePathsRef.current      = linePaths; },           [linePaths]);
-  useEffect(() => { stationRoadIdsRef.current = stationRoadIds; },      [stationRoadIds]);
+  useEffect(() => { currentLineIdRef.current    = currentEditingLineId; }, [currentEditingLineId]);
+  useEffect(() => { linePathsRef.current        = linePaths; },           [linePaths]);
+  useEffect(() => { stationRoadIdsRef.current   = stationRoadIds; },      [stationRoadIds]);
+  useEffect(() => { stationSectionIdsRef.current = stationSectionIds; },  [stationSectionIds]);
 
   useEffect(() => {
     const unsub1 = manager.onMessage('line-path-data', msg => {
       setLinePaths(msg.paths);
       setStationNames(msg.stationNames);
       setStationRoadIds(msg.stationRoadIds);
+      setStationSectionIds(msg.stationSectionIds);
     });
     const unsub2 = manager.onMessage('station-removed-from-line', () => {
       const lineId = currentLineIdRef.current;
@@ -59,15 +63,19 @@ const PathEditor: React.FC = () => {
   const toLinePathInputs = (paths: LinePath[]): LinePathInput[] =>
     paths.map(p => p.kind === 'station-stop'
       ? { kind: 'station-stop' as const, stationId: p.stationId }
-      : { kind: 'road-section-enter' as const, sourceRoadId: p.sourceRoadId, nodeId: p.nodeId, destRoadId: p.destRoadId }
+      : { kind: 'road-section-change' as const, nodeId: p.nodeId, exiting: p.exiting, entering: p.entering }
     );
 
-  const getSourceRoadAt = (pathIndex: number): RoadId | null => {
-    if (pathIndex < 0) return null;
-    const p = linePathsRef.current[pathIndex];
-    if (!p) return null;
-    if (p.kind === 'road-section-enter') return p.destRoadId;
-    return stationRoadIdsRef.current[p.stationId] ?? null;
+  const getSourceAt = (pathIndex: number): { roadId: RoadId | null; sectionId: RoadSectionId | null } => {
+    if (pathIndex < 0) return { roadId: null, sectionId: null };
+    const p = linePaths[pathIndex];
+    if (!p) return { roadId: null, sectionId: null };
+    if (p.kind === 'road-section-change') {
+      const sectionId = p.entering;
+      const roadId = sectionId ? (roads.find(r => r.sections.some(s => s.id === sectionId))?.id ?? null) : null;
+      return { roadId, sectionId };
+    }
+    return { roadId: stationRoadIds[p.stationId] ?? null, sectionId: stationSectionIds[p.stationId] ?? null };
   };
 
   // ─── Station adding ────────────────────────────────────────────────────────
@@ -111,11 +119,11 @@ const PathEditor: React.FC = () => {
     setAddingRseAfterPathIndex(null);
   };
 
-  const commitRse = (afterPathIndex: number, sourceRoadId: RoadId, nodeId: NodeId, destRoadId: RoadId) => {
+  const commitRse = (afterPathIndex: number, exitingSectionId: RoadSectionId | null, nodeId: NodeId, enteringSectionId: RoadSectionId | null) => {
     if (!currentEditingLineId) return;
     const fullPaths = toLinePathInputs(linePathsRef.current);
-    const rse: LinePathInput = { kind: 'road-section-enter', sourceRoadId, nodeId, destRoadId };
-    const newPaths = [...fullPaths.slice(0, afterPathIndex + 1), rse, ...fullPaths.slice(afterPathIndex + 1)];
+    const rsc: LinePathInput = { kind: 'road-section-change', nodeId, exiting: exitingSectionId, entering: enteringSectionId };
+    const newPaths = [...fullPaths.slice(0, afterPathIndex + 1), rsc, ...fullPaths.slice(afterPathIndex + 1)];
     postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'update-path', paths: newPaths } });
     postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
     stopRseMode();
@@ -182,14 +190,18 @@ const PathEditor: React.FC = () => {
         />
       )}
 
-      {addingRseAfterPathIndex !== null && (
-        <RseAddingPanel
-          afterPathIndex={addingRseAfterPathIndex}
-          sourceRoadId={getSourceRoadAt(addingRseAfterPathIndex)}
-          onCommitRse={commitRse}
-          onCancel={stopRseMode}
-        />
-      )}
+      {addingRseAfterPathIndex !== null && (() => {
+        const src = getSourceAt(addingRseAfterPathIndex);
+        return (
+          <RseAddingPanel
+            afterPathIndex={addingRseAfterPathIndex}
+            sourceRoadId={src.roadId}
+            exitingSectionId={src.sectionId}
+            onCommitRse={commitRse}
+            onCancel={stopRseMode}
+          />
+        );
+      })()}
 
       {inactive && linePaths.filter(p => p.kind === 'station-stop').length > 1 && (
         <div style={{ marginTop: '4px', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>

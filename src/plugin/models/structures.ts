@@ -49,15 +49,15 @@ export interface StationStop {
   stops: boolean; // false = passes through without stopping
 }
 
-export interface RoadSectionEnter {
-  kind: 'road-section-enter';
+export interface RoadSectionChange {
+  kind: 'road-section-change';
   index: number;
-  sourceRoadId: RoadId;
   nodeId: NodeId;
-  destRoadId: RoadId;
+  exiting: RoadSectionId | null;
+  entering: RoadSectionId | null;
 }
 
-export type LinePath = StationStop | RoadSectionEnter;
+export type LinePath = StationStop | RoadSectionChange;
 
 export interface Line {
   id: LineId;

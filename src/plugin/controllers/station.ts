@@ -3,7 +3,7 @@ import { HVAlign, LineId, RoadSectionId, StationId, TextHAlign } from "@/common/
 import { PlacingStationPluginSession } from "../sessions/placing-station";
 import { postMessageToUI } from "../figma";
 import { findNearestRoadSection } from "../utils/snap";
-import { getLineDirectionAtStop } from "../utils/section";
+import { getLineDirectionAtStop, getLineDepartureAtStop } from "../utils/section";
 import { BaseController } from "./base";
 import { ListenerHandle } from "./listener";
 import { UIMessageRouter } from "./router";
@@ -174,9 +174,15 @@ export class StationController extends BaseController {
     for (const line of state.lines.values()) {
       for (const path of line.paths) {
         if (path.kind === 'station-stop' && path.stationId === stationId) {
-          const dir = getLineDirectionAtStop(line, path.index, state);
-          const facing: 'left' | 'right' = dir === 'forward' ? 'right' : 'left';
+          const arrDir = getLineDirectionAtStop(line, path.index, state);
+          const facing: 'left' | 'right' = arrDir === 'forward' ? 'right' : 'left';
           lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing, stops: path.stops });
+          // U-turn: add a departure-direction entry when arrival and departure directions differ.
+          const depDir = getLineDepartureAtStop(line, path.index, state);
+          if (depDir !== null && depDir !== arrDir) {
+            const depFacing: 'left' | 'right' = depDir === 'forward' ? 'right' : 'left';
+            lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing: depFacing, stops: false, departureRole: true });
+          }
         }
       }
     }

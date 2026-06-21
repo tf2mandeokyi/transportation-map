@@ -104,6 +104,6 @@ export class LineController extends BaseController {
 
   private pathToInput(p: LinePath): LinePathInput {
     if (p.kind === 'station-stop') return { kind: 'station-stop', stationId: p.stationId };
-    return { kind: 'road-section-enter', sourceRoadId: p.sourceRoadId, nodeId: p.nodeId, destRoadId: p.destRoadId };
+    return { kind: 'road-section-change', nodeId: p.nodeId, exiting: p.exiting, entering: p.entering };
   }
 }

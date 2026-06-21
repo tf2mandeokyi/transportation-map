@@ -1,16 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { NodeId, RoadId } from '@/common/types';
+import { NodeId, RoadId, RoadSectionId } from '@/common/types';
 import { useMessageManager } from '../../contexts/MessageContext';
 import { useNetworkContext } from '../../contexts/NetworkContext';
 
 interface RseAddingPanelProps {
   afterPathIndex: number;
   sourceRoadId: RoadId | null;
-  onCommitRse: (afterPathIndex: number, sourceRoadId: RoadId, nodeId: NodeId, destRoadId: RoadId) => void;
+  exitingSectionId: RoadSectionId | null;
+  onCommitRse: (afterPathIndex: number, exitingSectionId: RoadSectionId | null, nodeId: NodeId, enteringSectionId: RoadSectionId | null) => void;
   onCancel: () => void;
 }
 
-const RseAddingPanel: React.FC<RseAddingPanelProps> = ({ afterPathIndex, sourceRoadId, onCommitRse, onCancel }) => {
+const RseAddingPanel: React.FC<RseAddingPanelProps> = ({ afterPathIndex, sourceRoadId, exitingSectionId, onCommitRse, onCancel }) => {
   const manager = useMessageManager();
   const { roads, nodes } = useNetworkContext();
 
@@ -51,7 +52,8 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({ afterPathIndex, sourceR
     setRseError(null);
 
     if (sharedNodes.length === 1) {
-      onCommitRse(afterPathIndex, sourceRoadId, sharedNodes[0].nodeId, destRoadId);
+      const enteringSectionId = (destRoad.sections[0]?.id ?? null) as RoadSectionId | null;
+      onCommitRse(afterPathIndex, exitingSectionId, sharedNodes[0].nodeId, enteringSectionId);
       return;
     }
 
@@ -92,12 +94,14 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({ afterPathIndex, sourceR
             disabled={!rseSelectedNodeId}
             style={{ width: '100%', marginBottom: '4px' }}
             onClick={() => {
-              if (sourceRoadId && rseSelectedNodeId && rsePendingRoadId) {
-                onCommitRse(afterPathIndex, sourceRoadId, rseSelectedNodeId as NodeId, rsePendingRoadId);
+              if (exitingSectionId && rseSelectedNodeId && rsePendingRoadId) {
+                const pendingDest = roads.find(r => r.id === rsePendingRoadId);
+                const enteringSectionId = (pendingDest?.sections[0]?.id ?? null) as RoadSectionId | null;
+                onCommitRse(afterPathIndex, exitingSectionId, rseSelectedNodeId as NodeId, enteringSectionId);
               }
             }}
           >
-            Add Road Enter
+            Add Road Junction
           </button>
         </div>
       )}

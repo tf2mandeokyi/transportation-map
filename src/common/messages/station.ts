@@ -10,6 +10,7 @@ export type LineAtStationData = {
   rank: number;
   facing: 'left' | 'right';
   stops: boolean;
+  departureRole?: boolean;
 };
 
 export type StationPatch =
