@@ -1,11 +1,10 @@
 import { MapState, Node } from "../../models/structures";
 import { JunctionShape } from "../../utils/junction-shape";
 import { PathBuilder } from "../../utils/path";
-import { NODE_RADIUS, FIGMA_KEY_NODE_ID, FIGMA_KEY_JUNCTION_OFFSET_X, FIGMA_KEY_JUNCTION_OFFSET_Y } from "./constants";
+import { NODE_RADIUS, FIGMA_KEY_NODE_ID, FIGMA_KEY_IS_NODE_MARKER, FIGMA_KEY_JUNCTION_OFFSET_X, FIGMA_KEY_JUNCTION_OFFSET_Y } from "./constants";
+import { renderEditHandle } from "../../figmls";
 
 const JUNCTION_FILL: RGB = { r: 0.82, g: 0.82, b: 0.82 };
-const NODE_FILL:     RGB = { r: 0.2,  g: 0.2,  b: 0.2  };
-const NODE_STROKE:   RGB = { r: 1,    g: 1,     b: 1    };
 
 export function buildNodePolygon(node: Node, state: Readonly<MapState>): VectorNode | null {
   const shape = new JunctionShape(node, state);
@@ -84,18 +83,15 @@ function resolveNodePosition(node: Node, state: Readonly<MapState>): Vector | nu
   return node.isolatedPos;
 }
 
-export function buildNodeMarker(node: Node, state: Readonly<MapState>): EllipseNode | null {
+export async function buildNodeMarker(node: Node, state: Readonly<MapState>): Promise<FrameNode | null> {
   const pos = resolveNodePosition(node, state);
   if (!pos) return null;
 
-  const ellipse = figma.createEllipse();
-  ellipse.resize(NODE_RADIUS * 2, NODE_RADIUS * 2);
-  ellipse.x = pos.x - NODE_RADIUS;
-  ellipse.y = pos.y - NODE_RADIUS;
-  ellipse.fills   = [{ type: 'SOLID', color: NODE_FILL   }];
-  ellipse.strokes = [{ type: 'SOLID', color: NODE_STROKE }];
-  ellipse.strokeWeight = 1.5;
-  ellipse.name = `Node: ${node.name ?? node.id}`;
-  ellipse.setPluginData(FIGMA_KEY_NODE_ID, node.id);
-  return ellipse;
+  const frame = await renderEditHandle({ fill: '#333333', size: NODE_RADIUS * 2 }).intoNode() as FrameNode;
+  frame.x = pos.x - NODE_RADIUS;
+  frame.y = pos.y - NODE_RADIUS;
+  frame.name = `Node: ${node.name ?? node.id}`;
+  frame.setPluginData(FIGMA_KEY_NODE_ID, node.id);
+  frame.setPluginData(FIGMA_KEY_IS_NODE_MARKER, 'true');
+  return frame;
 }

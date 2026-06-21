@@ -7,7 +7,7 @@ import { View } from "../../views";
 import { BaseController } from "../base";
 import { NodeChangeListener } from "../listener";
 import { UIMessageRouter } from "../router";
-import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_NODE_ID, FIGMA_KEY_ROAD_ID, FIGMA_KEY_JUNCTION_OFFSET_X, FIGMA_KEY_JUNCTION_OFFSET_Y } from "../../views/road";
+import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_NODE_ID, FIGMA_KEY_IS_NODE_MARKER, FIGMA_KEY_ROAD_ID, FIGMA_KEY_JUNCTION_OFFSET_X, FIGMA_KEY_JUNCTION_OFFSET_Y } from "../../views/road";
 import { RoadControlManager, FIGMA_KEY_BEZIER_HANDLE, FIGMA_KEY_ENDPOINT_HANDLE } from "./road-control";
 import { RoadCreationStateMachine } from "./road-creation";
 import { AddingRsePluginSession } from "../../sessions/adding-rse";
@@ -176,8 +176,9 @@ export class NetworkController extends BaseController {
 
       const nodeId = figmaNode.getPluginData(FIGMA_KEY_NODE_ID) as NodeId;
       if (nodeId) {
-        if (figmaNode.type === 'ELLIPSE') {
-          await this.onNodeMarkerMoved(nodeId, figmaNode as EllipseNode);
+        if (figmaNode.getPluginData(FIGMA_KEY_IS_NODE_MARKER) === 'true') {
+          const frame = figmaNode as FrameNode;
+          await this.onNodePositionChanged(nodeId, { x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 });
           return;
         }
         if (figmaNode.type === 'FRAME') {
@@ -193,7 +194,7 @@ export class NetworkController extends BaseController {
       if (endpointSide) {
         const endpointRoadId = figmaNode.getPluginData(FIGMA_KEY_ROAD_ID) as RoadId;
         if (endpointRoadId) {
-          await this.roadControl.onEndpointHandleMoved(endpointRoadId, endpointSide, figmaNode as EllipseNode);
+          await this.roadControl.onEndpointHandleMoved(endpointRoadId, endpointSide, figmaNode as FrameNode);
           return;
         }
       }
@@ -203,7 +204,7 @@ export class NetworkController extends BaseController {
 
       const roadId = figmaNode.getPluginData(FIGMA_KEY_ROAD_ID) as RoadId;
       if (roadId) {
-        await this.roadControl.onBezierHandleMoved(roadId, figmaNode as EllipseNode);
+        await this.roadControl.onBezierHandleMoved(roadId, figmaNode as FrameNode);
         return;
       }
     }
@@ -241,10 +242,6 @@ export class NetworkController extends BaseController {
   }
 
   // ── Private helpers ─────────────────────────────────────────────────────
-
-  private async onNodeMarkerMoved(nodeId: NodeId, ellipse: EllipseNode): Promise<void> {
-    await this.onNodePositionChanged(nodeId, { x: ellipse.x + ellipse.width / 2, y: ellipse.y + ellipse.height / 2 });
-  }
 
   private async onNodePositionChanged(nodeId: NodeId, newPos: { x: number; y: number }): Promise<void> {
     const currentCenter = this.getNodeCenter(nodeId);

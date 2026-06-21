@@ -1,0 +1,5 @@
+<component prop:fill="#333333" prop:size="8">
+  <frame width="hug" height="hug" flow="horizontal">
+    <ellipse locked="true" fill="$$prop:fill$$" stroke="#FFFFFF" strokeWeight="1.5" width="$$prop:size$$" height="$$prop:size$$"/>
+  </frame>
+</component>

@@ -4,6 +4,7 @@ import stationContentFigml from "./station-content.figml";
 import stationLineFigml from "./station-line.figml";
 import stationLineDotFigml from "./station-line-dot.figml";
 import stationLineTextFigml from "./station-line-text.figml";
+import editHandleFigml from "./edit-handle.figml";
 import { RenderResult } from "../figml-parser/result";
 
 import { FigmlParser } from "../figml-parser";
@@ -17,6 +18,7 @@ const FIGML_IMPORTS = {
   'station-line.figml': stationLineFigml,
   'station-line-dot.figml': stationLineDotFigml,
   'station-line-text.figml': stationLineTextFigml,
+  'edit-handle.figml': editHandleFigml,
 } as const;
 
 export function resolveImport(filename: string): string {
@@ -51,4 +53,9 @@ interface StationProps {
 }
 export function renderStation({ text, visible, rotation, textRotation, textLocation, align, textHAlign, textFrameAlign, children }: StationProps): RenderResult {
   return STATION_TEMPLATE.render({ text, visible, rotation, textRotation, align, textHAlign, textFrameAlign, children }, { textLocation });
+}
+
+const EDIT_HANDLE_TEMPLATE = FigmlParser.parseComponent(editHandleFigml);
+export function renderEditHandle({ fill, size }: { fill: string; size: number }): RenderResult {
+  return EDIT_HANDLE_TEMPLATE.render({ fill, size }, {});
 }

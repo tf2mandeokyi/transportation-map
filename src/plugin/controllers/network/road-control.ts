@@ -2,6 +2,7 @@ import { NodeId, RoadId } from "@/common/types";
 import { MapState } from "../../models/structures";
 import { Model } from "../../models";
 import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_ROAD_ID } from "../../views/road";
+import { renderEditHandle } from "../../figmls";
 import { elevateToCubic, bezierPathData, offsetBezier } from "../../utils/bezier";
 import { computeSectionOffset } from "../../utils/section";
 
@@ -10,11 +11,7 @@ export const FIGMA_KEY_BEZIER_HANDLE   = 'mapBezierHandle';   // value: 'mid'
 export const FIGMA_KEY_ENDPOINT_HANDLE = 'mapEndpointHandle'; // value: 'start' | 'end'
 
 const HANDLE_RADIUS = 5;
-const BEZIER_HANDLE_FILL:     RGB = { r: 0.1,  g: 0.47, b: 1    };
-const BEZIER_HANDLE_STROKE:   RGB = { r: 1,    g: 1,    b: 1    };
-const ENDPOINT_HANDLE_FILL:   RGB = { r: 0.15, g: 0.15, b: 0.15 };
-const ENDPOINT_HANDLE_STROKE: RGB = { r: 1,    g: 1,    b: 1    };
-const STEM_STROKE:             RGB = { r: 0.6,  g: 0.75, b: 1    };
+const STEM_STROKE:  RGB = { r: 0.6,  g: 0.75, b: 1 };
 
 interface StemLineIds {
   startNodeStem: string;
@@ -72,12 +69,12 @@ export class RoadControlManager {
     figma.currentPage.appendChild(endNodeStem);
     figma.currentPage.appendChild(endToMid);
 
-    const startEndpointHandle = this.buildEndpointHandle(p0, roadId, 'start');
-    const endEndpointHandle   = this.buildEndpointHandle(p2, roadId, 'end');
+    const startEndpointHandle = await this.buildEndpointHandle(p0, roadId, 'start');
+    const endEndpointHandle   = await this.buildEndpointHandle(p2, roadId, 'end');
     figma.currentPage.appendChild(startEndpointHandle);
     figma.currentPage.appendChild(endEndpointHandle);
 
-    const midHandle = this.buildBezierHandle(mid, roadId);
+    const midHandle = await this.buildBezierHandle(mid, roadId);
     figma.currentPage.appendChild(midHandle);
 
     this.controlledRoadId = roadId;
@@ -126,7 +123,7 @@ export class RoadControlManager {
     this.controlledRoadId = null;
   }
 
-  async onEndpointHandleMoved(roadId: RoadId, side: 'start' | 'end', handle: EllipseNode): Promise<void> {
+  async onEndpointHandleMoved(roadId: RoadId, side: 'start' | 'end', handle: FrameNode): Promise<void> {
     const handlePos = { x: handle.x + HANDLE_RADIUS, y: handle.y + HANDLE_RADIUS };
     const state = this.model.getState();
     const road = state.roads.get(roadId);
@@ -147,7 +144,7 @@ export class RoadControlManager {
     await this.updateRoadAndStems(roadId);
   }
 
-  async onBezierHandleMoved(roadId: RoadId, handle: EllipseNode): Promise<void> {
+  async onBezierHandleMoved(roadId: RoadId, handle: FrameNode): Promise<void> {
     const handlePos = { x: handle.x + HANDLE_RADIUS, y: handle.y + HANDLE_RADIUS };
     this.model.updateRoadBezierMidPoint(roadId, handlePos);
     await this.updateRoadAndStems(roadId);
@@ -236,34 +233,26 @@ export class RoadControlManager {
     return count > 0 ? { x: sumX / count, y: sumY / count } : { x: 0, y: 0 };
   }
 
-  private buildEndpointHandle(pos: Vector, roadId: RoadId, side: 'start' | 'end'): EllipseNode {
-    const ellipse = figma.createEllipse();
-    ellipse.resize(HANDLE_RADIUS * 2, HANDLE_RADIUS * 2);
-    ellipse.x = pos.x - HANDLE_RADIUS;
-    ellipse.y = pos.y - HANDLE_RADIUS;
-    ellipse.fills   = [{ type: 'SOLID', color: ENDPOINT_HANDLE_FILL }];
-    ellipse.strokes = [{ type: 'SOLID', color: ENDPOINT_HANDLE_STROKE }];
-    ellipse.strokeWeight = 1.5;
-    ellipse.name = `Endpoint: ${side}`;
-    ellipse.setPluginData(FIGMA_KEY_ROAD_ID, roadId);
-    ellipse.setPluginData(FIGMA_KEY_IS_ROAD_CONTROL, 'true');
-    ellipse.setPluginData(FIGMA_KEY_ENDPOINT_HANDLE, side);
-    return ellipse;
+  private async buildEndpointHandle(pos: Vector, roadId: RoadId, side: 'start' | 'end'): Promise<FrameNode> {
+    const frame = await renderEditHandle({ fill: '#262626', size: HANDLE_RADIUS * 2 }).intoNode() as FrameNode;
+    frame.x = pos.x - HANDLE_RADIUS;
+    frame.y = pos.y - HANDLE_RADIUS;
+    frame.name = `Endpoint: ${side}`;
+    frame.setPluginData(FIGMA_KEY_ROAD_ID, roadId);
+    frame.setPluginData(FIGMA_KEY_IS_ROAD_CONTROL, 'true');
+    frame.setPluginData(FIGMA_KEY_ENDPOINT_HANDLE, side);
+    return frame;
   }
 
-  private buildBezierHandle(pos: Vector, roadId: RoadId): EllipseNode {
-    const ellipse = figma.createEllipse();
-    ellipse.resize(HANDLE_RADIUS * 2, HANDLE_RADIUS * 2);
-    ellipse.x = pos.x - HANDLE_RADIUS;
-    ellipse.y = pos.y - HANDLE_RADIUS;
-    ellipse.fills   = [{ type: 'SOLID', color: BEZIER_HANDLE_FILL }];
-    ellipse.strokes = [{ type: 'SOLID', color: BEZIER_HANDLE_STROKE }];
-    ellipse.strokeWeight = 1.5;
-    ellipse.name = 'Bezier: mid';
-    ellipse.setPluginData(FIGMA_KEY_ROAD_ID, roadId);
-    ellipse.setPluginData(FIGMA_KEY_IS_ROAD_CONTROL, 'true');
-    ellipse.setPluginData(FIGMA_KEY_BEZIER_HANDLE, 'mid');
-    return ellipse;
+  private async buildBezierHandle(pos: Vector, roadId: RoadId): Promise<FrameNode> {
+    const frame = await renderEditHandle({ fill: '#1A78FF', size: HANDLE_RADIUS * 2 }).intoNode() as FrameNode;
+    frame.x = pos.x - HANDLE_RADIUS;
+    frame.y = pos.y - HANDLE_RADIUS;
+    frame.name = 'Bezier: mid';
+    frame.setPluginData(FIGMA_KEY_ROAD_ID, roadId);
+    frame.setPluginData(FIGMA_KEY_IS_ROAD_CONTROL, 'true');
+    frame.setPluginData(FIGMA_KEY_BEZIER_HANDLE, 'mid');
+    return frame;
   }
 
   private buildStemLine(from: Vector, to: Vector, roadId: RoadId): VectorNode {
