@@ -1,5 +1,5 @@
 import { Line, LinePath, MapState, Road, RoadSectionEnter, Station, StationStop } from "../models/structures";
-import { NodeId, StationId } from "@/common/types";
+import { NodeId, RoadSectionId, StationId } from "@/common/types";
 import { findRoadForSection } from "./section";
 
 function findSharedNode(roadA: Road, roadB: Road): NodeId | null {
@@ -10,7 +10,7 @@ function findSharedNode(roadA: Road, roadB: Road): NodeId | null {
 
 // ── Pass-through helpers ──────────────────────────────────────────────────────
 
-type RoadSpan = { road: Road; tEntry: number; tExit: number };
+type RoadSpan = { road: Road; tEntry: number; tExit: number; sectionId: RoadSectionId | null };
 
 // Decomposes a segment (dep → arr, with the RSEs between them) into a sequence of
 // road spans, each with the entry and exit interpT values on that road.
@@ -27,7 +27,7 @@ function getRoadSpans(
 
   if (rsesBetween.length === 0) {
     if (depRoad.id !== arrRoad.id) return [];
-    return [{ road: depRoad, tEntry: depStation.interpT, tExit: arrStation.interpT }];
+    return [{ road: depRoad, tEntry: depStation.interpT, tExit: arrStation.interpT, sectionId: depStation.roadSectionId }];
   }
 
   const spans: RoadSpan[] = [];
@@ -38,6 +38,7 @@ function getRoadSpans(
     road: depRoad,
     tEntry: depStation.interpT,
     tExit: firstRse.nodeId === depRoad.endNodeId ? 1 : 0,
+    sectionId: depStation.roadSectionId,
   });
 
   // Middle spans: one per road entered by an RSE (all except the last).
@@ -50,6 +51,7 @@ function getRoadSpans(
       road,
       tEntry: rse.nodeId === road.startNodeId ? 0 : 1,
       tExit:  nextRse.nodeId === road.endNodeId ? 1 : 0,
+      sectionId: null,
     });
   }
 
@@ -61,6 +63,7 @@ function getRoadSpans(
     road: lastRoad,
     tEntry: lastRse.nodeId === lastRoad.startNodeId ? 0 : 1,
     tExit: arrStation.interpT,
+    sectionId: arrStation.roadSectionId,
   });
 
   return spans;
@@ -68,14 +71,20 @@ function getRoadSpans(
 
 // Returns stations on a road whose interpT lies strictly inside (tEntry, tExit),
 // sorted in travel order, excluding any already in stoppingIds.
+// When sectionId is provided, only stations belonging to that section are considered.
 function findIntermediateStations(
   road: Road, tEntry: number, tExit: number,
   stoppingIds: Set<StationId>, state: Readonly<MapState>,
+  sectionId: RoadSectionId | null,
 ): Station[] {
   const tMin = Math.min(tEntry, tExit);
   const tMax = Math.max(tEntry, tExit);
   const result: Station[] = [];
-  for (const section of road.sections.values()) {
+  const sections = sectionId
+    ? [road.sections.get(sectionId)].filter(Boolean)
+    : road.sections.values();
+  for (const section of sections) {
+    if (!section) continue;
     for (const stationId of section.stationIds) {
       if (stoppingIds.has(stationId)) continue;
       const st = state.stations.get(stationId);
@@ -98,7 +107,7 @@ function insertPassThroughStops(paths: LinePath[], state: Readonly<MapState>): L
   let i = 0;
 
   const pushPassThroughs = (span: RoadSpan, rank: number) => {
-    for (const st of findIntermediateStations(span.road, span.tEntry, span.tExit, stoppingIds, state)) {
+    for (const st of findIntermediateStations(span.road, span.tEntry, span.tExit, stoppingIds, state, span.sectionId)) {
       result.push({ kind: 'station-stop', index: 0, stationId: st.id, rank, stops: false });
     }
   };
