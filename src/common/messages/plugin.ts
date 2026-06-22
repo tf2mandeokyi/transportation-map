@@ -2,7 +2,7 @@ import { LineId, NodeId, RoadId, RoadSectionId, StationId } from "../types";
 import { LinePath } from "@/plugin/models/structures";
 import { StationParams, LineAtStationData } from "./station";
 import { LineData } from "./line";
-import { NodeData, RoadData, NetworkFocusedElement } from "./network";
+import { LineAtNodeData, NodeData, RoadData, NetworkFocusedElement } from "./network";
 
 export type PluginToUIMessage =
   | { type: 'session-created'; sessionId: string }
@@ -15,4 +15,5 @@ export type PluginToUIMessage =
   | { type: 'network-selection-cleared' }
   | { type: 'road-creation-first-node'; nodeId: NodeId; name?: string }
   | { type: 'road-creation-exited' }
-  | { type: 'road-clicked'; roadId: RoadId };
+  | { type: 'road-clicked'; roadId: RoadId }
+  | { type: 'node-lines-data'; nodeId: NodeId; lines: LineAtNodeData[] };

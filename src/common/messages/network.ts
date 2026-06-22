@@ -1,4 +1,4 @@
-import { NodeId, RoadId, RoadSectionId } from "../types";
+import { LineId, NodeId, RoadId, RoadSectionId } from "../types";
 
 export type NodeData = { id: NodeId; name?: string; pos: { x: number; y: number } };
 export type RoadSectionData = { id: RoadSectionId; name?: string; index: number };
@@ -8,8 +8,20 @@ export type NetworkFocusedElement =
   | { kind: 'node'; nodeId: NodeId; name?: string; pos: { x: number; y: number } }
   | { kind: 'road'; roadId: RoadId; name?: string; startNodeId: NodeId; endNodeId: NodeId; sections: RoadSectionData[] };
 
+export type LineAtNodeData = {
+  lineId: LineId;
+  lineName: string;
+  lineColor: string;
+  pathIndex: number;
+  exitingSectionId: RoadSectionId | null;
+  enteringSectionId: RoadSectionId | null;
+  exitRank: number;
+  enterRank: number;
+};
+
 export type NodePatch =
-  | { op: 'update-name'; name: string | undefined };
+  | { op: 'update-name'; name: string | undefined }
+  | { op: 'update-rsc-ranks'; changes: Array<{ lineId: LineId; pathIndex: number; exitRank: number; enterRank: number }> };
 
 export type RoadPatch =
   | { op: 'add-section'; section: { name?: string; index: number } }

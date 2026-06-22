@@ -270,9 +270,21 @@ export class Model {
     if (path.kind === 'station-stop') {
       line.paths.push({ kind: 'station-stop', index, stationId: path.stationId, rank: this._nextRankForStation(path.stationId), stops: true });
     } else {
-      line.paths.push({ kind: 'road-section-change', index, nodeId: path.nodeId, exiting: path.exiting, entering: path.entering });
+      line.paths.push({ kind: 'road-section-change', index, nodeId: path.nodeId, exiting: path.exiting, entering: path.entering, exitRank: this._nextRankForNode(path.nodeId, path.exiting, 'exit'), enterRank: this._nextRankForNode(path.nodeId, path.entering, 'enter') });
     }
     line.paths = validateLinePaths(line, this.state);
+  }
+
+  private _nextRankForNode(nodeId: NodeId, sectionId: RoadSectionId | null, role: 'exit' | 'enter'): number {
+    let max = -1;
+    for (const line of this.state.lines.values()) {
+      for (const p of line.paths) {
+        if (p.kind !== 'road-section-change' || p.nodeId !== nodeId) continue;
+        if (role === 'exit'  && p.exiting  === sectionId) max = Math.max(max, p.exitRank);
+        if (role === 'enter' && p.entering === sectionId) max = Math.max(max, p.enterRank);
+      }
+    }
+    return max + 1;
   }
 
   private _nextRankForStation(stationId: StationId): number {
@@ -297,6 +309,21 @@ export class Model {
       const path = line.paths.find(p => p.index === pathIndex);
       if (path?.kind === 'station-stop' && path.stationId === stationId) {
         path.rank = rank;
+      }
+    }
+  }
+
+  public updateRscRanks(
+    nodeId: NodeId,
+    changes: Array<{ lineId: LineId; pathIndex: number; exitRank: number; enterRank: number }>
+  ): void {
+    for (const { lineId, pathIndex, exitRank, enterRank } of changes) {
+      const line = this.state.lines.get(lineId);
+      if (!line) continue;
+      const path = line.paths.find(p => p.index === pathIndex);
+      if (path?.kind === 'road-section-change' && path.nodeId === nodeId) {
+        path.exitRank = exitRank;
+        path.enterRank = enterRank;
       }
     }
   }
@@ -346,15 +373,20 @@ export class Model {
   public replaceLinePaths(lineId: LineId, paths: LinePathInput[]): void {
     const line = this.state.lines.get(lineId);
     if (!line) return;
-    const existingRanks = new Map<StationId, number>();
+    const existingStationRanks = new Map<StationId, number>();
+    const existingRscRanks = new Map<string, { exitRank: number; enterRank: number }>();
     for (const p of line.paths) {
-      if (p.kind === 'station-stop') existingRanks.set(p.stationId, p.rank);
+      if (p.kind === 'station-stop') existingStationRanks.set(p.stationId, p.rank);
+      if (p.kind === 'road-section-change') {
+        existingRscRanks.set(`${p.nodeId}:${p.exiting}:${p.entering}`, { exitRank: p.exitRank, enterRank: p.enterRank });
+      }
     }
     line.paths = paths.map((p, i) => {
       if (p.kind === 'station-stop') {
-        return { kind: 'station-stop', index: i, stationId: p.stationId, rank: existingRanks.get(p.stationId) ?? 0, stops: true };
+        return { kind: 'station-stop', index: i, stationId: p.stationId, rank: existingStationRanks.get(p.stationId) ?? 0, stops: true };
       }
-      return { kind: 'road-section-change', index: i, nodeId: p.nodeId, exiting: p.exiting, entering: p.entering } as RoadSectionChange;
+      const existing = existingRscRanks.get(`${p.nodeId}:${p.exiting}:${p.entering}`);
+      return { kind: 'road-section-change', index: i, nodeId: p.nodeId, exiting: p.exiting, entering: p.entering, exitRank: existing?.exitRank ?? 0, enterRank: existing?.enterRank ?? 0 } as RoadSectionChange;
     });
     line.paths = validateLinePaths(line, this.state);
   }

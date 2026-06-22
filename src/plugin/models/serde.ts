@@ -1,3 +1,5 @@
+// Use single-letter keys to minimize storage size
+
 import { HVAlign, LineId, NodeId, RoadId, RoadSectionId, StationId } from "@/common/types";
 import { Connection, Line, LinePath, MapState, Node, Road, RoadSection, Station } from "./structures";
 
@@ -50,6 +52,8 @@ interface SerializedLinePath {
   n?: string;       // 'sc': nodeId
   e?: string;       // 'sc': exiting sectionId
   a?: string;       // 'sc': entering sectionId
+  f?: number;       // 'sc': exitRank (absent → 0)
+  g?: number;       // 'sc': enterRank (absent → 0)
 }
 
 interface SerializedLine {
@@ -122,7 +126,7 @@ export function serializeMapState(state: MapState): string {
         if (!path.stops) return [];
         return [{ k: 'ss', x: path.index, i: path.stationId, r: path.rank || undefined }];
       }
-      return [{ k: 'sc', x: path.index, n: path.nodeId, e: path.exiting ?? undefined, a: path.entering ?? undefined }];
+      return [{ k: 'sc', x: path.index, n: path.nodeId, e: path.exiting ?? undefined, a: path.entering ?? undefined, f: path.exitRank || undefined, g: path.enterRank || undefined }];
     }),
     g: line.figmaGroupId,
   }));
@@ -189,7 +193,7 @@ export function deserializeMapState(json: string): MapState | null {
         }
         if (p.k === 'sc') {
           if (!p.n) return [];
-          return [{ kind: 'road-section-change' as const, index: p.x, nodeId: p.n as NodeId, exiting: (p.e ?? null) as RoadSectionId | null, entering: (p.a ?? null) as RoadSectionId | null }];
+          return [{ kind: 'road-section-change' as const, index: p.x, nodeId: p.n as NodeId, exiting: (p.e ?? null) as RoadSectionId | null, entering: (p.a ?? null) as RoadSectionId | null, exitRank: p.f ?? 0, enterRank: p.g ?? 0 }];
         }
         return [];
       });

@@ -55,6 +55,8 @@ export interface RoadSectionChange {
   nodeId: NodeId;
   exiting: RoadSectionId | null;
   entering: RoadSectionId | null;
+  exitRank: number;
+  enterRank: number;
 }
 
 export type LinePath = StationStop | RoadSectionChange;

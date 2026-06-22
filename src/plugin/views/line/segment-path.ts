@@ -37,25 +37,31 @@ export function computeTotalOffset(
   referenceStationId?: StationId,
   pathSegmentIndex?: number,
   isUturnDeparture?: boolean,
+  forceRank?: number,
 ): number {
   const section = road.sections.get(sectionId);
   if (!section) return 0;
 
   const sectionOffset = computeSectionOffset(section, road, state);
 
-  const passes = getLinesForSection(section, state, referenceStationId);
   const totalPasses = getLinesForSection(section, state);
-  let passIndex: number;
-  if (pathSegmentIndex !== undefined) {
-    const wantDep = isUturnDeparture ?? false;
-    passIndex = passes.findIndex(lp =>
-      lp.line.id === line.id && lp.segmentIndex === pathSegmentIndex && lp.departureRole === wantDep
-    );
+  let effectiveIdx: number;
+  if (forceRank !== undefined) {
+    effectiveIdx = forceRank;
   } else {
-    passIndex = passes.findIndex(lp => lp.line.id === line.id && !lp.departureRole);
+    const passes = getLinesForSection(section, state, referenceStationId);
+    let passIndex: number;
+    if (pathSegmentIndex !== undefined) {
+      const wantDep = isUturnDeparture ?? false;
+      passIndex = passes.findIndex(lp =>
+        lp.line.id === line.id && lp.segmentIndex === pathSegmentIndex && lp.departureRole === wantDep
+      );
+    } else {
+      passIndex = passes.findIndex(lp => lp.line.id === line.id && !lp.departureRole);
+    }
+    effectiveIdx = passIndex >= 0 ? passIndex : totalPasses.length;
   }
-  const effectiveIdx   = passIndex >= 0 ? passIndex : totalPasses.length;
-  const effectiveCount = Math.max(totalPasses.length, passes.length);
+  const effectiveCount = Math.max(totalPasses.length, effectiveIdx + 1);
   const lineOffset = lineOffsetInSection(effectiveIdx, effectiveCount);
 
   return sectionOffset + lineOffset;
@@ -110,6 +116,8 @@ export function computeSectionSegs(
   arrivalStationId?: StationId,
   depPathSegIdx?: number,
   arrPathSegIdx?: number,
+  depRank?: number,
+  arrRank?: number,
 ): CubicBezierPoints[] {
   const centerline = computeRoadBezier(road, state);
   if (!centerline) return [];
@@ -124,9 +132,9 @@ export function computeSectionSegs(
     isDepUturn = depDir !== null && depDir !== arrDir;
   }
 
-  const offsetDep = computeTotalOffset(line, road, sectionId, state, departureStationId, depPathSegIdx, isDepUturn);
+  const offsetDep = computeTotalOffset(line, road, sectionId, state, departureStationId, depPathSegIdx, isDepUturn, departureStationId === undefined ? depRank : undefined);
   const offsetArr = arrivalStationId === undefined
-    ? offsetDep
+    ? (arrRank !== undefined ? computeTotalOffset(line, road, sectionId, state, undefined, undefined, false, arrRank) : offsetDep)
     : computeTotalOffset(line, road, sectionId, state, arrivalStationId, arrPathSegIdx);
 
   // Negate offset for reverse traversal so the backward-parameterized bezier's

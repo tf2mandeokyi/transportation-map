@@ -29,6 +29,8 @@ type RoadTraversal = {
   arrStationId: StationId | undefined;
   depPathSegIdx: number | undefined;
   arrPathSegIdx: number | undefined;
+  depRank: number | undefined;
+  arrRank: number | undefined;
 };
 
 // Converts an RSC sequence into an ordered list of (road, entryT, exitT) traversals.
@@ -53,6 +55,8 @@ function buildTraversals(
     arrStationId: undefined,
     depPathSegIdx: startPathIdx,
     arrPathSegIdx: undefined,
+    depRank: undefined,
+    arrRank: firstRsc.exitRank,
   });
 
   for (let k = 0; k < rseBetween.length - 1; k++) {
@@ -70,6 +74,8 @@ function buildTraversals(
       arrStationId: undefined,
       depPathSegIdx: undefined,
       arrPathSegIdx: undefined,
+      depRank: rsc.enterRank,
+      arrRank: nextRsc.exitRank,
     });
   }
 
@@ -86,6 +92,8 @@ function buildTraversals(
     arrStationId: endStation.id,
     depPathSegIdx: undefined,
     arrPathSegIdx: endPathIdx,
+    depRank: lastRsc.enterRank,
+    arrRank: undefined,
   });
 
   return traversals;
@@ -155,7 +163,7 @@ export function buildSegmentPath(
   const entries: CubicBezierPoints[][] = [];
   for (const tr of traversals) {
     if (tr.sectionId === null) continue;
-    const segs = computeSectionSegs(line, tr.road, tr.sectionId, tr.entryT, tr.exitT, state, tr.depStationId, tr.arrStationId, tr.depPathSegIdx, tr.arrPathSegIdx);
+    const segs = computeSectionSegs(line, tr.road, tr.sectionId, tr.entryT, tr.exitT, state, tr.depStationId, tr.arrStationId, tr.depPathSegIdx, tr.arrPathSegIdx, tr.depRank, tr.arrRank);
     if (segs.length > 0) entries.push(segs);
   }
 

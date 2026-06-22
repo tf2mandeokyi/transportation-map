@@ -165,7 +165,7 @@ function tryAutoInsertRSC(
   if (!prevRoad || !currRoad || prevRoad.id === currRoad.id) return null;
   const nodeId = findSharedNode(prevRoad, currRoad);
   if (!nodeId) return null;
-  return { kind: 'road-section-change', index: 0, nodeId, exiting: prevStation.roadSectionId, entering: currStation.roadSectionId };
+  return { kind: 'road-section-change', index: 0, nodeId, exiting: prevStation.roadSectionId, entering: currStation.roadSectionId, exitRank: 0, enterRank: 0 };
 }
 
 // Validates and normalises RSE entries for a line:

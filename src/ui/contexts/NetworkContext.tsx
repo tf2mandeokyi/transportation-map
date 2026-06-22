@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { NetworkFocusedElement, NodeData, RoadData } from '@/common/messages';
+import { LineAtNodeData, NetworkFocusedElement, NodeData, RoadData } from '@/common/messages';
 import { NodeId } from '@/common/types';
 import { useMessageManager } from './MessageContext';
 import { AddingRoadUISession } from '../sessions/adding-road';
@@ -11,6 +11,7 @@ interface NetworkContextValue {
   nodes: NodeData[];
   roads: RoadData[];
   networkFocus: NetworkFocusedElement | null;
+  nodeLinesData: LineAtNodeData[];
   roadCreationStep: RoadCreationStep;
   roadCreationFirstNode: { id: NodeId; name?: string } | null;
   handleStartRoadCreation: () => void;
@@ -26,6 +27,7 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [nodes, setNodes] = useState<NodeData[]>([]);
   const [roads, setRoads] = useState<RoadData[]>([]);
   const [networkFocus, setNetworkFocus] = useState<NetworkFocusedElement | null>(null);
+  const [nodeLinesData, setNodeLinesData] = useState<LineAtNodeData[]>([]);
   const [roadCreationStep, setRoadCreationStep] = useState<RoadCreationStep>('idle');
   const [roadCreationFirstNode, setRoadCreationFirstNode] = useState<{ id: NodeId; name?: string } | null>(null);
 
@@ -48,7 +50,10 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setRoadCreationStep('idle');
       setRoadCreationFirstNode(null);
     });
-    return () => { unsub1(); unsub2(); unsub3(); unsub4(); unsub5(); };
+    const unsub6 = manager.onMessage('node-lines-data', msg => {
+      setNodeLinesData(msg.lines);
+    });
+    return () => { unsub1(); unsub2(); unsub3(); unsub4(); unsub5(); unsub6(); };
   }, [manager]);
 
   const handleStartRoadCreation = useCallback(() => {
@@ -65,7 +70,7 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   return (
     <NetworkContext.Provider value={{
-      nodes, roads, networkFocus,
+      nodes, roads, networkFocus, nodeLinesData,
       roadCreationStep, roadCreationFirstNode,
       handleStartRoadCreation, handleCancelRoadCreation,
     }}>

@@ -1,5 +1,5 @@
 import { NodeId, RoadId } from "@/common/types";
-import { NetworkFocusedElement, NodeData, NodePatch, RoadData, RoadPatch, RoadSectionData, UIToPluginMessage } from "@/common/messages";
+import { LineAtNodeData, NetworkFocusedElement, NodeData, NodePatch, RoadData, RoadPatch, RoadSectionData, UIToPluginMessage } from "@/common/messages";
 import { PluginSessionManager } from "../../sessions/manager";
 import { postMessageToUI } from "../../figma";
 import { Model } from "../../models";
@@ -58,6 +58,12 @@ export class NetworkController extends BaseController {
         this.model.updateNodeName(nodeId, patch.name);
         await this.save();
         this.syncNetworkToUI();
+        break;
+      case 'update-rsc-ranks':
+        this.model.updateRscRanks(nodeId, patch.changes);
+        await this.render();
+        await this.save();
+        this.emitNodeLinesData(nodeId);
         break;
     }
   }
@@ -148,6 +154,7 @@ export class NetworkController extends BaseController {
     if (nodeId) {
       await this.roadControl.remove();
       postMessageToUI({ type: 'network-element-focused', element: this.buildNodeElement(nodeId) });
+      this.emitNodeLinesData(nodeId);
       return;
     }
 
@@ -304,6 +311,19 @@ export class NetworkController extends BaseController {
   private buildNodeElement(nodeId: NodeId): NetworkFocusedElement {
     const node = this.model.getState().nodes.get(nodeId);
     return { kind: 'node', nodeId, name: node?.name, pos: this.getNodeCenter(nodeId) };
+  }
+
+  public emitNodeLinesData(nodeId: NodeId): void {
+    const state = this.model.getState();
+    const lines: LineAtNodeData[] = [];
+    for (const line of state.lines.values()) {
+      for (const p of line.paths) {
+        if (p.kind === 'road-section-change' && p.nodeId === nodeId) {
+          lines.push({ lineId: line.id, lineName: line.name, lineColor: line.color, pathIndex: p.index, exitingSectionId: p.exiting, enteringSectionId: p.entering, exitRank: p.exitRank, enterRank: p.enterRank });
+        }
+      }
+    }
+    postMessageToUI({ type: 'node-lines-data', nodeId, lines });
   }
 
   private buildRoadElement(roadId: RoadId): NetworkFocusedElement {
