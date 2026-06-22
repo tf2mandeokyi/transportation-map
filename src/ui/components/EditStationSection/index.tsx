@@ -83,7 +83,6 @@ const EditStationSection: React.FC = () => {
       <StationLineList
         stationId={stationId}
         lines={linesAtStation}
-        onReorder={setLinesAtStation}
       />
     </div>
   );

@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { LineAtNodeData, NetworkFocusedElement } from '@/common/messages';
 import { NodeId, RoadSectionId } from '@/common/types';
 import { postMessageToPlugin } from '../../figma';
 import { useNetworkContext } from '../../contexts/NetworkContext';
+import DraggableLineList from '../DraggableLineList';
 
 type ArmItem = { line: LineAtNodeData; role: 'exit' | 'enter'; rank: number };
 
@@ -26,7 +27,6 @@ const FocusedNodePanel: React.FC<{ element: Extract<NetworkFocusedElement, { kin
     return sectionId;
   };
 
-  // Collect unique section IDs across both exit and enter roles.
   const allSectionIds = [
     ...new Set([
       ...lines.map(l => l.exitingSectionId),
@@ -79,54 +79,32 @@ interface NodeArmListProps {
   items: ArmItem[];
 }
 
-const NodeArmList: React.FC<NodeArmListProps> = ({ label, nodeId, items }) => {
-  const itemsRef = useRef(items);
-  useEffect(() => { itemsRef.current = items; }, [items]);
-  const draggedIndexRef = useRef<number | null>(null);
-
-  if (items.length === 0) return null;
-
-  return (
-    <div style={{ marginTop: '8px' }}>
-      <label style={{ color: '#555' }}>{label}</label>
-      <div style={{ marginTop: '4px' }}>
-        {items.map((item, index) => (
-          <div
-            key={`${item.line.lineId}-${item.line.pathIndex}-${item.role}`}
-            className="station-path-item"
-            draggable
-            onDragStart={() => { draggedIndexRef.current = index; }}
-            onDragEnd={() => {
-              draggedIndexRef.current = null;
-              const changes = itemsRef.current.map((it, i) => ({
-                lineId: it.line.lineId,
-                pathIndex: it.line.pathIndex,
-                exitRank: it.role === 'exit' ? i : it.line.exitRank,
-                enterRank: it.role === 'enter' ? i : it.line.enterRank,
-              }));
-              postMessageToPlugin({ type: 'patch-node', nodeId, patch: { op: 'update-rsc-ranks', changes } });
-            }}
-            onDragOver={e => {
-              e.preventDefault();
-              const dragIdx = draggedIndexRef.current;
-              if (dragIdx === null || dragIdx === index) return;
-              const next = [...itemsRef.current];
-              const [moved] = next.splice(dragIdx, 1);
-              next.splice(index, 0, moved);
-              draggedIndexRef.current = index;
-              itemsRef.current = next;
-            }}
-            onDrop={e => e.preventDefault()}
-            style={{ alignItems: 'center', cursor: 'grab' }}
-          >
-            <span style={{ color: '#999', fontSize: '12px' }}>⋮⋮</span>
-            <div style={{ width: '12px', height: '12px', backgroundColor: item.line.lineColor, borderRadius: '2px', border: '1px solid rgba(0,0,0,0.1)', flexShrink: 0, marginLeft: '8px' }} />
-            <span style={{ marginLeft: '8px' }}>{item.line.lineName}</span>
-          </div>
-        ))}
-      </div>
+const NodeArmList: React.FC<NodeArmListProps> = ({ label, nodeId, items }) => (
+  <div style={{ marginTop: '8px' }}>
+    <label style={{ color: '#555' }}>{label}</label>
+    <div style={{ marginTop: '4px' }}>
+      <DraggableLineList
+        items={items}
+        getKey={item => `${item.line.lineId}-${item.line.pathIndex}-${item.role}`}
+        getLineColor={item => item.line.lineColor}
+        getLineName={item => item.line.lineName}
+        right={item => (
+          <span style={{ color: '#aaa', fontSize: '11px' }}>
+            {item.role === 'exit' ? 'exit' : 'enter'}
+          </span>
+        )}
+        onCommit={items => {
+          const changes = items.map((it, i) => ({
+            lineId: it.line.lineId,
+            pathIndex: it.line.pathIndex,
+            exitRank: it.role === 'exit' ? i : it.line.exitRank,
+            enterRank: it.role === 'enter' ? i : it.line.enterRank,
+          }));
+          postMessageToPlugin({ type: 'patch-node', nodeId, patch: { op: 'update-rsc-ranks', changes } });
+        }}
+      />
     </div>
-  );
-};
+  </div>
+);
 
 export default FocusedNodePanel;
