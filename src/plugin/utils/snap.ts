@@ -1,7 +1,8 @@
 import { MapState } from '../models/structures';
 import { RoadSectionId } from '@/common/types';
 import { QuadBezierPoints, evalQuadraticBezier, evalQuadraticBezierTangent } from './bezier';
-import { computeRoadBezier, computeSectionOffset } from './section';
+import { computeRoadBezier } from './section';
+import { computeSectionOffset } from './line-queries';
 
 const SAMPLES = 20;
 

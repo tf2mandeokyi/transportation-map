@@ -3,6 +3,7 @@ import { LinePathInput } from "@/common/messages";
 import { AddingStationsPluginSession } from "../sessions/adding-stations";
 import { LinePath } from "../models/structures";
 import { findRoadForSection, getLineDirectionAtStop, getLineDepartureAtStop } from "../utils/section";
+import { getStationStopsAcrossLines } from "../utils/line-queries";
 import { postMessageToUI } from "../figma";
 import { BaseController } from "./base";
 import { UIMessageRouter } from "./router";
@@ -76,21 +77,16 @@ export class ConnectionController extends BaseController {
     if (station) {
       const state = this.model.getState();
       const lines = [];
-      for (const line of state.lines.values()) {
-        for (const path of line.paths) {
-          if (path.kind === 'station-stop' && path.stationId === station.id) {
-            const arrDir = getLineDirectionAtStop(line, path.index, state);
-            const facing: 'left' | 'right' = arrDir === 'forward' ? 'right' : 'left';
-            lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing, stops: path.stops });
-            const depDir = getLineDepartureAtStop(line, path.index, state);
-            if (depDir !== null && depDir !== arrDir) {
-              const depFacing: 'left' | 'right' = depDir === 'forward' ? 'right' : 'left';
-              lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing: depFacing, stops: false, departureRole: true });
-            }
-          }
+      for (const { line, path } of getStationStopsAcrossLines(station.id, state)) {
+        const arrDir = getLineDirectionAtStop(line, path.index, state);
+        const facing: 'left' | 'right' = arrDir === 'forward' ? 'right' : 'left';
+        lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing, stops: path.stops });
+        const depDir = getLineDepartureAtStop(line, path.index, state);
+        if (depDir !== null && depDir !== arrDir) {
+          const depFacing: 'left' | 'right' = depDir === 'forward' ? 'right' : 'left';
+          lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing: depFacing, stops: false, departureRole: true });
         }
       }
-      lines.sort((a, b) => a.rank - b.rank);
       postMessageToUI({
         type: 'station-clicked',
         stationId: station.id,

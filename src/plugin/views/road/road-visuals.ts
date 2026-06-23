@@ -1,6 +1,8 @@
 import { MapState, Road } from "../../models/structures";
-import { elevateToCubic, offsetBezierAdaptive, bezierListPathData, ROAD_MIN_WIDTH } from "../../utils/bezier";
-import { getLinesForSection, sectionBandWidth, computeSectionOffset } from "../../utils/section";
+import { elevateToCubic, offsetBezierAdaptive, bezierListPathData } from "../../utils/bezier";
+import { ROAD_MIN_WIDTH } from "../../utils/constants";
+import { getLinesForSection } from "../../utils/section";
+import { sectionBandWidth, computeSectionOffset } from "../../utils/line-queries";
 import { FIGMA_KEY_ROAD_ID } from "./constants";
 
 const SECTION_COLOR: RGB = { r: 0.82, g: 0.82, b: 0.82 };

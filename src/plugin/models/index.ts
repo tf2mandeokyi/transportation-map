@@ -1,8 +1,9 @@
-import { Connection, Line, MapState, Node, Road, RoadSection, RoadSectionChange, Station, StationStop } from "./structures";
+import { Connection, Line, MapState, Node, Road, RoadSection, RoadSectionChange, Station } from "./structures";
 import { deserializeMapState, serializeMapState } from "./serde";
 import { LineId, NodeId, RoadId, RoadSectionId, StationId } from "@/common/types";
 import { LinePathInput } from "@/common/messages";
 import { validateLinePaths } from "../utils/line-validator";
+import { getStationStopsAcrossLines, getRscEntriesForNode } from "../utils/line-queries";
 
 function generateBase62(length: number): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -270,31 +271,32 @@ export class Model {
     if (path.kind === 'station-stop') {
       line.paths.push({ kind: 'station-stop', index, stationId: path.stationId, rank: this._nextRankForStation(path.stationId), stops: true });
     } else {
-      line.paths.push({ kind: 'road-section-change', index, nodeId: path.nodeId, exiting: path.exiting, entering: path.entering, exitRank: this._nextRankForNode(path.nodeId, path.exiting, 'exit'), enterRank: this._nextRankForNode(path.nodeId, path.entering, 'enter') });
+      const isUturn = path.entering !== null && path.entering === path.exiting;
+      const exitRank = this._nextRankForSection(path.nodeId, path.exiting);
+      // U-turn: both exit and enter are on the same section — take two consecutive
+      // slots from the same unified pool to guarantee they land on distinct lanes.
+      const enterRank = isUturn ? exitRank + 1 : this._nextRankForSection(path.nodeId, path.entering);
+      line.paths.push({ kind: 'road-section-change', index, nodeId: path.nodeId, exiting: path.exiting, entering: path.entering, exitRank, enterRank });
     }
     line.paths = validateLinePaths(line, this.state);
   }
 
-  private _nextRankForNode(nodeId: NodeId, sectionId: RoadSectionId | null, role: 'exit' | 'enter'): number {
+  // Returns the next available rank in the unified pool of all exit AND enter ranks
+  // for the given section at the given junction node. This ensures that exit and
+  // enter passes on the same section never share a lateral slot.
+  private _nextRankForSection(nodeId: NodeId, sectionId: RoadSectionId | null): number {
     let max = -1;
-    for (const line of this.state.lines.values()) {
-      for (const p of line.paths) {
-        if (p.kind !== 'road-section-change' || p.nodeId !== nodeId) continue;
-        if (role === 'exit'  && p.exiting  === sectionId) max = Math.max(max, p.exitRank);
-        if (role === 'enter' && p.entering === sectionId) max = Math.max(max, p.enterRank);
-      }
+    for (const { path: p } of getRscEntriesForNode(nodeId, this.state)) {
+      if (p.exiting  === sectionId) max = Math.max(max, p.exitRank);
+      if (p.entering === sectionId) max = Math.max(max, p.enterRank);
     }
     return max + 1;
   }
 
   private _nextRankForStation(stationId: StationId): number {
     let max = -1;
-    for (const line of this.state.lines.values()) {
-      for (const p of line.paths) {
-        if (p.kind === 'station-stop' && p.stationId === stationId && p.stops) {
-          max = Math.max(max, p.rank);
-        }
-      }
+    for (const { path: p } of getStationStopsAcrossLines(stationId, this.state)) {
+      if (p.stops) max = Math.max(max, p.rank);
     }
     return max + 1;
   }
@@ -329,14 +331,9 @@ export class Model {
   }
 
   public fixStationRankConflicts(stationId: StationId): void {
-    const stops: Array<{ path: StationStop; lineId: LineId }> = [];
-    for (const line of this.state.lines.values()) {
-      for (const p of line.paths) {
-        if (p.kind === 'station-stop' && p.stationId === stationId) {
-          stops.push({ path: p, lineId: line.id });
-        }
-      }
-    }
+    const stops = getStationStopsAcrossLines(stationId, this.state)
+      .filter(({ path }) => path.stops)
+      .map(({ line, path }) => ({ path, lineId: line.id }));
     stops.sort((a, b) => {
       if (a.path.rank !== b.path.rank) return a.path.rank - b.path.rank;
       if (a.lineId !== b.lineId) return a.lineId < b.lineId ? -1 : 1;
@@ -412,10 +409,8 @@ export class Model {
   }
 
   public getLineStackingOrderForStation(stationId: StationId): LineId[] {
-    return this.state.lineStackingOrder.filter(lineId => {
-      const line = this.state.lines.get(lineId);
-      return line?.paths.some(p => p.kind === 'station-stop' && p.stationId === stationId);
-    });
+    const lineIds = new Set(getStationStopsAcrossLines(stationId, this.state).map(e => e.line.id));
+    return this.state.lineStackingOrder.filter(id => lineIds.has(id));
   }
 
   // ─── Persistence ───

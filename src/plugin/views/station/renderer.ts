@@ -5,7 +5,7 @@ import { LineId, StationId } from "@/common/types";
 import { computeStationPosition, computeStationTangentAngle } from "./position";
 import { getLinesForStation } from "./layout";
 import { getLinesForSection, findRoadForSection } from "../../utils/section";
-import { LINE_SPACING } from "../../utils/bezier";
+import { LINE_SPACING } from "../../utils/constants";
 import { RenderResult } from "../../figml-parser/result";
 
 function applyTransform(transform: Transform, point: Vector): Vector {

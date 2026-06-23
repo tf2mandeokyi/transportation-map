@@ -5,7 +5,8 @@ import { hexToRgb } from "@/common/utils/color";
 import { SegmentResult } from "./segment-path";
 import { isInvalidJump, buildSegmentPath } from "./path-builder";
 import { createDashedLine, bezierPathToSegments } from "./segment-nodes";
-import { LINE_SPACING, evalQuadraticBezierTangent } from "../../utils/bezier";
+import { evalQuadraticBezierTangent } from "../../utils/bezier";
+import { LINE_SPACING } from "../../utils/constants";
 import { computeRoadBezier, findRoadForSection, getLineDirectionAtStop, getLineDepartureAtStop } from "../../utils/section";
 
 type StopInfo = { pathIdx: number; station: Station };

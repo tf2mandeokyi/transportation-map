@@ -4,7 +4,7 @@ import { Model } from "../../models";
 import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_ROAD_ID } from "../../views/road";
 import { renderEditHandle } from "../../figmls";
 import { elevateToCubic, bezierPathData, offsetBezier } from "../../utils/bezier";
-import { computeSectionOffset } from "../../utils/section";
+import { computeSectionOffset } from "../../utils/line-queries";
 
 const ROAD_CONTROL_NODE_NAME = '_road-bezier-control';
 export const FIGMA_KEY_BEZIER_HANDLE   = 'mapBezierHandle';   // value: 'mid'

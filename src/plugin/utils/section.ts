@@ -1,6 +1,6 @@
 import { Line, MapState, Road, RoadSection, Station } from "../models/structures";
 import { RoadSectionId, StationId } from "@/common/types";
-import { LINE_SPACING, ROAD_MARGIN, ROAD_MIN_WIDTH, SECTION_GAP, QuadBezierPoints } from "./bezier";
+import { QuadBezierPoints } from "./bezier";
 
 // A single directed pass of a line through a section. For lines that U-turn on a
 // section the same line appears multiple times, once per pass.
@@ -105,21 +105,36 @@ export function getLineDepartureAtStop(
 
 // Counts the number of directed runs a line makes on a section. Each direction
 // reversal (U-turn) starts a new run; each run occupies a distinct lateral lane.
+// Also counts runs that enter the section via RSE but have no station-stops on it
+// (pure through-passes between two junctions).
 function countPassesOnSection(line: Line, section: RoadSection, state: Readonly<MapState>): number {
   const sectionStationSet = new Set(section.stationIds);
   let passes = 0;
   let onSection = false;
+  let enteredViaRse = false; // entered via RSE but no station on this section yet
   let prevStation: Station | null = null;
   let prevForward: boolean | null = null;
 
   for (const p of line.paths) {
     if (p.kind === 'road-section-change') {
+      if (enteredViaRse) {
+        // Entered section via RSE and exited again without hitting any station on it.
+        passes++;
+        enteredViaRse = false;
+      }
       onSection = false;
       prevStation = null;
       prevForward = null;
+      if (p.entering === section.id) enteredViaRse = true;
       continue;
     }
     if (!sectionStationSet.has(p.stationId)) {
+      if (enteredViaRse) {
+        // Station on a different section appears before we found any station here —
+        // data inconsistency, but count the RSE-entered pass conservatively.
+        passes++;
+        enteredViaRse = false;
+      }
       onSection = false;
       prevStation = null;
       prevForward = null;
@@ -127,6 +142,8 @@ function countPassesOnSection(line: Line, section: RoadSection, state: Readonly<
     }
     const st = state.stations.get(p.stationId);
     if (!st) continue;
+
+    enteredViaRse = false; // first station on section consumes the RSE-entry flag
 
     if (!onSection) {
       passes++;
@@ -140,6 +157,9 @@ function countPassesOnSection(line: Line, section: RoadSection, state: Readonly<
       prevStation = st;
     }
   }
+
+  if (enteredViaRse) passes++; // path ended while still in RSE-entered pass
+
   return passes;
 }
 
@@ -190,31 +210,3 @@ export function getLinesForSection(
   return allPasses;
 }
 
-export function sectionBandWidth(numLines: number): number {
-  return numLines <= 0 ? ROAD_MIN_WIDTH : numLines * LINE_SPACING + 2 * ROAD_MARGIN;
-}
-
-export function lineOffsetInSection(lineIndex: number, numLines: number): number {
-  return (lineIndex - (numLines - 1) / 2) * LINE_SPACING;
-}
-
-// Lateral offset of a section's centerline from the road centerline, computed
-// from cumulative section widths so sections never visually overlap regardless
-// of how many lines each section carries.
-export function computeSectionOffset(
-  section: RoadSection,
-  road: Road,
-  state: Readonly<MapState>,
-): number {
-  const sections = Array.from(road.sections.values()).sort((a, b) => a.index - b.index);
-  const widths = sections.map(s => sectionBandWidth(getLinesForSection(s, state).length));
-  const gapTotal = Math.max(0, sections.length - 1) * SECTION_GAP;
-  const totalWidth = widths.reduce((a, b) => a + b, 0) + gapTotal;
-  let cumulative = -totalWidth / 2;
-  for (let i = 0; i < sections.length; i++) {
-    const center = cumulative + widths[i] / 2;
-    if (sections[i].id === section.id) return center;
-    cumulative += widths[i] + SECTION_GAP;
-  }
-  return 0;
-}

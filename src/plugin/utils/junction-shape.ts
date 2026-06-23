@@ -1,7 +1,8 @@
 import { Node, MapState } from '../models/structures';
 import { RoadId } from '@/common/types';
-import { ROAD_MIN_WIDTH } from './bezier';
-import { computeSectionOffset, getLinesForSection, sectionBandWidth } from './section';
+import { ROAD_MIN_WIDTH } from './constants';
+import { getLinesForSection } from './section';
+import { sectionBandWidth, computeSectionOffset } from './line-queries';
 import { PathBuilder } from './path';
 import { appendGapCurve } from './curves';
 

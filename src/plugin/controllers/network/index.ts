@@ -12,6 +12,7 @@ import { RoadControlManager, FIGMA_KEY_BEZIER_HANDLE, FIGMA_KEY_ENDPOINT_HANDLE 
 import { RoadCreationStateMachine } from "./road-creation";
 import { AddingRsePluginSession } from "../../sessions/adding-rse";
 import { AddingRoadPluginSession } from "../../sessions/adding-road";
+import { getRscEntriesForNode } from "../../utils/line-queries";
 
 
 export class NetworkController extends BaseController {
@@ -315,14 +316,10 @@ export class NetworkController extends BaseController {
 
   public emitNodeLinesData(nodeId: NodeId): void {
     const state = this.model.getState();
-    const lines: LineAtNodeData[] = [];
-    for (const line of state.lines.values()) {
-      for (const p of line.paths) {
-        if (p.kind === 'road-section-change' && p.nodeId === nodeId) {
-          lines.push({ lineId: line.id, lineName: line.name, lineColor: line.color, pathIndex: p.index, exitingSectionId: p.exiting, enteringSectionId: p.entering, exitRank: p.exitRank, enterRank: p.enterRank });
-        }
-      }
-    }
+    const lines: LineAtNodeData[] = getRscEntriesForNode(nodeId, state).map(({ line, path: p }) => ({
+      lineId: line.id, lineName: line.name, lineColor: line.color, pathIndex: p.index,
+      exitingSectionId: p.exiting, enteringSectionId: p.entering, exitRank: p.exitRank, enterRank: p.enterRank,
+    }));
     postMessageToUI({ type: 'node-lines-data', nodeId, lines });
   }
 

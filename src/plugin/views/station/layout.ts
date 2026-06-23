@@ -1,6 +1,7 @@
 import { Line, MapState, Station } from "../../models/structures";
 import { LineId } from "@/common/types";
 import { getLineDepartureAtStop, getLineDirectionAtStop } from "../../utils/section";
+import { getStationStopsAcrossLines } from "../../utils/line-queries";
 
 type CollectedEntry = {
   lineId: LineId;
@@ -25,23 +26,18 @@ export function getLinesForStation(
 ): LineAtStation[] {
   const entries: CollectedEntry[] = [];
 
-  for (const line of state.lines.values()) {
+  for (const { line, path } of getStationStopsAcrossLines(station.id, state)) {
     const stackingOrder = state.lineStackingOrder.indexOf(line.id);
-    for (let i = 0; i < line.paths.length; i++) {
-      const path = line.paths[i];
-      if (path.kind === 'station-stop' && path.stationId === station.id) {
-        const arrivalDir = getLineDirectionAtStop(line, i, state);
-        const facing: 'left' | 'right' = arrivalDir === 'forward' ? 'right' : 'left';
-        entries.push({ lineId: line.id, segmentIndex: i, rank: path.rank, facing, passThrough: !path.stops, departureRole: false, stackingOrder });
-        // U-turn: also add an entry for the departure direction when it differs from arrival.
-        const departureDir = getLineDepartureAtStop(line, i, state);
-        if (departureDir !== null && departureDir !== arrivalDir) {
-          const departureFacing: 'left' | 'right' = departureDir === 'forward' ? 'right' : 'left';
-          // The departure side of a U-turn is always shown as a pass-through indicator,
-          // even when the station itself is an explicit stop.
-          entries.push({ lineId: line.id, segmentIndex: i, rank: path.rank, facing: departureFacing, passThrough: true, departureRole: true, stackingOrder });
-        }
-      }
+    const arrivalDir = getLineDirectionAtStop(line, path.index, state);
+    const facing: 'left' | 'right' = arrivalDir === 'forward' ? 'right' : 'left';
+    entries.push({ lineId: line.id, segmentIndex: path.index, rank: path.rank, facing, passThrough: !path.stops, departureRole: false, stackingOrder });
+    // U-turn: also add an entry for the departure direction when it differs from arrival.
+    const departureDir = getLineDepartureAtStop(line, path.index, state);
+    if (departureDir !== null && departureDir !== arrivalDir) {
+      const departureFacing: 'left' | 'right' = departureDir === 'forward' ? 'right' : 'left';
+      // The departure side of a U-turn is always shown as a pass-through indicator,
+      // even when the station itself is an explicit stop.
+      entries.push({ lineId: line.id, segmentIndex: path.index, rank: path.rank, facing: departureFacing, passThrough: true, departureRole: true, stackingOrder });
     }
   }
 

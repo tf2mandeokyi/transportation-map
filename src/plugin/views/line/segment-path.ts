@@ -13,12 +13,11 @@ import { appendGapCurve } from "../../utils/curves";
 import { PathBuilder } from "../../utils/path";
 import {
   computeRoadBezier,
-  computeSectionOffset,
   getLinesForSection,
   getLineDirectionAtStop,
   getLineDepartureAtStop,
-  lineOffsetInSection,
 } from "../../utils/section";
+import { computeSectionOffset, lineOffsetInSection } from "../../utils/line-queries";
 
 export type SegmentResult =
   | { kind: 'normal'; outline: VectorNode; main: VectorNode }

@@ -1,5 +1,6 @@
 import { MapState, Station } from "../../models/structures";
-import { computeRoadBezier, computeSectionOffset, findRoadForSection } from "../../utils/section";
+import { computeRoadBezier, findRoadForSection } from "../../utils/section";
+import { computeSectionOffset } from "../../utils/line-queries";
 import { evalQuadraticBezier, evalQuadraticBezierTangent } from "../../utils/bezier";
 
 export function computeStationPosition(station: Station, state: Readonly<MapState>): Vector {
