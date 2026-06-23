@@ -27,7 +27,7 @@ export function getLinesForStation(
   for (const { line, path } of getStationStopsAcrossLines(station.id, state)) {
     const stackingOrder = state.lineStackingOrder.indexOf(line.id);
     const arrivalDir = getLineDirectionAtStop(line, path.index, state);
-    const facing: 'left' | 'right' = arrivalDir === 'forward' ? 'right' : 'left';
+    const facing: 'left' | 'right' = arrivalDir === 'ascending' ? 'right' : 'left';
     entries.push({ lineId: line.id, segmentIndex: path.index, rank: path.rank, facing, passThrough: !path.stops, stackingOrder });
   }
 

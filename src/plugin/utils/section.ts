@@ -15,60 +15,14 @@ export function findRoadForSection(sectionId: RoadSectionId, state: Readonly<Map
   return null;
 }
 
-export function computeRoadBezier(road: Road, state: Readonly<MapState>): QuadBezierPoints | null {
-  const startNode = state.nodes.get(road.startNodeId);
-  const endNode = state.nodes.get(road.endNodeId);
-  if (!startNode || !endNode) return null;
-  return {
-    p0: road.endpoints[0].endpointPos,
-    p1: road.bezierMidPoint,
-    p2: road.endpoints[1].endpointPos,
-  };
+export function computeRoadBezier(road: Road, _state: Readonly<MapState>): QuadBezierPoints | null {
+  return road.computeBezier();
 }
 
-// Determines traversal direction for a line at a specific station stop (by path
-// index). Checks the preceding entry first; when unavailable (first stop or
-// circular wrap) falls back to the following entry.
-//   - station-stop: compare interpT (smaller → larger = forward)
-//   - road-section-change (preceding): check which end of the entering road the node is on
-//   - road-section-change (following): check which end of the current road we exit from
 export function getLineDirectionAtStop(
-  line: Line, segmentIndex: number, state: Readonly<MapState>
-): 'forward' | 'reverse' {
-  const currentPath = line.paths[segmentIndex];
-  if (currentPath?.kind !== 'station-stop') return 'forward';
-  const current = state.stations.get(currentPath.stationId);
-  if (!current) return 'forward';
-
-  const prev = segmentIndex > 0
-    ? line.paths[segmentIndex - 1]
-    : (line.isCircular ? line.paths[line.paths.length - 1] : undefined);
-
-  if (prev?.kind === 'station-stop') {
-    const prevStation = state.stations.get(prev.stationId);
-    if (prevStation) return prevStation.interpT < current.interpT ? 'forward' : 'reverse';
-  }
-
-  if (prev?.kind === 'road-section-change') {
-    if (!prev.entering) return 'forward';
-    const road = findRoadForSection(prev.entering, state);
-    if (road) return prev.nodeId === road.startNodeId ? 'forward' : 'reverse';
-  }
-
-  // No usable preceding entry — infer from the following entry instead.
-  const next = line.paths[segmentIndex + 1];
-  if (next?.kind === 'station-stop') {
-    const nextStation = state.stations.get(next.stationId);
-    if (nextStation) return current.interpT < nextStation.interpT ? 'forward' : 'reverse';
-  }
-  if (next?.kind === 'road-section-change') {
-    if (!current.roadSectionId) return 'forward';
-    const road = findRoadForSection(current.roadSectionId, state);
-    if (!road) return 'forward';
-    return next.nodeId === road.endNodeId ? 'forward' : 'reverse';
-  }
-
-  return 'forward';
+  line: Line, segmentIndex: number, _state: Readonly<MapState>
+): 'ascending' | 'descending' {
+  return line.getDirectionAtStop(segmentIndex);
 }
 
 // referenceStationId: when supplied, uses that station's stop ranks to order lines

@@ -1,4 +1,4 @@
-import { Connection, Line, MapState, Node, Road, RoadSection, RoadSectionChange, Station } from "./structures";
+import { Connection, IModel, Line, LineProps, MapState, Node, NodeProps, Road, RoadProps, RoadSection, RoadSectionChange, RoadSectionProps, Station, StationProps } from "./structures";
 import { deserializeMapState, serializeMapState } from "./serde";
 import { LineId, NodeId, RoadId, RoadSectionId, StationId } from "@/common/types";
 import { LinePathInput } from "@/common/messages";
@@ -23,16 +23,16 @@ function generateUniqueId<T extends string>(map: Map<T, unknown>): T {
   }
 }
 
-export class Model {
+export class Model implements IModel {
   private readonly state: MapState;
 
-  constructor(initialState?: Partial<MapState>) {
+  constructor() {
     this.state = {
-      nodes: initialState?.nodes ?? new Map(),
-      roads: initialState?.roads ?? new Map(),
-      stations: initialState?.stations ?? new Map(),
-      lines: initialState?.lines ?? new Map(),
-      lineStackingOrder: initialState?.lineStackingOrder ?? [],
+      nodes: new Map(),
+      roads: new Map(),
+      stations: new Map(),
+      lines: new Map(),
+      lineStackingOrder: [],
     };
   }
 
@@ -42,9 +42,10 @@ export class Model {
 
   // ─── Node ───
 
-  public addNode(node: Omit<Node, 'id'>): NodeId {
+  public addNode(node: NodeProps): NodeId {
     const id = generateUniqueId(this.state.nodes);
-    this.state.nodes.set(id, { ...node, id });
+    const obj = new Node(this, id, node);
+    this.state.nodes.set(id, obj);
     return id;
   }
 
@@ -84,9 +85,10 @@ export class Model {
 
   // ─── Road ───
 
-  public addRoad(road: Omit<Road, 'id'>): RoadId {
+  public addRoad(road: RoadProps): RoadId {
     const id = generateUniqueId(this.state.roads);
-    this.state.roads.set(id, { ...road, id });
+    const obj = new Road(this, id, road);
+    this.state.roads.set(id, obj);
 
     const startNode = this.state.nodes.get(road.startNodeId);
     if (startNode) startNode.roadConnections.push({ roadId: id, endpointIndex: 0 });
@@ -128,7 +130,7 @@ export class Model {
 
   // ─── RoadSection ───
 
-  public addRoadSection(roadId: RoadId, section: Omit<RoadSection, 'id'>): RoadSectionId {
+  public addRoadSection(roadId: RoadId, section: RoadSectionProps): RoadSectionId {
     const road = this.state.roads.get(roadId);
     if (!road) throw new Error(`Road ${roadId} not found`);
 
@@ -139,7 +141,8 @@ export class Model {
     }
     const id = generateUniqueId(allSectionIds);
 
-    road.sections.set(id, { ...section, id });
+    const obj = new RoadSection(this, id, section);
+    road.sections.set(id, obj);
     return id;
   }
 
@@ -173,9 +176,10 @@ export class Model {
 
   // ─── Station ───
 
-  public addStation(station: Omit<Station, 'id' | 'figmaNodeId'>): StationId {
+  public addStation(station: Omit<StationProps, 'figmaNodeId'>): StationId {
     const id = generateUniqueId(this.state.stations);
-    this.state.stations.set(id, { ...station, figmaNodeId: null, id });
+    const obj = new Station(this, id, { ...station, figmaNodeId: null });
+    this.state.stations.set(id, obj);
 
     if (station.roadSectionId) {
       const section = this._findSection(station.roadSectionId);
@@ -228,9 +232,10 @@ export class Model {
 
   // ─── Line ───
 
-  public addLine(line: Omit<Line, 'id' | 'figmaGroupId'>): LineId {
+  public addLine(line: Omit<LineProps, 'figmaGroupId'>): LineId {
     const id = generateUniqueId(this.state.lines);
-    this.state.lines.set(id, { ...line, id, figmaGroupId: null });
+    const obj = new Line(this, id, { ...line, figmaGroupId: null });
+    this.state.lines.set(id, obj);
     if (!this.state.lineStackingOrder.includes(id)) {
       this.state.lineStackingOrder.push(id);
     }
@@ -421,10 +426,11 @@ export class Model {
     const data = figma.root.getPluginData('mapState');
     if (!data) return null;
 
-    const state = deserializeMapState(data);
+    const model = new Model();
+    const state = deserializeMapState(data, model);
     if (!state) return null;
 
-    const model = new Model(state);
+    Object.assign(model.state, state);
     model.validateAllLinePaths();
     return model;
   }

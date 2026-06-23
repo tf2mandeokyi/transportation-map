@@ -79,7 +79,7 @@ export class ConnectionController extends BaseController {
       const lines = [];
       for (const { line, path } of getStationStopsAcrossLines(station.id, state)) {
         const arrDir = getLineDirectionAtStop(line, path.index, state);
-        const facing: 'left' | 'right' = arrDir === 'forward' ? 'right' : 'left';
+        const facing: 'left' | 'right' = arrDir === 'ascending' ? 'right' : 'left';
         lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing, stops: path.stops });
       }
       postMessageToUI({

@@ -174,7 +174,7 @@ export class StationController extends BaseController {
     const lines: Array<LineAtStationData> = [];
     for (const { line, path } of getStationStopsAcrossLines(stationId, state)) {
       const arrDir = getLineDirectionAtStop(line, path.index, state);
-      const facing: 'left' | 'right' = arrDir === 'forward' ? 'right' : 'left';
+      const facing: 'left' | 'right' = arrDir === 'ascending' ? 'right' : 'left';
       lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing, stops: path.stops });
     }
 
