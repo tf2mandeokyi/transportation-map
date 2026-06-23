@@ -20,6 +20,7 @@ const StationLineList: React.FC<Props> = ({ stationId, lines }) => (
         getLineName={l => l.name}
         getColorOpacity={l => l.stops ? 1 : 0.5}
         getDimName={l => !l.stops}
+        showRank
         right={l => (
           <>
             <span style={{ color: '#999', fontSize: '12px' }}>

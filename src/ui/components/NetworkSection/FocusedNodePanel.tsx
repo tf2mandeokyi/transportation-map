@@ -88,6 +88,7 @@ const NodeArmList: React.FC<NodeArmListProps> = ({ label, nodeId, items }) => (
         getKey={item => `${item.line.lineId}-${item.line.pathIndex}-${item.role}`}
         getLineColor={item => item.line.lineColor}
         getLineName={item => item.line.lineName}
+        showRank
         right={item => (
           <span style={{ color: '#aaa', fontSize: '11px' }}>
             {item.role === 'exit' ? 'exit' : 'enter'}
