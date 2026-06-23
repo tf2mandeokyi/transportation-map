@@ -1,13 +1,11 @@
-import { Line, MapState, Road, RoadSection, Station } from "../models/structures";
+import { Line, MapState, Road, RoadSection } from "../models/structures";
 import { RoadSectionId, StationId } from "@/common/types";
 import { QuadBezierPoints } from "./bezier";
 
-// A single directed pass of a line through a section. For lines that U-turn on a
-// section the same line appears multiple times, once per pass.
+// A single directed pass of a line through a section.
 export type LinePass = {
   line: Line;
   segmentIndex: number;    // path index of the station-stop entry at the reference station
-  departureRole: boolean;  // true when this slot is for the U-turn departure direction
 };
 
 export function findRoadForSection(sectionId: RoadSectionId, state: Readonly<MapState>): Road | null {
@@ -76,35 +74,7 @@ export function getLineDirectionAtStop(
 // referenceStationId: when supplied, uses that station's stop ranks to order lines
 // on the road (caller passes the segment's departure station). Falls back to the
 // section's first station (lowest interpT) when omitted.
-// Returns the direction the line heads OUT of a station stop — based on the
-// following path entry. Returns null when there is no following entry.
-export function getLineDepartureAtStop(
-  line: Line, segmentIndex: number, state: Readonly<MapState>
-): 'forward' | 'reverse' | null {
-  const currentPath = line.paths[segmentIndex];
-  if (currentPath?.kind !== 'station-stop') return null;
-  const current = state.stations.get(currentPath.stationId);
-  if (!current) return null;
-
-  const next = line.paths[segmentIndex + 1];
-  if (!next) return null;
-
-  if (next.kind === 'station-stop') {
-    const nextStation = state.stations.get(next.stationId);
-    if (nextStation) return current.interpT < nextStation.interpT ? 'forward' : 'reverse';
-  }
-  if (next.kind === 'road-section-change') {
-    if (!current.roadSectionId) return null;
-    const road = findRoadForSection(current.roadSectionId, state);
-    if (!road) return null;
-    return next.nodeId === road.endNodeId ? 'forward' : 'reverse';
-  }
-
-  return null;
-}
-
-// Counts the number of directed runs a line makes on a section. Each direction
-// reversal (U-turn) starts a new run; each run occupies a distinct lateral lane.
+// Counts the number of directed runs a line makes on a section.
 // Also counts runs that enter the section via RSE but have no station-stops on it
 // (pure through-passes between two junctions).
 function countPassesOnSection(line: Line, section: RoadSection, state: Readonly<MapState>): number {
@@ -112,53 +82,35 @@ function countPassesOnSection(line: Line, section: RoadSection, state: Readonly<
   let passes = 0;
   let onSection = false;
   let enteredViaRse = false; // entered via RSE but no station on this section yet
-  let prevStation: Station | null = null;
-  let prevForward: boolean | null = null;
 
   for (const p of line.paths) {
     if (p.kind === 'road-section-change') {
       if (enteredViaRse) {
-        // Entered section via RSE and exited again without hitting any station on it.
         passes++;
         enteredViaRse = false;
       }
       onSection = false;
-      prevStation = null;
-      prevForward = null;
       if (p.entering === section.id) enteredViaRse = true;
       continue;
     }
     if (!sectionStationSet.has(p.stationId)) {
       if (enteredViaRse) {
-        // Station on a different section appears before we found any station here —
-        // data inconsistency, but count the RSE-entered pass conservatively.
         passes++;
         enteredViaRse = false;
       }
       onSection = false;
-      prevStation = null;
-      prevForward = null;
       continue;
     }
-    const st = state.stations.get(p.stationId);
-    if (!st) continue;
+    if (!state.stations.get(p.stationId)) continue;
 
-    enteredViaRse = false; // first station on section consumes the RSE-entry flag
-
+    enteredViaRse = false;
     if (!onSection) {
       passes++;
       onSection = true;
-      prevStation = st;
-      prevForward = null;
-    } else if (prevStation) {
-      const forward = st.interpT > prevStation.interpT;
-      if (prevForward !== null && forward !== prevForward) passes++; // U-turn = new lane
-      prevForward = forward;
-      prevStation = st;
     }
   }
 
-  if (enteredViaRse) passes++; // path ended while still in RSE-entered pass
+  if (enteredViaRse) passes++;
 
   return passes;
 }
@@ -174,19 +126,11 @@ export function getLinesForSection(
   referenceStationId?: StationId,
 ): LinePass[] {
   if (referenceStationId) {
-    // One entry per occurrence of the reference station. A U-turn stop (where
-    // arrival and departure directions differ) gets two entries: one for the
-    // arrival slot and one for the departure slot.
     const passes: Array<LinePass & { rank: number }> = [];
     for (const line of state.lines.values()) {
       for (const p of line.paths) {
         if (p.kind === 'station-stop' && p.stationId === referenceStationId) {
-          passes.push({ line, segmentIndex: p.index, departureRole: false, rank: p.rank });
-          const arrDir = getLineDirectionAtStop(line, p.index, state);
-          const depDir = getLineDepartureAtStop(line, p.index, state);
-          if (depDir !== null && depDir !== arrDir) {
-            passes.push({ line, segmentIndex: p.index, departureRole: true, rank: p.rank });
-          }
+          passes.push({ line, segmentIndex: p.index, rank: p.rank });
         }
       }
     }
@@ -204,7 +148,7 @@ export function getLinesForSection(
   for (const line of state.lines.values()) {
     const count = countPassesOnSection(line, section, state);
     for (let i = 0; i < count; i++) {
-      allPasses.push({ line, segmentIndex: -1, departureRole: false });
+      allPasses.push({ line, segmentIndex: -1 });
     }
   }
   return allPasses;

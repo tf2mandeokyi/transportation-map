@@ -2,7 +2,7 @@ import { LineId, RoadId, RoadSectionId, StationId } from "@/common/types";
 import { LinePathInput } from "@/common/messages";
 import { AddingStationsPluginSession } from "../sessions/adding-stations";
 import { LinePath } from "../models/structures";
-import { findRoadForSection, getLineDirectionAtStop, getLineDepartureAtStop } from "../utils/section";
+import { findRoadForSection, getLineDirectionAtStop } from "../utils/section";
 import { getStationStopsAcrossLines } from "../utils/line-queries";
 import { postMessageToUI } from "../figma";
 import { BaseController } from "./base";
@@ -81,11 +81,6 @@ export class ConnectionController extends BaseController {
         const arrDir = getLineDirectionAtStop(line, path.index, state);
         const facing: 'left' | 'right' = arrDir === 'forward' ? 'right' : 'left';
         lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing, stops: path.stops });
-        const depDir = getLineDepartureAtStop(line, path.index, state);
-        if (depDir !== null && depDir !== arrDir) {
-          const depFacing: 'left' | 'right' = depDir === 'forward' ? 'right' : 'left';
-          lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing: depFacing, stops: false, departureRole: true });
-        }
       }
       postMessageToUI({
         type: 'station-clicked',

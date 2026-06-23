@@ -271,11 +271,8 @@ export class Model {
     if (path.kind === 'station-stop') {
       line.paths.push({ kind: 'station-stop', index, stationId: path.stationId, rank: this._nextRankForStation(path.stationId), stops: true });
     } else {
-      const isUturn = path.entering !== null && path.entering === path.exiting;
       const exitRank = this._nextRankForSection(path.nodeId, path.exiting);
-      // U-turn: both exit and enter are on the same section — take two consecutive
-      // slots from the same unified pool to guarantee they land on distinct lanes.
-      const enterRank = isUturn ? exitRank + 1 : this._nextRankForSection(path.nodeId, path.entering);
+      const enterRank = this._nextRankForSection(path.nodeId, path.entering);
       line.paths.push({ kind: 'road-section-change', index, nodeId: path.nodeId, exiting: path.exiting, entering: path.entering, exitRank, enterRank });
     }
     line.paths = validateLinePaths(line, this.state);

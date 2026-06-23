@@ -2,7 +2,7 @@ import { Line, MapState, Road, RoadSectionChange, Station } from "../../models/s
 import { RoadSectionId, StationId } from "@/common/types";
 import { CubicBezierPoints } from "../../utils/bezier";
 import { PathBuilder } from "../../utils/path";
-import { computeRoadBezier, findRoadForSection, getLineDirectionAtStop, getLineDepartureAtStop } from "../../utils/section";
+import { computeRoadBezier, findRoadForSection } from "../../utils/section";
 import { appendJunctionCurve, computeCrossingSeg, computeSectionSegs, computeTotalOffset } from "./segment-path";
 
 export function isInvalidJump(
@@ -142,11 +142,8 @@ export function buildSegmentPath(
     // Case 4: different sections on the same road — single crossing segment.
     const centerline = computeRoadBezier(startRoad, state);
     if (!centerline) return fallback;
-    const startArrDir = getLineDirectionAtStop(line, startPathIdx, state);
-    const startDepDir = getLineDepartureAtStop(line, startPathIdx, state);
-    const isStartUturnDep = startDepDir !== null && startDepDir !== startArrDir;
     const sign      = t1 > t2 ? -1 : 1;
-    const offsetDep = computeTotalOffset(line, startRoad, startSectionId, state, startStation.id, startPathIdx, isStartUturnDep);
+    const offsetDep = computeTotalOffset(line, startRoad, startSectionId, state, startStation.id, startPathIdx);
     const offsetArr = computeTotalOffset(line, startRoad, endSectionId,   state, endStation.id,   endPathIdx);
     const seg = computeCrossingSeg(centerline, t1, t2, sign * offsetDep, sign * offsetArr);
     return new PathBuilder().beziers([seg]).build();

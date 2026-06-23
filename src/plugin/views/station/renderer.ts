@@ -20,7 +20,7 @@ async function renderStationWithTemplate(
   station: Station,
   state: Readonly<MapState>,
   tangentAngle: number,
-): Promise<{ line: Line; segmentIndex: number; node: SceneNode; passThrough: boolean; departureRole: boolean }[]> {
+): Promise<{ line: Line; segmentIndex: number; node: SceneNode; passThrough: boolean }[]> {
   const flipLR = (f: 'left' | 'right'): 'left' | 'right' => f === 'left' ? 'right' : 'left';
 
   // Total directed runs on the section determines the lane band width.
@@ -35,11 +35,10 @@ async function renderStationWithTemplate(
   const effectiveNoRef = Math.max(noRefCount, lines.length);
 
   // Render each visiting line's indicator (in rank-sorted order, facing flipped for flipped stations).
-  const indicators = lines.map(({ line, segmentIndex, facing, passThrough, departureRole }) => ({
+  const indicators = lines.map(({ line, segmentIndex, facing, passThrough }) => ({
     line,
     segmentIndex,
     passThrough,
-    departureRole,
     result: renderStationLine({
       text: line.name,
       color: line.color,
@@ -88,8 +87,8 @@ async function renderStationWithTemplate(
   }).intoNode();
 
   parentFrame.appendChild(stationElement);
-  return indicators.map(({ line, segmentIndex, passThrough, departureRole, result }) => ({
-    line, segmentIndex, passThrough, departureRole, node: result.node,
+  return indicators.map(({ line, segmentIndex, passThrough, result }) => ({
+    line, segmentIndex, passThrough, node: result.node,
   }));
 }
 
@@ -143,26 +142,20 @@ export class StationRenderer {
 
   private storeLineConnectionPoints(
     station: Station,
-    lines: Array<{ line: Line; segmentIndex: number; node: SceneNode; passThrough: boolean; departureRole: boolean }>,
+    lines: Array<{ line: Line; segmentIndex: number; node: SceneNode; passThrough: boolean }>,
   ): void {
-    for (const { line, node, segmentIndex, departureRole } of lines) {
+    for (const { line, node, segmentIndex } of lines) {
       const transform = node.absoluteTransform;
       const width  = node.width;
       const height = node.height;
 
       const center = applyTransform(transform, { x: width / 2, y: height / 2 });
-      const key = departureRole
-        ? `${station.id}-${line.id}-${segmentIndex}:dep`
-        : `${station.id}-${line.id}-${segmentIndex}`;
-      this.lineConnectionPoints.set(key, center);
+      this.lineConnectionPoints.set(`${station.id}-${line.id}-${segmentIndex}`, center);
     }
   }
 
-  public getConnectionPoint(stationId: StationId, lineId: LineId, segmentIndex: number, isUturnDeparture?: boolean): Vector | undefined {
-    const key = isUturnDeparture
-      ? `${stationId}-${lineId}-${segmentIndex}:dep`
-      : `${stationId}-${lineId}-${segmentIndex}`;
-    return this.lineConnectionPoints.get(key);
+  public getConnectionPoint(stationId: StationId, lineId: LineId, segmentIndex: number): Vector | undefined {
+    return this.lineConnectionPoints.get(`${stationId}-${lineId}-${segmentIndex}`);
   }
 
   public clearConnectionPoints(): void {
