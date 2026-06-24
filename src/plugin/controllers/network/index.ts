@@ -50,14 +50,15 @@ export class NetworkController extends BaseController {
   }
 
   public async handlePatchNode(nodeId: NodeId, patch: NodePatch): Promise<void> {
+    const node = this.model.getState().nodes.get(nodeId);
     switch (patch.op) {
       case 'update-name':
-        this.model.updateNodeName(nodeId, patch.name);
+        node?.updateName(patch.name);
         await this.save();
         this.syncNetworkToUI();
         break;
       case 'update-rsc-ranks':
-        this.model.updateRscRanks(nodeId, patch.changes);
+        if (node) this.model.updateRscRanks(node, patch.changes);
         await this.render();
         await this.save();
         this.emitNodeLinesData(nodeId);
@@ -244,10 +245,10 @@ export class NetworkController extends BaseController {
     if (Math.abs(delta.x) < 0.5 && Math.abs(delta.y) < 0.5) return;
     const node = this.model.getState().nodes.get(nodeId);
     if (node && node.roadConnections.length > 0) {
-      this.model.moveNodeConnections(nodeId, delta);
+      this.model.moveNodeConnections(node, delta);
     } else {
       this.nodePositionCache.set(nodeId, newPos);
-      this.model.updateIsolatedNodePos(nodeId, newPos);
+      if (node) node.isolatedPos = newPos;
     }
     await this.roadControl.remove();
 

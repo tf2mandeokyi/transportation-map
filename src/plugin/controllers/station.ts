@@ -179,7 +179,9 @@ export class StationController extends BaseController {
     stationId: StationId,
     stops: Array<{ lineId: LineId; pathIndex: number; rank: number }>
   ): Promise<void> {
-    this.model.updateStationStopRanks(stationId, stops);
+    const station = this.model.getState().stations.get(stationId);
+    if (!station) return;
+    this.model.updateStationStopRanks(station, stops);
     await this.render();
     await this.save();
     await this.handleGetStationInfo(stationId);

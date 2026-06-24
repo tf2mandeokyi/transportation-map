@@ -29,6 +29,8 @@ export class Node implements Serializable<SerializedNode> {
     this.isolatedPos = props.isolatedPos;
   }
 
+  updateName(name: string | undefined): void { this.name = name; }
+
   serialize(): SerializedNode {
     return {
       i: this.id,

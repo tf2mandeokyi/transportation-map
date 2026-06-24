@@ -1,4 +1,4 @@
-import { Connection, IModel, Line, LineProps, MapState, Node, NodeProps, Road, RoadProps, RoadSection, RoadSectionChange, RoadSectionProps, Station, StationProps } from "./structures";
+import { IModel, Line, LineProps, MapState, Node, NodeProps, Road, RoadProps, RoadSection, RoadSectionChange, RoadSectionProps, Station, StationProps } from "./structures";
 import { deserializeMapState, serializeMapState } from "./serde";
 import { LineId, NodeId, RoadId, RoadSectionId, StationId } from "@/common/types";
 import { LinePathInput } from "@/common/messages";
@@ -49,16 +49,6 @@ export class Model implements IModel {
     return obj;
   }
 
-  public updateIsolatedNodePos(id: NodeId, pos: Vector): void {
-    const node = this.state.nodes.get(id);
-    if (node?.roadConnections.length === 0) node.isolatedPos = pos;
-  }
-
-  public updateNodeName(id: NodeId, name: string | undefined): void {
-    const node = this.state.nodes.get(id);
-    if (node) node.name = name;
-  }
-
   public removeNode(id: NodeId): void {
     const node = this.state.nodes.get(id);
     if (!node) return;
@@ -69,9 +59,7 @@ export class Model implements IModel {
     this.state.nodes.delete(id);
   }
 
-  public moveNodeConnections(id: NodeId, delta: { x: number; y: number }): void {
-    const node = this.state.nodes.get(id);
-    if (!node) return;
+  public moveNodeConnections(node: Node, delta: { x: number; y: number }): void {
     for (const { road, endpointIndex } of node.roadConnections) {
       const conn = road.endpoints[endpointIndex];
       road.endpoints[endpointIndex] = {
@@ -101,16 +89,6 @@ export class Model implements IModel {
     }
 
     return obj;
-  }
-
-  public updateRoadEndpoints(id: RoadId, endpoints: [Connection, Connection]): void {
-    const road = this.state.roads.get(id);
-    if (road) road.endpoints = endpoints;
-  }
-
-  public updateRoadBezierMidPoint(id: RoadId, midPoint: Vector): void {
-    const road = this.state.roads.get(id);
-    if (road) road.bezierMidPoint = midPoint;
   }
 
   public removeRoad(id: RoadId): void {
@@ -291,28 +269,28 @@ export class Model implements IModel {
   }
 
   public updateStationStopRanks(
-    stationId: StationId,
+    station: Station,
     stops: Array<{ lineId: LineId; pathIndex: number; rank: number }>
   ): void {
     for (const { lineId, pathIndex, rank } of stops) {
       const line = this.state.lines.get(lineId);
       if (!line) continue;
       const path = line.paths.find(p => p.index === pathIndex);
-      if (path?.kind === 'station-stop' && path.station.id === stationId) {
+      if (path?.kind === 'station-stop' && path.station === station) {
         path.rank = rank;
       }
     }
   }
 
   public updateRscRanks(
-    nodeId: NodeId,
+    node: Node,
     changes: Array<{ lineId: LineId; pathIndex: number; exitRank: number; enterRank: number }>
   ): void {
     for (const { lineId, pathIndex, exitRank, enterRank } of changes) {
       const line = this.state.lines.get(lineId);
       if (!line) continue;
       const path = line.paths.find(p => p.index === pathIndex);
-      if (path?.kind === 'road-section-change' && path.node.id === nodeId) {
+      if (path?.kind === 'road-section-change' && path.node === node) {
         path.exitRank = exitRank;
         path.enterRank = enterRank;
       }

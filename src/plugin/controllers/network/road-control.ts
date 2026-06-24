@@ -128,15 +128,9 @@ export class RoadControlManager {
     if (!road) return;
 
     if (side === 'start') {
-      this.model.updateRoadEndpoints(roadId, [
-        { ...road.endpoints[0], endpointPos: handlePos },
-        road.endpoints[1],
-      ]);
+      road.endpoints = [{ ...road.endpoints[0], endpointPos: handlePos }, road.endpoints[1]];
     } else {
-      this.model.updateRoadEndpoints(roadId, [
-        road.endpoints[0],
-        { ...road.endpoints[1], endpointPos: handlePos },
-      ]);
+      road.endpoints = [road.endpoints[0], { ...road.endpoints[1], endpointPos: handlePos }];
     }
 
     await this.updateRoadAndStems(roadId);
@@ -144,7 +138,9 @@ export class RoadControlManager {
 
   async onBezierHandleMoved(roadId: RoadId, handle: FrameNode): Promise<void> {
     const handlePos = { x: handle.x + HANDLE_RADIUS, y: handle.y + HANDLE_RADIUS };
-    this.model.updateRoadBezierMidPoint(roadId, handlePos);
+    const road = this.model.getState().roads.get(roadId);
+    if (!road) return;
+    road.bezierMidPoint = handlePos;
     await this.updateRoadAndStems(roadId);
   }
 
