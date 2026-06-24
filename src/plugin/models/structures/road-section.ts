@@ -30,10 +30,6 @@ export class RoadSection implements Serializable<SerializedRoadSection> {
     this.index = props.index;
   }
 
-  findRoad(): Road {
-    return this.road;
-  }
-
   serialize(): SerializedRoadSection {
     return { i: this.id, n: this.name, x: this.index, s: this.stations.map(s => s.id) };
   }

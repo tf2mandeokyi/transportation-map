@@ -79,29 +79,29 @@ async function createDemoMap(controller: Controller, model: Model) {
   });
 
   // Create road sections (parallel tracks)
-  const sec1 = model.addRoadSection(road1.id, { name: 'Track A', index: 0 });
-  const sec2 = model.addRoadSection(road2.id, { name: 'Track A', index: 0 });
-  const sec3 = model.addRoadSection(road3.id, { name: 'Track A', index: 0 });
+  const sec1 = model.addRoadSection(road1, { name: 'Track A', index: 0 });
+  const sec2 = model.addRoadSection(road2, { name: 'Track A', index: 0 });
+  const sec3 = model.addRoadSection(road3, { name: 'Track A', index: 0 });
 
   // Create stations on sections
-  const sWest   = model.addStation({ name: 'West Station',    textAlign: 'right',  textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.2,  roadSectionId: sec1.id });
-  const sCentral = model.addStation({ name: 'Central Station', textAlign: 'bottom', textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.5,  roadSectionId: sec1.id });
-  const sEast    = model.addStation({ name: 'East Station',   textAlign: 'right',  textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.8,  roadSectionId: sec2.id });
-  const sNorth   = model.addStation({ name: 'North Station',  textAlign: 'right',  textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.7,  roadSectionId: sec3.id });
-  const sMid     = model.addStation({ name: 'Midpoint',       textAlign: 'right',  textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.5,  roadSectionId: sec2.id });
+  const sWest   = model.addStation({ name: 'West Station',    textAlign: 'right',  textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.2,  roadSection: sec1 });
+  const sCentral = model.addStation({ name: 'Central Station', textAlign: 'bottom', textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.5,  roadSection: sec1 });
+  const sEast    = model.addStation({ name: 'East Station',   textAlign: 'right',  textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.8,  roadSection: sec2 });
+  const sNorth   = model.addStation({ name: 'North Station',  textAlign: 'right',  textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.7,  roadSection: sec3 });
+  const sMid     = model.addStation({ name: 'Midpoint',       textAlign: 'right',  textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.5,  roadSection: sec2 });
 
   // Create lines
   const redLine = model.addLine({ name: 'Red Line', color: '#ff0000', isCircular: false, paths: [] });
   const blueLine = model.addLine({ name: 'Blue Line', color: '#0000ff', isCircular: false, paths: [] });
 
   // Red line: West → Central → North
-  controller.connectStationsWithLine(redLine.id, sWest.id, sCentral.id);
-  controller.connectStationsWithLine(redLine.id, sCentral.id, sNorth.id);
+  controller.connectStationsWithLine(redLine.id, sWest, sCentral);
+  controller.connectStationsWithLine(redLine.id, sCentral, sNorth);
 
   // Blue line: West → Central → Mid → East
-  controller.connectStationsWithLine(blueLine.id, sWest.id, sCentral.id);
-  controller.connectStationsWithLine(blueLine.id, sCentral.id, sMid.id);
-  controller.connectStationsWithLine(blueLine.id, sMid.id, sEast.id);
+  controller.connectStationsWithLine(blueLine.id, sWest, sCentral);
+  controller.connectStationsWithLine(blueLine.id, sCentral, sMid);
+  controller.connectStationsWithLine(blueLine.id, sMid, sEast);
 }
 
 main();

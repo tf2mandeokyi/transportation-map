@@ -24,7 +24,7 @@ export interface StationCoreProps {
 }
 
 export interface StationProps extends StationCoreProps {
-  roadSectionId: RoadSectionId | null;
+  roadSection: RoadSection | null;
 }
 
 export class Station implements Serializable<SerializedStation> {
@@ -60,6 +60,18 @@ export class Station implements Serializable<SerializedStation> {
       }
     }
     return state.lineStackingOrder.filter(id => lineIds.has(id));
+  }
+
+  updateStopRanks(stops: Array<{ lineId: LineId; pathIndex: number; rank: number }>): void {
+    const lines = this.parent.getState().lines;
+    for (const { lineId, pathIndex, rank } of stops) {
+      const line = lines.get(lineId);
+      if (!line) continue;
+      const path = line.paths.find(p => p.index === pathIndex);
+      if (path?.kind === 'station-stop' && path.station === this) {
+        path.rank = rank;
+      }
+    }
   }
 
   fixRankConflicts(): void {

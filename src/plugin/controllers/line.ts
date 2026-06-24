@@ -55,20 +55,22 @@ export class LineController extends BaseController {
   private async handleUpdateLinePath(lineId: LineId, paths: LinePathInput[]): Promise<void> {
     const line = this.model.getState().lines.get(lineId);
     if (!line) { console.error("Line not found:", lineId); return; }
-    this.model.replaceLinePaths(lineId, paths);
+    line.replacePaths(paths);
     await this.save();
   }
 
   private async handleRemoveStationFromLine(lineId: LineId, pathIndex: number): Promise<void> {
     const line = this.model.getState().lines.get(lineId);
     if (!line) { console.warn(`Line ${lineId} not found`); return; }
-    this.model.removeLinePath(lineId, pathIndex);
+    line.removePath(pathIndex);
     await this.save();
     postMessageToUI({ type: 'station-removed-from-line' });
   }
 
   private async handleToggleStops(lineId: LineId, pathIndex: number, stops: boolean): Promise<void> {
-    this.model.setStationStopFlag(lineId, pathIndex, stops);
+    const line = this.model.getState().lines.get(lineId);
+    if (!line) return;
+    line.setStopFlag(pathIndex, stops);
     await this.save();
     postMessageToUI({ type: 'station-removed-from-line' });
   }
@@ -87,7 +89,7 @@ export class LineController extends BaseController {
       ...line.paths.slice(0, normalized),
     ].map(p => this.pathToInput(p));
 
-    this.model.replaceLinePaths(lineId, rotated);
+    line.replacePaths(rotated);
     await this.save();
   }
 

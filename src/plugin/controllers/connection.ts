@@ -1,7 +1,7 @@
 import { LineId, RoadId, RoadSectionId, StationId } from "@/common/types";
 import { LinePathInput } from "@/common/messages";
 import { AddingStationsPluginSession } from "../sessions/adding-stations";
-import { LinePath } from "../models/structures";
+import { LinePath, Station } from "../models/structures";
 import { getStationStopsAcrossLines } from "../utils/line-queries";
 import { postMessageToUI } from "../figma";
 import { BaseController } from "./base";
@@ -37,32 +37,32 @@ export class ConnectionController extends BaseController {
     postMessageToUI({ type: 'line-path-data', lineId, paths: line.paths, stationNames, stationRoadIds, stationSectionIds });
   }
 
-  public insertStationIntoLine(lineId: LineId, newStationId: StationId, relativeToStationId: StationId, insertAfter: boolean): boolean {
+  public insertStationIntoLine(lineId: LineId, newStation: Station, relativeToStation: Station, insertAfter: boolean): boolean {
     const line = this.model.getState().lines.get(lineId);
     if (!line) return false;
 
-    const refIndex = line.paths.findIndex(p => p.kind === 'station-stop' && p.station.id === relativeToStationId);
+    const refIndex = line.paths.findIndex(p => p.kind === 'station-stop' && p.station === relativeToStation);
     if (refIndex === -1) return false;
 
     const insertAt = insertAfter ? refIndex + 1 : refIndex;
-    const newStop: { kind: 'station-stop'; stationId: StationId } = { kind: 'station-stop', stationId: newStationId };
+    const newStop: { kind: 'station-stop'; stationId: StationId } = { kind: 'station-stop', stationId: newStation.id };
 
     const before = line.paths.slice(0, insertAt).map(p => this.pathToInput(p));
     const after  = line.paths.slice(insertAt).map(p => this.pathToInput(p));
-    this.model.replaceLinePaths(lineId, [...before, newStop, ...after]);
+    line.replacePaths([...before, newStop, ...after]);
 
     return true;
   }
 
-  public connectStationsWithLine(lineId: LineId, startStationId: StationId, endStationId: StationId): void {
+  public connectStationsWithLine(lineId: LineId, startStation: Station, endStation: Station): void {
     const line = this.model.getState().lines.get(lineId);
     if (!line) return;
 
-    const hasStart = line.paths.some(p => p.kind === 'station-stop' && p.station.id === startStationId);
+    const hasStart = line.paths.some(p => p.kind === 'station-stop' && p.station === startStation);
     if (!hasStart) {
-      this.model.addLinePath(lineId, { kind: 'station-stop', stationId: startStationId });
+      line.addPath({ kind: 'station-stop', stationId: startStation.id });
     }
-    this.model.addLinePath(lineId, { kind: 'station-stop', stationId: endStationId });
+    line.addPath({ kind: 'station-stop', stationId: endStation.id });
   }
 
   public handleSelectionChange(): void {

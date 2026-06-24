@@ -23,7 +23,7 @@ export function computeSectionOffset(
   let cumulative = -totalWidth / 2;
   for (let i = 0; i < sections.length; i++) {
     const center = cumulative + widths[i] / 2;
-    if (sections[i].id === section.id) return center;
+    if (sections[i] === section) return center;
     cumulative += widths[i] + SECTION_GAP;
   }
   return 0;
@@ -72,7 +72,7 @@ function computePosition<T extends LinePath>(entry: PathEntry<T>, state: Readonl
     return applyLateralOffset(pos, evalQuadraticBezierTangent(bezier, station.interpT), totalOffset);
   }
 
-  const isStart = road.startNode.id === path.node.id;
+  const isStart = road.startNode === path.node;
   const ep = road.endpoints[isStart ? 0 : 1].endpointPos;
   if (totalOffset === 0) return ep;
   return applyLateralOffset(ep, evalQuadraticBezierTangent(bezier, isStart ? 0 : 1), totalOffset * (isStart ? 1 : -1));

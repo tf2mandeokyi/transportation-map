@@ -34,8 +34,8 @@ export function computeTotalOffset(
   } else {
     const passes = getLinesForSection(section, state, referenceStation);
     const passIndex = pathSegmentIndex !== undefined
-      ? passes.findIndex(lp => lp.line.id === line.id && lp.segmentIndex === pathSegmentIndex)
-      : passes.findIndex(lp => lp.line.id === line.id);
+      ? passes.findIndex(lp => lp.line === line && lp.segmentIndex === pathSegmentIndex)
+      : passes.findIndex(lp => lp.line === line);
     effectiveIdx = passIndex >= 0 ? passIndex : totalPasses.length;
   }
   const effectiveCount = Math.max(totalPasses.length, effectiveIdx + 1);

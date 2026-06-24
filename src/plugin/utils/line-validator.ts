@@ -6,8 +6,8 @@ function findRoadForStation(station: Station): Road | null {
 }
 
 function findSharedNode(roadA: Road, roadB: Road): Node | null {
-  if (roadA.endNode.id === roadB.startNode.id || roadA.endNode.id === roadB.endNode.id) return roadA.endNode;
-  if (roadA.startNode.id === roadB.startNode.id || roadA.startNode.id === roadB.endNode.id) return roadA.startNode;
+  if (roadA.endNode === roadB.startNode || roadA.endNode === roadB.endNode) return roadA.endNode;
+  if (roadA.startNode === roadB.startNode || roadA.startNode === roadB.endNode) return roadA.startNode;
   return null;
 }
 
@@ -27,7 +27,7 @@ function getRoadSpans(
   if (!depRoad || !arrRoad) return [];
 
   if (rsesBetween.length === 0) {
-    if (depRoad.id !== arrRoad.id) return [];
+    if (depRoad !== arrRoad) return [];
     return [{ road: depRoad, tEntry: depStation.interpT, tExit: arrStation.interpT, section: depStation.roadSection }];
   }
 
@@ -38,7 +38,7 @@ function getRoadSpans(
   spans.push({
     road: depRoad,
     tEntry: depStation.interpT,
-    tExit: firstRsc.node.id === depRoad.endNode.id ? 1 : 0,
+    tExit: firstRsc.node === depRoad.endNode ? 1 : 0,
     section: depStation.roadSection,
   });
 
@@ -50,8 +50,8 @@ function getRoadSpans(
     const road = rsc.entering.road;
     spans.push({
       road,
-      tEntry: rsc.node.id === road.startNode.id ? 0 : 1,
-      tExit:  nextRsc.node.id === road.endNode.id ? 1 : 0,
+      tEntry: rsc.node === road.startNode ? 0 : 1,
+      tExit:  nextRsc.node === road.endNode ? 1 : 0,
       section: rsc.entering,
     });
   }
@@ -62,7 +62,7 @@ function getRoadSpans(
   const lastRoad = lastRsc.entering.road;
   spans.push({
     road: lastRoad,
-    tEntry: lastRsc.node.id === lastRoad.startNode.id ? 0 : 1,
+    tEntry: lastRsc.node === lastRoad.startNode ? 0 : 1,
     tExit: arrStation.interpT,
     section: arrStation.roadSection,
   });
@@ -144,7 +144,7 @@ function tryAutoInsertRSC(
   const currStation = currStop.station;
   const prevRoad = findRoadForStation(prevStation);
   const currRoad = findRoadForStation(currStation);
-  if (!prevRoad || !currRoad || prevRoad.id === currRoad.id) return null;
+  if (!prevRoad || !currRoad || prevRoad === currRoad) return null;
   const node = findSharedNode(prevRoad, currRoad);
   if (!node) return null;
   return {

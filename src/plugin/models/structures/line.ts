@@ -1,8 +1,11 @@
 import { LineId, NodeId, RoadSectionId, StationId } from "@/common/types";
-import { IModel, LinePath, RoadSectionChange, Serializable, StationStop } from './types';
+import { LinePathInput } from "@/common/messages";
+import { IModel, LinePath, MapState, RoadSectionChange, Serializable, StationStop } from './types';
 import type { Node } from './node';
 import type { RoadSection } from './road-section';
 import type { Station } from './station';
+import { getStationStopsAcrossLines, getRscEntriesForNode } from '../../utils/line-queries';
+import { validateLinePaths } from '../../utils/line-validator';
 
 export interface SerializedLinePath {
   k: 'ss' | 'sc'; // kind
@@ -70,7 +73,7 @@ export class Line implements Serializable<SerializedLine> {
     if (prev?.kind === 'road-section-change') {
       if (!prev.entering) return 'ascending';
       const road = prev.entering.road;
-      return prev.node.id === road.startNode.id ? 'ascending' : 'descending';
+      return prev.node === road.startNode ? 'ascending' : 'descending';
     }
 
     const next = this.paths[segmentIndex + 1];
@@ -82,10 +85,109 @@ export class Line implements Serializable<SerializedLine> {
       const section = current.roadSection;
       if (!section) return 'ascending';
       const road = section.road;
-      return next.node.id === road.endNode.id ? 'ascending' : 'descending';
+      return next.node === road.endNode ? 'ascending' : 'descending';
     }
 
     return 'ascending';
+  }
+
+  addPath(path: LinePathInput): void {
+    const state = this.parent.getState();
+    const index = this.paths.length;
+    if (path.kind === 'station-stop') {
+      const station = state.stations.get(path.stationId);
+      if (!station) return;
+      this.paths.push({ kind: 'station-stop', index, station, rank: this._nextRankForStation(station, state), stops: true });
+    } else {
+      const node = state.nodes.get(path.nodeId);
+      if (!node) return;
+      const exiting = path.exiting ? this._findSection(path.exiting, state) : null;
+      const entering = path.entering ? this._findSection(path.entering, state) : null;
+      this.paths.push({ kind: 'road-section-change', index, node, exiting, entering,
+        exitRank: this._nextRankForSection(node, exiting, state),
+        enterRank: this._nextRankForSection(node, entering, state),
+      });
+    }
+    this.paths = validateLinePaths(this);
+  }
+
+  private _nextRankForStation(station: Station, state: Readonly<MapState>): number {
+    let max = -1;
+    for (const { path: p } of getStationStopsAcrossLines(station, state)) {
+      if (p.stops) max = Math.max(max, p.rank);
+    }
+    return max + 1;
+  }
+
+  private _nextRankForSection(node: Node, section: RoadSection | null, state: Readonly<MapState>): number {
+    if (!section) return 0;
+    let max = -1;
+    for (const { path: p } of getRscEntriesForNode(node, state)) {
+      if (p.exiting === section) max = Math.max(max, p.exitRank);
+      if (p.entering === section) max = Math.max(max, p.enterRank);
+    }
+    return max + 1;
+  }
+
+  private _findSection(sectionId: RoadSectionId, state: Readonly<MapState>): RoadSection | null {
+    for (const road of state.roads.values()) {
+      const section = road.sections.get(sectionId);
+      if (section) return section;
+    }
+    return null;
+  }
+
+  replacePaths(paths: LinePathInput[]): void {
+    const state = this.parent.getState();
+    const existingStationRanks = new Map<StationId, number>();
+    const existingRscRanks = new Map<string, { exitRank: number; enterRank: number }>();
+    for (const p of this.paths) {
+      if (p.kind === 'station-stop') existingStationRanks.set(p.station.id, p.rank);
+      if (p.kind === 'road-section-change') {
+        existingRscRanks.set(`${p.node.id}:${p.exiting?.id ?? null}:${p.entering?.id ?? null}`, { exitRank: p.exitRank, enterRank: p.enterRank });
+      }
+    }
+    const newPaths: typeof this.paths = [];
+    for (let i = 0; i < paths.length; i++) {
+      const p = paths[i];
+      if (p.kind === 'station-stop') {
+        const station = state.stations.get(p.stationId);
+        if (!station) continue;
+        newPaths.push({ kind: 'station-stop', index: i, station, rank: existingStationRanks.get(p.stationId) ?? 0, stops: true });
+      } else {
+        const node = state.nodes.get(p.nodeId);
+        if (!node) continue;
+        const exiting = p.exiting ? this._findSection(p.exiting, state) : null;
+        const entering = p.entering ? this._findSection(p.entering, state) : null;
+        const existing = existingRscRanks.get(`${p.nodeId}:${p.exiting ?? null}:${p.entering ?? null}`);
+        newPaths.push({ kind: 'road-section-change', index: i, node, exiting, entering, exitRank: existing?.exitRank ?? 0, enterRank: existing?.enterRank ?? 0 } as RoadSectionChange);
+      }
+    }
+    this.paths = newPaths;
+    this.paths = validateLinePaths(this);
+  }
+
+  removePath(pathIndex: number): void {
+    this.paths = this.paths.filter(p => p.index !== pathIndex);
+    this._reindexPaths();
+    this.paths = validateLinePaths(this);
+  }
+
+  setStopFlag(pathIndex: number, stops: boolean): void {
+    const path = this.paths.find(p => p.index === pathIndex);
+    if (!path || path.kind !== 'station-stop') return;
+    if (stops) {
+      path.stops = true;
+      this.paths = validateLinePaths(this);
+    } else {
+      this.paths = this.paths.filter(p => p.index !== pathIndex);
+      this._reindexPaths();
+      this.paths = validateLinePaths(this);
+    }
+  }
+
+  private _reindexPaths(): void {
+    this.paths.forEach((p, i) => { p.index = i; });
   }
 
   serialize(): SerializedLine {

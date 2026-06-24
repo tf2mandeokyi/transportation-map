@@ -2,6 +2,7 @@ import { NodeId, RoadId } from "@/common/types";
 import { LineAtNodeData, NetworkFocusedElement, NodeData, NodePatch, RoadData, RoadPatch, RoadSectionData, UIToPluginMessage } from "@/common/messages";
 import { PluginSessionManager } from "../../sessions/manager";
 import { postMessageToUI } from "../../figma";
+import { Node } from "../../models/structures";
 import { Model } from "../../models";
 import { View } from "../../views";
 import { BaseController } from "../base";
@@ -58,35 +59,41 @@ export class NetworkController extends BaseController {
         this.syncNetworkToUI();
         break;
       case 'update-rsc-ranks':
-        if (node) this.model.updateRscRanks(node, patch.changes);
+        if (node) node.updateRscRanks(patch.changes);
         await this.render();
         await this.save();
-        this.emitNodeLinesData(nodeId);
+        if (node) this.emitNodeLinesData(node);
         break;
     }
   }
 
   public async handleRemoveNode(nodeId: NodeId): Promise<void> {
     this.nodePositionCache.delete(nodeId);
-    this.model.removeNode(nodeId);
+    const node = this.model.getState().nodes.get(nodeId);
+    if (node) this.model.removeNode(node);
     await this.save();
     this.syncNetworkToUI();
   }
 
   public async handleRemoveRoad(roadId: RoadId): Promise<void> {
-    this.model.removeRoad(roadId);
+    const road = this.model.getState().roads.get(roadId);
+    if (!road) return;
+    this.model.removeRoad(road);
     await this.save();
     this.syncNetworkToUI();
   }
 
   public async handlePatchRoad(roadId: RoadId, patch: RoadPatch): Promise<void> {
+    const road = this.model.getState().roads.get(roadId);
     switch (patch.op) {
       case 'add-section':
-        this.model.addRoadSection(roadId, { ...patch.section });
+        if (road) this.model.addRoadSection(road, { ...patch.section });
         break;
-      case 'remove-section':
-        this.model.removeRoadSection(roadId, patch.sectionId);
+      case 'remove-section': {
+        const section = road?.sections.get(patch.sectionId);
+        if (section) this.model.removeRoadSection(section);
         break;
+      }
     }
     await this.save();
     this.syncNetworkToUI();
@@ -114,7 +121,7 @@ export class NetworkController extends BaseController {
       if (first) {
         const nodeId = first.getPluginData(FIGMA_KEY_NODE_ID) as NodeId;
         if (nodeId) {
-          await this.roadCreation.handleNodeClick(nodeId, this.model, (id) => this.getNodeCenter(id), async () => {
+          await this.roadCreation.handleNodeClick(nodeId, this.model, (node) => this.computeNodeCenter(node), async () => {
             this.isRendering = true;
             try { await this.render(); await this.save(); } finally { this.isRendering = false; }
             this.syncNetworkToUI();
@@ -147,7 +154,8 @@ export class NetworkController extends BaseController {
     if (nodeId) {
       await this.roadControl.remove();
       postMessageToUI({ type: 'network-element-focused', element: this.buildNodeElement(nodeId) });
-      this.emitNodeLinesData(nodeId);
+      const node = this.model.getState().nodes.get(nodeId);
+      if (node) this.emitNodeLinesData(node);
       return;
     }
 
@@ -225,7 +233,7 @@ export class NetworkController extends BaseController {
   private buildNetworkPayload(): { nodes: NodeData[]; roads: RoadData[] } {
     const state = this.model.getState();
     const nodes: NodeData[] = Array.from(state.nodes.values()).map(n => ({
-      id: n.id, name: n.name, pos: this.getNodeCenter(n.id),
+      id: n.id, name: n.name, pos: this.computeNodeCenter(n),
     }));
     const roads: RoadData[] = Array.from(state.roads.values()).map(r => ({
       id: r.id,
@@ -276,36 +284,36 @@ export class NetworkController extends BaseController {
     postMessageToUI({ type: 'network-selection-cleared' });
   }
 
+  private computeNodeCenter(node: Node): { x: number; y: number } {
+    let sumX = 0, sumY = 0, count = 0;
+    for (const { road, endpointIndex } of node.roadConnections) {
+      sumX += road.endpoints[endpointIndex].endpointPos.x;
+      sumY += road.endpoints[endpointIndex].endpointPos.y;
+      count++;
+    }
+    if (count > 0) return { x: sumX / count, y: sumY / count };
+    return node.isolatedPos ?? this.nodePositionCache.get(node.id) ?? { x: 0, y: 0 };
+  }
+
   private getNodeCenter(nodeId: NodeId): { x: number; y: number } {
     const node = this.model.getState().nodes.get(nodeId);
-    if (node) {
-      let sumX = 0, sumY = 0, count = 0;
-      for (const { road, endpointIndex } of node.roadConnections) {
-        sumX += road.endpoints[endpointIndex].endpointPos.x;
-        sumY += road.endpoints[endpointIndex].endpointPos.y;
-        count++;
-      }
-      if (count > 0) return { x: sumX / count, y: sumY / count };
-      if (node.isolatedPos) return node.isolatedPos;
-    }
+    if (node) return this.computeNodeCenter(node);
     return this.nodePositionCache.get(nodeId) ?? { x: 0, y: 0 };
   }
 
   private buildNodeElement(nodeId: NodeId): NetworkFocusedElement {
     const node = this.model.getState().nodes.get(nodeId);
-    return { kind: 'node', nodeId, name: node?.name, pos: this.getNodeCenter(nodeId) };
+    return { kind: 'node', nodeId, name: node?.name, pos: node ? this.computeNodeCenter(node) : (this.nodePositionCache.get(nodeId) ?? { x: 0, y: 0 }) };
   }
 
-  public emitNodeLinesData(nodeId: NodeId): void {
+  public emitNodeLinesData(node: Node): void {
     const state = this.model.getState();
-    const node = state.nodes.get(nodeId);
-    if (!node) return;
     const lines: LineAtNodeData[] = getRscEntriesForNode(node, state).map(({ line, path: p }) => ({
       lineId: line.id, lineName: line.name, lineColor: line.color, pathIndex: p.index,
       exitingSectionId: p.exiting?.id ?? null, enteringSectionId: p.entering?.id ?? null,
       exitRank: p.exitRank, enterRank: p.enterRank,
     }));
-    postMessageToUI({ type: 'node-lines-data', nodeId, lines });
+    postMessageToUI({ type: 'node-lines-data', nodeId: node.id, lines });
   }
 
   private buildRoadElement(roadId: RoadId): NetworkFocusedElement {

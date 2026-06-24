@@ -1,4 +1,4 @@
-import { NodeId, RoadId } from "@/common/types";
+import { LineId, NodeId, RoadId } from "@/common/types";
 import { IModel, Serializable } from './types';
 import type { Road } from './road';
 
@@ -30,6 +30,19 @@ export class Node implements Serializable<SerializedNode> {
   }
 
   updateName(name: string | undefined): void { this.name = name; }
+
+  updateRscRanks(changes: Array<{ lineId: LineId; pathIndex: number; exitRank: number; enterRank: number }>): void {
+    const lines = this.parent.getState().lines;
+    for (const { lineId, pathIndex, exitRank, enterRank } of changes) {
+      const line = lines.get(lineId);
+      if (!line) continue;
+      const path = line.paths.find(p => p.index === pathIndex);
+      if (path?.kind === 'road-section-change' && path.node === this) {
+        path.exitRank = exitRank;
+        path.enterRank = enterRank;
+      }
+    }
+  }
 
   serialize(): SerializedNode {
     return {

@@ -11,7 +11,7 @@ export function isInvalidJump(
   if (!startStation.roadSection || !endStation.roadSection) return false;
   const startRoad = startStation.roadSection.road;
   const endRoad   = endStation.roadSection.road;
-  if (startRoad.id === endRoad.id) return false;
+  if (startRoad === endRoad) return false;
   return rseBetween.length === 0;
 }
 
@@ -44,7 +44,7 @@ function buildTraversals(
     road: startRoad,
     section: startSection,
     entryT: startStation.interpT,
-    exitT: firstRsc.node.id === startRoad.endNode.id ? 1 : 0,
+    exitT: firstRsc.node === startRoad.endNode ? 1 : 0,
     depStation: startStation,
     arrStation: undefined,
     depPathSegIdx: startPathIdx,
@@ -61,8 +61,8 @@ function buildTraversals(
     traversals.push({
       road,
       section: rsc.entering,
-      entryT: rsc.node.id === road.startNode.id ? 0 : 1,
-      exitT:  nextRsc.node.id === road.endNode.id ? 1 : 0,
+      entryT: rsc.node === road.startNode ? 0 : 1,
+      exitT:  nextRsc.node === road.endNode ? 1 : 0,
       depStation: undefined,
       arrStation: undefined,
       depPathSegIdx: undefined,
@@ -78,7 +78,7 @@ function buildTraversals(
   traversals.push({
     road: lastRoad,
     section: endSection,
-    entryT: lastRsc.node.id === lastRoad.startNode.id ? 0 : 1,
+    entryT: lastRsc.node === lastRoad.startNode ? 0 : 1,
     exitT: endStation.interpT,
     depStation: undefined,
     arrStation: endStation,

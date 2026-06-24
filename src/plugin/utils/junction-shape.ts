@@ -1,5 +1,4 @@
-import { Node, MapState } from '../models/structures';
-import { RoadId } from '@/common/types';
+import { Node, Road, MapState } from '../models/structures';
 import { ROAD_MIN_WIDTH } from './constants';
 import { getLinesForSection } from './section';
 import { sectionBandWidth, computeSectionOffset } from './line-queries';
@@ -13,10 +12,7 @@ interface Arm {
   negEdge: Vector;   // endpoint displaced to the -n (CCW) side
 }
 
-function buildArm(roadId: RoadId, endpointIndex: 0 | 1, state: Readonly<MapState>): Arm | null {
-  const road = state.roads.get(roadId);
-  if (!road) return null;
-
+function buildArm(road: Road, endpointIndex: 0 | 1, state: Readonly<MapState>): Arm | null {
   const conn = road.endpoints[endpointIndex];
   const ep: Vector = conn.endpointPos;
 
@@ -64,7 +60,7 @@ export class JunctionShape {
     const arms: Arm[] = [];
 
     for (const { road, endpointIndex } of node.roadConnections) {
-      const arm = buildArm(road.id, endpointIndex, state);
+      const arm = buildArm(road, endpointIndex, state);
       if (arm) arms.push(arm);
     }
 

@@ -1,5 +1,4 @@
-import { MapState } from '../models/structures';
-import { RoadSectionId } from '@/common/types';
+import { MapState, RoadSection } from '../models/structures';
 import { QuadBezierPoints, evalQuadraticBezier, evalQuadraticBezierTangent } from './bezier';
 import { computeSectionOffset } from './line-queries';
 
@@ -41,7 +40,7 @@ function sectionPosAt(bezier: QuadBezierPoints, t: number, offset: number): Vect
 }
 
 export interface SnapResult {
-  roadSectionId: RoadSectionId;
+  section: RoadSection;
   interpT: number;
   pos: Vector;
 }
@@ -63,7 +62,7 @@ export function findNearestRoadSection(point: Vector, state: Readonly<MapState>)
       const d = distSq(pos, point);
       if (d < bestDist) {
         bestDist = d;
-        best = { roadSectionId: section.id, interpT: t, pos };
+        best = { section, interpT: t, pos };
       }
     }
   }

@@ -2,6 +2,7 @@ import { LineAtStationData, StationParams, StationPatch } from "@/common/message
 import { LineId, RoadSectionId, StationId } from "@/common/types";
 import { PlacingStationPluginSession } from "../sessions/placing-station";
 import { postMessageToUI } from "../figma";
+import { RoadSection } from "../models/structures";
 import { findNearestRoadSection } from "../utils/snap";
 import { getStationStopsAcrossLines } from "../utils/line-queries";
 import { BaseController } from "./base";
@@ -18,7 +19,7 @@ interface PlacingState {
   handleId: string;
   previewId: string;
   listenerHandle: ListenerHandle;
-  snap: { roadSectionId: RoadSectionId; interpT: number } | null;
+  snap: { section: RoadSection; interpT: number } | null;
 }
 
 export class StationController extends BaseController {
@@ -97,14 +98,14 @@ export class StationController extends BaseController {
       p.x = snap.pos.x - p.width / 2;
       p.y = snap.pos.y - p.height / 2;
 
-      this.placingState.snap = { roadSectionId: snap.roadSectionId, interpT: snap.interpT };
+      this.placingState.snap = { section: snap.section, interpT: snap.interpT };
     });
 
     this.placingState = {
       handleId,
       previewId,
       listenerHandle,
-      snap: initialSnap ? { roadSectionId: initialSnap.roadSectionId, interpT: initialSnap.interpT } : null,
+      snap: initialSnap ? { section: initialSnap.section, interpT: initialSnap.interpT } : null,
     };
 
     figma.currentPage.selection = [handle];
@@ -115,7 +116,7 @@ export class StationController extends BaseController {
     const snap = this.placingState.snap;
     await this.cancelPlacingMode();
 
-    const station = this.model.addStation({ name, textAlign, textHAlign, textRotation, flipped, interpT: snap?.interpT ?? 0.5, roadSectionId: snap?.roadSectionId ?? null });
+    const station = this.model.addStation({ name, textAlign, textHAlign, textRotation, flipped, interpT: snap?.interpT ?? 0.5, roadSection: snap?.section ?? null });
     await this.view.stationRenderer.renderStation(station, this.model.getState());
     await this.save();
   }
@@ -135,7 +136,8 @@ export class StationController extends BaseController {
   // ── Message handlers ──────────────────────────────────────────────────────
 
   public async handleAddStation({ name, textAlign, textHAlign, textRotation, flipped, roadSectionId, interpT }: StationParams & { roadSectionId: RoadSectionId | null; interpT: number }): Promise<void> {
-    const station = this.model.addStation({ name, textAlign, textHAlign, textRotation, flipped, interpT, roadSectionId });
+    const roadSection = roadSectionId ? this.model.findSection(roadSectionId) : null;
+    const station = this.model.addStation({ name, textAlign, textHAlign, textRotation, flipped, interpT, roadSection });
     await this.view.stationRenderer.renderStation(station, this.model.getState());
     await this.save();
   }
@@ -181,7 +183,7 @@ export class StationController extends BaseController {
   ): Promise<void> {
     const station = this.model.getState().stations.get(stationId);
     if (!station) return;
-    this.model.updateStationStopRanks(station, stops);
+    station.updateStopRanks(stops);
     await this.render();
     await this.save();
     await this.handleGetStationInfo(stationId);
@@ -210,7 +212,7 @@ export class StationController extends BaseController {
       if (node) node.remove();
     }
 
-    this.model.removeStation(stationId);
+    this.model.removeStation(station);
     await this.save();
   }
 
@@ -228,13 +230,13 @@ export class StationController extends BaseController {
       textRotation: station.textRotation,
       flipped: station.flipped,
       interpT: newInterpT,
-      roadSectionId: station.roadSection?.id ?? null,
+      roadSection: station.roadSection ?? null,
     });
 
     if (this.connectionController) {
       const linesAtStation = station.getLineStackingOrder();
       for (const lineId of linesAtStation) {
-        this.connectionController.insertStationIntoLine(lineId, newStation.id, stationId, direction === 'forwards');
+        this.connectionController.insertStationIntoLine(lineId, newStation, station, direction === 'forwards');
       }
     }
 
@@ -254,7 +256,7 @@ export class StationController extends BaseController {
 
     for (const line of this.model.getState().lines.values()) {
       for (const path of line.paths) {
-        if (path.kind === 'station-stop' && path.station.id === sourceStationId) {
+        if (path.kind === 'station-stop' && path.station === sourceStation) {
           path.station = targetStation;
         }
       }
@@ -265,7 +267,7 @@ export class StationController extends BaseController {
       if (node) node.remove();
     }
 
-    this.model.removeStation(sourceStationId);
+    this.model.removeStation(sourceStation);
     await this.save();
   }
 
