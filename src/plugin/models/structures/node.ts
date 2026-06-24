@@ -29,10 +29,6 @@ export class Node implements Serializable<SerializedNode> {
     this.isolatedPos = props.isolatedPos;
   }
 
-  getRoads(): Road[] {
-    return this.roadConnections.map(rc => rc.road);
-  }
-
   serialize(): SerializedNode {
     return {
       i: this.id,

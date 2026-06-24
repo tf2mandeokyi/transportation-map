@@ -1,5 +1,4 @@
-import { Line, LinePath, MapState, Road, RoadSection, RoadSectionChange, StationStop } from "../models/structures";
-import { NodeId, StationId } from "@/common/types";
+import { Line, LinePath, MapState, Node, Road, RoadSection, RoadSectionChange, Station, StationStop } from "../models/structures";
 import { evalQuadraticBezier, evalQuadraticBezierTangent } from "./bezier";
 import { LINE_SPACING, ROAD_MARGIN, ROAD_MIN_WIDTH, SECTION_GAP } from "./constants";
 import { getLinesForSection } from "./section";
@@ -103,15 +102,15 @@ function getLinePaths<T extends LinePath>(
 }
 
 export function getStationStopsAcrossLines(
-  stationId: StationId,
+  station: Station,
   state: Readonly<MapState>,
 ): Array<{ line: Line; path: StationStop; position: Vector }> {
-  return getLinePaths(state, (p): p is StationStop => p.kind === 'station-stop' && p.station.id === stationId);
+  return getLinePaths(state, (p): p is StationStop => p.kind === 'station-stop' && p.station === station);
 }
 
 export function getRscEntriesForNode(
-  nodeId: NodeId,
+  node: Node,
   state: Readonly<MapState>,
 ): Array<{ line: Line; path: RoadSectionChange; position: Vector }> {
-  return getLinePaths(state, (p): p is RoadSectionChange => p.kind === 'road-section-change' && p.node.id === nodeId);
+  return getLinePaths(state, (p): p is RoadSectionChange => p.kind === 'road-section-change' && p.node === node);
 }

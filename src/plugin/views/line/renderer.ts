@@ -1,5 +1,4 @@
 import { Line, MapState, RoadSectionChange, Station } from "../../models/structures";
-import { Model } from "../../models";
 import { StationRenderer } from "../station";
 import { hexToRgb } from "@/common/utils/color";
 import { SegmentResult } from "./segment-path";
@@ -37,14 +36,9 @@ async function cleanupOldLineGroup(line: Line): Promise<void> {
 
 export class LineRenderer {
   private readonly stationRenderer: StationRenderer;
-  private model: Model | null = null;
 
   constructor(stationRenderer: StationRenderer) {
     this.stationRenderer = stationRenderer;
-  }
-
-  public setModel(model: Model): void {
-    this.model = model;
   }
 
   public async renderLine(line: Line, state: Readonly<MapState>): Promise<void> {
@@ -77,7 +71,7 @@ export class LineRenderer {
       const lineGroup = figma.group(segmentNodes, figma.currentPage);
       lineGroup.name   = `Line: ${line.name}`;
       lineGroup.locked = true;
-      this.model?.updateLineFigmaGroupId(line.id, lineGroup.id);
+      line.figmaGroupId = lineGroup.id;
     }
   }
 
@@ -91,8 +85,8 @@ export class LineRenderer {
     color: RGB,
     state: Readonly<MapState>
   ): SegmentResult | null {
-    const startPoint = this.stationRenderer.getConnectionPoint(startStation.id, line.id, startPathIdx);
-    const endPoint   = this.stationRenderer.getConnectionPoint(endStation.id,   line.id, endPathIdx);
+    const startPoint = this.stationRenderer.getConnectionPoint(startStation, line, startPathIdx);
+    const endPoint   = this.stationRenderer.getConnectionPoint(endStation,   line, endPathIdx);
     if (!startPoint || !endPoint) {
       console.warn(`Missing connection points for line ${line.id}`);
       return null;
@@ -109,9 +103,7 @@ export class LineRenderer {
     return { ...bezierPathToSegments(pathData, color), kind: 'normal' };
   }
 
-  public async moveSegmentsToBack(): Promise<void> {
-    if (!this.model) return;
-    const state = this.model.getState();
+  public async moveSegmentsToBack(state: Readonly<MapState>): Promise<void> {
     for (const line of state.lines.values()) {
       if (!line.figmaGroupId) continue;
       try {
@@ -121,18 +113,6 @@ export class LineRenderer {
           if (parent && 'insertChild' in parent) parent.insertChild(0, lineGroup as SceneNode);
         }
       } catch {}
-    }
-  }
-
-  public async clearAllSegments(): Promise<void> {
-    if (!this.model) return;
-    const state = this.model.getState();
-    for (const line of state.lines.values()) {
-      if (!line.figmaGroupId) continue;
-      try {
-        const node = await figma.getNodeByIdAsync(line.figmaGroupId);
-        if (node && !node.removed) node.remove();
-      } catch { /* node may have been deleted */ }
     }
   }
 }

@@ -17,7 +17,6 @@ async function main() {
   }
 
   const view = new View();
-  view.setModel(model);
   const controller = new Controller(model, view);
 
   await controller.initialize();

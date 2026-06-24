@@ -1,5 +1,4 @@
 import { Line, MapState, Road, RoadSection, RoadSectionChange, Station } from "../../models/structures";
-import { StationId } from "@/common/types";
 import { CubicBezierPoints } from "../../utils/bezier";
 import { PathBuilder } from "../../utils/path";
 import { appendJunctionCurve, computeCrossingSeg, computeSectionSegs, computeTotalOffset } from "./segment-path";
@@ -23,8 +22,8 @@ type RoadTraversal = {
   section: RoadSection | null;
   entryT: number;
   exitT: number;
-  depStationId: StationId | undefined;
-  arrStationId: StationId | undefined;
+  depStation: Station | undefined;
+  arrStation: Station | undefined;
   depPathSegIdx: number | undefined;
   arrPathSegIdx: number | undefined;
   depRank: number | undefined;
@@ -46,8 +45,8 @@ function buildTraversals(
     section: startSection,
     entryT: startStation.interpT,
     exitT: firstRsc.node.id === startRoad.endNode.id ? 1 : 0,
-    depStationId: startStation.id,
-    arrStationId: undefined,
+    depStation: startStation,
+    arrStation: undefined,
     depPathSegIdx: startPathIdx,
     arrPathSegIdx: undefined,
     depRank: undefined,
@@ -64,8 +63,8 @@ function buildTraversals(
       section: rsc.entering,
       entryT: rsc.node.id === road.startNode.id ? 0 : 1,
       exitT:  nextRsc.node.id === road.endNode.id ? 1 : 0,
-      depStationId: undefined,
-      arrStationId: undefined,
+      depStation: undefined,
+      arrStation: undefined,
       depPathSegIdx: undefined,
       arrPathSegIdx: undefined,
       depRank: rsc.enterRank,
@@ -81,8 +80,8 @@ function buildTraversals(
     section: endSection,
     entryT: lastRsc.node.id === lastRoad.startNode.id ? 0 : 1,
     exitT: endStation.interpT,
-    depStationId: undefined,
-    arrStationId: endStation.id,
+    depStation: undefined,
+    arrStation: endStation,
     depPathSegIdx: undefined,
     arrPathSegIdx: endPathIdx,
     depRank: lastRsc.enterRank,
@@ -128,15 +127,15 @@ export function buildSegmentPath(
 
   if (rseBetween.length === 0) {
     if (startSection === endSection) {
-      const segs = computeSectionSegs(line, startRoad, startSection, t1, t2, state, startStation.id, endStation.id, startPathIdx, endPathIdx);
+      const segs = computeSectionSegs(line, startRoad, startSection, t1, t2, state, startStation, endStation, startPathIdx, endPathIdx);
       return segs.length === 0 ? fallback : new PathBuilder().beziers(segs).build();
     }
     // Different sections on the same road — single crossing segment.
     const centerline = startRoad.computeBezier();
     if (!centerline) return fallback;
     const sign      = t1 > t2 ? -1 : 1;
-    const offsetDep = computeTotalOffset(line, startRoad, startSection, state, startStation.id, startPathIdx);
-    const offsetArr = computeTotalOffset(line, startRoad, endSection,   state, endStation.id,   endPathIdx);
+    const offsetDep = computeTotalOffset(line, startRoad, startSection, state, startStation, startPathIdx);
+    const offsetArr = computeTotalOffset(line, startRoad, endSection,   state, endStation,   endPathIdx);
     const seg = computeCrossingSeg(centerline, t1, t2, sign * offsetDep, sign * offsetArr);
     return new PathBuilder().beziers([seg]).build();
   }
@@ -151,7 +150,7 @@ export function buildSegmentPath(
   const entries: CubicBezierPoints[][] = [];
   for (const tr of traversals) {
     if (tr.section === null) continue;
-    const segs = computeSectionSegs(line, tr.road, tr.section, tr.entryT, tr.exitT, state, tr.depStationId, tr.arrStationId, tr.depPathSegIdx, tr.arrPathSegIdx, tr.depRank, tr.arrRank);
+    const segs = computeSectionSegs(line, tr.road, tr.section, tr.entryT, tr.exitT, state, tr.depStation, tr.arrStation, tr.depPathSegIdx, tr.arrPathSegIdx, tr.depRank, tr.arrRank);
     if (segs.length > 0) entries.push(segs);
   }
 

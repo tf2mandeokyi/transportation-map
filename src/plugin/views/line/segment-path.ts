@@ -1,5 +1,4 @@
-import { Line, MapState, Road, RoadSection } from "../../models/structures";
-import { StationId } from "@/common/types";
+import { Line, MapState, Road, RoadSection, Station } from "../../models/structures";
 import {
   elevateToCubic,
   evalQuadraticBezier,
@@ -22,7 +21,7 @@ export type SegmentResult =
 export function computeTotalOffset(
   line: Line, road: Road, section: RoadSection,
   state: Readonly<MapState>,
-  referenceStationId?: StationId,
+  referenceStation?: Station,
   pathSegmentIndex?: number,
   forceRank?: number,
 ): number {
@@ -33,7 +32,7 @@ export function computeTotalOffset(
   if (forceRank !== undefined) {
     effectiveIdx = forceRank;
   } else {
-    const passes = getLinesForSection(section, state, referenceStationId);
+    const passes = getLinesForSection(section, state, referenceStation);
     const passIndex = pathSegmentIndex !== undefined
       ? passes.findIndex(lp => lp.line.id === line.id && lp.segmentIndex === pathSegmentIndex)
       : passes.findIndex(lp => lp.line.id === line.id);
@@ -82,8 +81,8 @@ export function computeSectionSegs(
   line: Line, road: Road, section: RoadSection,
   t1: number, t2: number,
   state: Readonly<MapState>,
-  departureStationId?: StationId,
-  arrivalStationId?: StationId,
+  departureStation?: Station,
+  arrivalStation?: Station,
   depPathSegIdx?: number,
   arrPathSegIdx?: number,
   depRank?: number,
@@ -92,10 +91,10 @@ export function computeSectionSegs(
   const centerline = road.computeBezier();
   if (!centerline) return [];
 
-  const offsetDep = computeTotalOffset(line, road, section, state, departureStationId, depPathSegIdx, departureStationId === undefined ? depRank : undefined);
-  const offsetArr = arrivalStationId === undefined
+  const offsetDep = computeTotalOffset(line, road, section, state, departureStation, depPathSegIdx, departureStation === undefined ? depRank : undefined);
+  const offsetArr = arrivalStation === undefined
     ? (arrRank !== undefined ? computeTotalOffset(line, road, section, state, undefined, undefined, arrRank) : offsetDep)
-    : computeTotalOffset(line, road, section, state, arrivalStationId, arrPathSegIdx);
+    : computeTotalOffset(line, road, section, state, arrivalStation, arrPathSegIdx);
 
   const directedDep = t1 > t2 ? -offsetDep : offsetDep;
   const directedArr = t1 > t2 ? -offsetArr : offsetArr;

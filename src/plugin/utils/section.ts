@@ -1,5 +1,4 @@
-import { Line, MapState, RoadSection } from "../models/structures";
-import { StationId } from "@/common/types";
+import { Line, MapState, RoadSection, Station } from "../models/structures";
 
 // A single directed pass of a line through a section.
 export type LinePass = {
@@ -55,13 +54,13 @@ function countPassesOnSection(line: Line, section: RoadSection): number {
 export function getLinesForSection(
   section: RoadSection,
   state: Readonly<MapState>,
-  referenceStationId?: StationId,
+  referenceStation?: Station,
 ): LinePass[] {
-  if (referenceStationId) {
+  if (referenceStation) {
     const passes: Array<LinePass & { rank: number }> = [];
     for (const line of state.lines.values()) {
       for (const p of line.paths) {
-        if (p.kind === 'station-stop' && p.station.id === referenceStationId) {
+        if (p.kind === 'station-stop' && p.station === referenceStation) {
           passes.push({ line, segmentIndex: p.index, rank: p.rank });
         }
       }

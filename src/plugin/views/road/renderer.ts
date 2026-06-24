@@ -1,5 +1,4 @@
 import { MapState } from "../../models/structures";
-import { Model } from "../../models";
 import { renderRoad } from "./road-visuals";
 import { buildAndAppendJunction, buildNodeMarker } from "./node-visuals";
 import { FIGMA_KEY_NODE_ID, FIGMA_KEY_IS_NODE_MARKER, FIGMA_KEY_ROAD_ID, FIGMA_KEY_IS_ROAD_CONTROL } from "./constants";
@@ -14,9 +13,6 @@ function pushToBack(children: readonly SceneNode[], predicate: (c: SceneNode) =>
 }
 
 export class RoadRenderer {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  public setModel(_model: Model): void {}
-
   public static async renderAll(state: Readonly<MapState>): Promise<void> {
     await RoadRenderer.clearPrevious();
     for (const road of state.roads.values()) renderRoad(road, state);

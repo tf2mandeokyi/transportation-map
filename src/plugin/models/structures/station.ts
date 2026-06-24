@@ -1,6 +1,5 @@
-import { HVAlign, RoadSectionId, StationId } from "@/common/types";
-import { IModel, Serializable } from './types';
-import type { Road } from './road';
+import { HVAlign, LineId, RoadSectionId, StationId } from "@/common/types";
+import { IModel, Serializable, StationStop } from './types';
 import type { RoadSection } from './road-section';
 
 export interface SerializedStation {
@@ -52,12 +51,33 @@ export class Station implements Serializable<SerializedStation> {
     this.interpT = props.interpT;
   }
 
-  getRoad(): Road | null {
-    return this.roadSection?.road ?? null;
+  getLineStackingOrder(): LineId[] {
+    const state = this.parent.getState();
+    const lineIds = new Set<LineId>();
+    for (const line of state.lines.values()) {
+      for (const p of line.paths) {
+        if (p.kind === 'station-stop' && p.station === this) { lineIds.add(line.id); break; }
+      }
+    }
+    return state.lineStackingOrder.filter(id => lineIds.has(id));
   }
 
-  getRoadSection(): RoadSection | null {
-    return this.roadSection;
+  fixRankConflicts(): void {
+    const state = this.parent.getState();
+    const stops: Array<{ path: StationStop; lineId: LineId }> = [];
+    for (const line of state.lines.values()) {
+      for (const p of line.paths) {
+        if (p.kind === 'station-stop' && p.station === this && p.stops) {
+          stops.push({ path: p, lineId: line.id });
+        }
+      }
+    }
+    stops.sort((a, b) => {
+      if (a.path.rank !== b.path.rank) return a.path.rank - b.path.rank;
+      if (a.lineId !== b.lineId) return a.lineId < b.lineId ? -1 : 1;
+      return a.path.index - b.path.index;
+    });
+    stops.forEach(({ path }, i) => { path.rank = i; });
   }
 
   serialize(): SerializedStation {

@@ -1,7 +1,5 @@
 import { Line, MapState, Station } from "../../models/structures";
-import { Model } from "../../models";
 import { renderStation, renderStationLine } from "../../figmls";
-import { LineId, StationId } from "@/common/types";
 import { computeStationPosition, computeStationTangentAngle } from "./position";
 import { getLinesForStation } from "./layout";
 import { getLinesForSection } from "../../utils/section";
@@ -82,13 +80,7 @@ async function renderStationWithTemplate(
 }
 
 export class StationRenderer {
-  private readonly figmaStationMap: Map<StationId, SceneNode> = new Map();
   private readonly lineConnectionPoints: Map<string, Vector> = new Map();
-  private model?: Model;
-
-  public setModel(model: Model): void {
-    this.model = model;
-  }
 
   public async renderStation(station: Station, state: Readonly<MapState>): Promise<void> {
     let frame: FrameNode | null = null;
@@ -102,9 +94,8 @@ export class StationRenderer {
       frame.layoutMode = 'HORIZONTAL';
       frame.layoutSizingHorizontal = 'HUG';
       frame.layoutSizingVertical = 'HUG';
-      this.figmaStationMap.set(station.id, frame);
       figma.currentPage.appendChild(frame);
-      this.model?.updateStationFigmaNodeId(station.id, frame.id);
+      station.figmaNodeId = frame.id;
     }
 
     frame.fills = [];
@@ -140,8 +131,8 @@ export class StationRenderer {
     }
   }
 
-  public getConnectionPoint(stationId: StationId, lineId: LineId, segmentIndex: number): Vector | undefined {
-    return this.lineConnectionPoints.get(`${stationId}-${lineId}-${segmentIndex}`);
+  public getConnectionPoint(station: Station, line: Line, segmentIndex: number): Vector | undefined {
+    return this.lineConnectionPoints.get(`${station.id}-${line.id}-${segmentIndex}`);
   }
 
   public clearConnectionPoints(): void {

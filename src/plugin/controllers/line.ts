@@ -37,17 +37,19 @@ export class LineController extends BaseController {
   }
 
   private async handleUpdateLineName(lineId: LineId, name: string): Promise<void> {
-    this.model.updateLineName(lineId, name);
-    await this.save();
     const line = this.model.getState().lines.get(lineId);
-    if (line) postMessageToUI({ type: 'line-added', id: lineId, name: line.name, color: line.color });
+    if (!line) return;
+    line.name = name;
+    await this.save();
+    postMessageToUI({ type: 'line-added', id: lineId, name: line.name, color: line.color });
   }
 
   private async handleUpdateLineColor(lineId: LineId, color: string): Promise<void> {
-    this.model.updateLineColor(lineId, color);
-    await this.save();
     const line = this.model.getState().lines.get(lineId);
-    if (line) postMessageToUI({ type: 'line-added', id: lineId, name: line.name, color: line.color });
+    if (!line) return;
+    line.color = color;
+    await this.save();
+    postMessageToUI({ type: 'line-added', id: lineId, name: line.name, color: line.color });
   }
 
   private async handleUpdateLinePath(lineId: LineId, paths: LinePathInput[]): Promise<void> {

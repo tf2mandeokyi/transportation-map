@@ -1,5 +1,4 @@
 import { MapState } from "../models/structures";
-import { Model } from "../models";
 import { StationRenderer } from "./station";
 import { LineRenderer } from "./line";
 import { RoadRenderer } from "./road";
@@ -13,11 +12,6 @@ export class View {
   constructor() {
     this.stationRenderer = new StationRenderer();
     this.lineSegmentRenderer = new LineRenderer(this.stationRenderer);
-  }
-
-  public setModel(model: Model): void {
-    this.stationRenderer.setModel(model);
-    this.lineSegmentRenderer.setModel(model);
   }
 
   public async render(state: Readonly<MapState>): Promise<void> {
@@ -41,7 +35,7 @@ export class View {
       ));
 
       // 4. Move line segments behind stations
-      await this.lineSegmentRenderer.moveSegmentsToBack();
+      await this.lineSegmentRenderer.moveSegmentsToBack(state);
 
       // 5. Move all road infrastructure (roads, junctions, node markers) to the very back
       //    so they sit below line segments and stations.
