@@ -2,7 +2,7 @@ import { Line, LinePath, MapState, Road, RoadSection, RoadSectionChange, Station
 import { NodeId, StationId } from "@/common/types";
 import { evalQuadraticBezier, evalQuadraticBezierTangent } from "./bezier";
 import { LINE_SPACING, ROAD_MARGIN, ROAD_MIN_WIDTH, SECTION_GAP } from "./constants";
-import { findRoadForSection, computeRoadBezier, getLinesForSection } from "./section";
+import { getLinesForSection } from "./section";
 
 export function sectionBandWidth(numLines: number): number {
   return numLines <= 0 ? ROAD_MIN_WIDTH : numLines * LINE_SPACING + 2 * ROAD_MARGIN;
@@ -38,18 +38,17 @@ type PathEntry<T extends LinePath> = {
   section: RoadSection | null;
 };
 
-function computeEntry(line: Line, path: LinePath, state: Readonly<MapState>): PathEntry<LinePath> {
+function computeEntry(line: Line, path: LinePath): PathEntry<LinePath> {
   if (path.kind === 'station-stop') {
-    const station = state.stations.get(path.stationId);
-    const road = station?.roadSectionId ? findRoadForSection(station.roadSectionId, state) : null;
-    const section = road && station?.roadSectionId ? (road.sections.get(station.roadSectionId) ?? null) : null;
+    const station = path.station;
+    const section = station.roadSection ?? null;
+    const road = section?.road ?? null;
     return { line, path, rank: path.rank, road, section };
   }
-  const sectionId = path.exiting ?? path.entering;
-  const road = sectionId ? findRoadForSection(sectionId, state) : null;
-  const section = road && sectionId ? (road.sections.get(sectionId) ?? null) : null;
+  const section = path.exiting ?? path.entering;
+  const road = section?.road ?? null;
   const rank = path.exiting !== null ? path.exitRank : path.enterRank;
-  return { line, path, rank, road, section };
+  return { line, path, rank, road, section: section ?? null };
 }
 
 function applyLateralOffset(pos: Vector, tan: Vector, offset: number): Vector {
@@ -61,21 +60,20 @@ function computePosition<T extends LinePath>(entry: PathEntry<T>, state: Readonl
   const { path, road, section, rank } = entry;
   if (!road || !section) return { x: 0, y: 0 };
 
-  const bezier = computeRoadBezier(road, state);
+  const bezier = road.computeBezier();
   if (!bezier) return { x: 0, y: 0 };
 
   const numLines = getLinesForSection(section, state).length;
   const totalOffset = computeSectionOffset(section, road, state) + lineOffsetInSection(rank, numLines);
 
   if (path.kind === 'station-stop') {
-    const station = state.stations.get(path.stationId);
-    if (!station) return { x: 0, y: 0 };
+    const station = path.station;
     const pos = evalQuadraticBezier(bezier, station.interpT);
     if (totalOffset === 0) return pos;
     return applyLateralOffset(pos, evalQuadraticBezierTangent(bezier, station.interpT), totalOffset);
   }
 
-  const isStart = road.startNodeId === path.nodeId;
+  const isStart = road.startNode.id === path.node.id;
   const ep = road.endpoints[isStart ? 0 : 1].endpointPos;
   if (totalOffset === 0) return ep;
   return applyLateralOffset(ep, evalQuadraticBezierTangent(bezier, isStart ? 0 : 1), totalOffset * (isStart ? 1 : -1));
@@ -89,7 +87,7 @@ function getLinePaths<T extends LinePath>(
   for (const line of state.lines.values()) {
     for (const p of line.paths) {
       if (!match(p)) continue;
-      const e = computeEntry(line, p, state) as PathEntry<T>;
+      const e = computeEntry(line, p) as PathEntry<T>;
       const key = e.section?.id ?? null;
       const group = groups.get(key);
       if (group) group.push(e);
@@ -108,12 +106,12 @@ export function getStationStopsAcrossLines(
   stationId: StationId,
   state: Readonly<MapState>,
 ): Array<{ line: Line; path: StationStop; position: Vector }> {
-  return getLinePaths(state, (p): p is StationStop => p.kind === 'station-stop' && p.stationId === stationId);
+  return getLinePaths(state, (p): p is StationStop => p.kind === 'station-stop' && p.station.id === stationId);
 }
 
 export function getRscEntriesForNode(
   nodeId: NodeId,
   state: Readonly<MapState>,
 ): Array<{ line: Line; path: RoadSectionChange; position: Vector }> {
-  return getLinePaths(state, (p): p is RoadSectionChange => p.kind === 'road-section-change' && p.nodeId === nodeId);
+  return getLinePaths(state, (p): p is RoadSectionChange => p.kind === 'road-section-change' && p.node.id === nodeId);
 }

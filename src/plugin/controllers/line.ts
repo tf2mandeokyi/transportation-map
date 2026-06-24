@@ -15,9 +15,9 @@ export class LineController extends BaseController {
 
   public async handleAddLine(lineData: { name: string; color: string; isCircular?: boolean }): Promise<void> {
     const { name, color, isCircular = false } = lineData;
-    const lineId = this.model.addLine({ name, color, isCircular, paths: [] });
+    const line = this.model.addLine({ name, color, isCircular, paths: [] });
     await this.save();
-    postMessageToUI({ type: 'line-added', id: lineId, name, color });
+    postMessageToUI({ type: 'line-added', id: line.id, name, color });
   }
 
   public async handleRemoveLine(lineId: LineId): Promise<void> {
@@ -103,7 +103,7 @@ export class LineController extends BaseController {
   }
 
   private pathToInput(p: LinePath): LinePathInput {
-    if (p.kind === 'station-stop') return { kind: 'station-stop', stationId: p.stationId };
-    return { kind: 'road-section-change', nodeId: p.nodeId, exiting: p.exiting, entering: p.entering };
+    if (p.kind === 'station-stop') return { kind: 'station-stop', stationId: p.station.id };
+    return { kind: 'road-section-change', nodeId: p.node.id, exiting: p.exiting?.id ?? null, entering: p.entering?.id ?? null };
   }
 }

@@ -2,7 +2,6 @@ import { LineId, RoadId, RoadSectionId, StationId } from "@/common/types";
 import { LinePathInput } from "@/common/messages";
 import { AddingStationsPluginSession } from "../sessions/adding-stations";
 import { LinePath } from "../models/structures";
-import { findRoadForSection, getLineDirectionAtStop } from "../utils/section";
 import { getStationStopsAcrossLines } from "../utils/line-queries";
 import { postMessageToUI } from "../figma";
 import { BaseController } from "./base";
@@ -28,13 +27,10 @@ export class ConnectionController extends BaseController {
     const stationSectionIds: Record<StationId, RoadSectionId | null> = {};
     for (const path of line.paths) {
       if (path.kind === 'station-stop') {
-        const station = this.model.getState().stations.get(path.stationId);
-        if (station) {
-          stationNames[path.stationId] = station.name;
-          const road = station.roadSectionId ? findRoadForSection(station.roadSectionId, this.model.getState()) : null;
-          stationRoadIds[path.stationId] = road?.id ?? null;
-          stationSectionIds[path.stationId] = station.roadSectionId;
-        }
+        const station = path.station;
+        stationNames[station.id] = station.name;
+        stationRoadIds[station.id] = station.roadSection?.road?.id ?? null;
+        stationSectionIds[station.id] = station.roadSection?.id ?? null;
       }
     }
 
@@ -45,7 +41,7 @@ export class ConnectionController extends BaseController {
     const line = this.model.getState().lines.get(lineId);
     if (!line) return false;
 
-    const refIndex = line.paths.findIndex(p => p.kind === 'station-stop' && p.stationId === relativeToStationId);
+    const refIndex = line.paths.findIndex(p => p.kind === 'station-stop' && p.station.id === relativeToStationId);
     if (refIndex === -1) return false;
 
     const insertAt = insertAfter ? refIndex + 1 : refIndex;
@@ -62,7 +58,7 @@ export class ConnectionController extends BaseController {
     const line = this.model.getState().lines.get(lineId);
     if (!line) return;
 
-    const hasStart = line.paths.some(p => p.kind === 'station-stop' && p.stationId === startStationId);
+    const hasStart = line.paths.some(p => p.kind === 'station-stop' && p.station.id === startStationId);
     if (!hasStart) {
       this.model.addLinePath(lineId, { kind: 'station-stop', stationId: startStationId });
     }
@@ -78,7 +74,7 @@ export class ConnectionController extends BaseController {
       const state = this.model.getState();
       const lines = [];
       for (const { line, path } of getStationStopsAcrossLines(station.id, state)) {
-        const arrDir = getLineDirectionAtStop(line, path.index, state);
+        const arrDir = line.getDirectionAtStop(path.index);
         const facing: 'left' | 'right' = arrDir === 'ascending' ? 'right' : 'left';
         lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing, stops: path.stops });
       }
@@ -92,7 +88,7 @@ export class ConnectionController extends BaseController {
   }
 
   private pathToInput(p: LinePath): LinePathInput {
-    if (p.kind === 'station-stop') return { kind: 'station-stop', stationId: p.stationId };
-    return { kind: 'road-section-change', nodeId: p.nodeId, exiting: p.exiting, entering: p.entering };
+    if (p.kind === 'station-stop') return { kind: 'station-stop', stationId: p.station.id };
+    return { kind: 'road-section-change', nodeId: p.node.id, exiting: p.exiting?.id ?? null, entering: p.entering?.id ?? null };
   }
 }

@@ -1,5 +1,5 @@
-import { NodeId, RoadId } from "@/common/types";
-import { MapState } from "../../models/structures";
+import { RoadId } from "@/common/types";
+import { Node } from "../../models/structures/node";
 import { Model } from "../../models";
 import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_ROAD_ID } from "../../views/road";
 import { renderEditHandle } from "../../figmls";
@@ -7,8 +7,8 @@ import { elevateToCubic, bezierPathData, offsetBezier } from "../../utils/bezier
 import { computeSectionOffset } from "../../utils/line-queries";
 
 const ROAD_CONTROL_NODE_NAME = '_road-bezier-control';
-export const FIGMA_KEY_BEZIER_HANDLE   = 'mapBezierHandle';   // value: 'mid'
-export const FIGMA_KEY_ENDPOINT_HANDLE = 'mapEndpointHandle'; // value: 'start' | 'end'
+export const FIGMA_KEY_BEZIER_HANDLE   = 'mapBezierHandle';
+export const FIGMA_KEY_ENDPOINT_HANDLE = 'mapEndpointHandle';
 
 const HANDLE_RADIUS = 5;
 const STEM_STROKE:  RGB = { r: 0.6,  g: 0.75, b: 1 };
@@ -42,8 +42,8 @@ export class RoadControlManager {
     const road = state.roads.get(roadId);
     if (!road) return;
 
-    const startNode = state.nodes.get(road.startNodeId);
-    const endNode   = state.nodes.get(road.endNodeId);
+    const startNode = road.startNode;
+    const endNode   = road.endNode;
     if (!startNode || !endNode) return;
 
     const p0  = road.endpoints[0].endpointPos;
@@ -58,8 +58,8 @@ export class RoadControlManager {
       this.lockedRoadNodeId = roadGroup.id;
     }
 
-    const startCenter = this.computeNodeCenter(state, road.startNodeId);
-    const endCenter   = this.computeNodeCenter(state, road.endNodeId);
+    const startCenter = this.computeNodeCenter(startNode);
+    const endCenter   = this.computeNodeCenter(endNode);
     const startNodeStem = this.buildStemLine(startCenter, p0,  roadId);
     const startToMid    = this.buildStemLine(p0, mid, roadId);
     const endNodeStem   = this.buildStemLine(endCenter,   p2,  roadId);
@@ -104,7 +104,6 @@ export class RoadControlManager {
     }
     this.controlElementIds = [];
     this.stemLineIds = null;
-
     this.controlledRoadId = null;
   }
 
@@ -119,7 +118,6 @@ export class RoadControlManager {
       .forEach(n => { if (!n.removed) n.remove(); });
     this.controlElementIds = [];
     this.stemLineIds = null;
-
     this.controlledRoadId = null;
   }
 
@@ -172,8 +170,8 @@ export class RoadControlManager {
           data: `M ${from.x - tx} ${from.y - ty} L ${to.x - tx} ${to.y - ty}`,
         }];
       };
-      const startCenter = this.computeNodeCenter(state, road.startNodeId);
-      const endCenter   = this.computeNodeCenter(state, road.endNodeId);
+      const startCenter = this.computeNodeCenter(road.startNode);
+      const endCenter   = this.computeNodeCenter(road.endNode);
       await updateStem(ids.startNodeStem, startCenter, p0);
       await updateStem(ids.startToMid,   p0,  mid);
       await updateStem(ids.endNodeStem,   endCenter,   p2);
@@ -219,13 +217,10 @@ export class RoadControlManager {
     }
   }
 
-  private computeNodeCenter(state: Readonly<MapState>, nodeId: NodeId): Vector {
-    const node = state.nodes.get(nodeId);
+  private computeNodeCenter(node: Node): Vector {
     if (!node || node.roadConnections.length === 0) return { x: 0, y: 0 };
     let sumX = 0, sumY = 0, count = 0;
-    for (const { roadId, endpointIndex } of node.roadConnections) {
-      const road = state.roads.get(roadId);
-      if (!road) continue;
+    for (const { road, endpointIndex } of node.roadConnections) {
       sumX += road.endpoints[endpointIndex].endpointPos.x;
       sumY += road.endpoints[endpointIndex].endpointPos.y;
       count++;

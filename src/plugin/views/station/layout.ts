@@ -1,6 +1,5 @@
 import { Line, MapState, Station } from "../../models/structures";
 import { LineId } from "@/common/types";
-import { getLineDirectionAtStop } from "../../utils/section";
 import { getStationStopsAcrossLines } from "../../utils/line-queries";
 
 type CollectedEntry = {
@@ -26,7 +25,7 @@ export function getLinesForStation(
 
   for (const { line, path } of getStationStopsAcrossLines(station.id, state)) {
     const stackingOrder = state.lineStackingOrder.indexOf(line.id);
-    const arrivalDir = getLineDirectionAtStop(line, path.index, state);
+    const arrivalDir = line.getDirectionAtStop(path.index);
     const facing: 'left' | 'right' = arrivalDir === 'ascending' ? 'right' : 'left';
     entries.push({ lineId: line.id, segmentIndex: path.index, rank: path.rank, facing, passThrough: !path.stops, stackingOrder });
   }

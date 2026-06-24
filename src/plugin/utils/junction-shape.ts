@@ -63,8 +63,8 @@ export class JunctionShape {
   constructor(node: Node, state: Readonly<MapState>) {
     const arms: Arm[] = [];
 
-    for (const { roadId, endpointIndex } of node.roadConnections) {
-      const arm = buildArm(roadId, endpointIndex, state);
+    for (const { road, endpointIndex } of node.roadConnections) {
+      const arm = buildArm(road.id, endpointIndex, state);
       if (arm) arms.push(arm);
     }
 

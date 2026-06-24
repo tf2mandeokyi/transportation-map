@@ -3,7 +3,6 @@ import { HVAlign, LineId, RoadSectionId, StationId, TextHAlign } from "@/common/
 import { PlacingStationPluginSession } from "../sessions/placing-station";
 import { postMessageToUI } from "../figma";
 import { findNearestRoadSection } from "../utils/snap";
-import { getLineDirectionAtStop } from "../utils/section";
 import { getStationStopsAcrossLines } from "../utils/line-queries";
 import { BaseController } from "./base";
 import { ListenerHandle } from "./listener";
@@ -160,7 +159,7 @@ export class StationController extends BaseController {
   // ── Individual handlers ───────────────────────────────────────────────────
 
   public createStation(name: string, textAlign: HVAlign = 'right', textHAlign: TextHAlign = 'left', textRotation: number = 0, flipped: boolean = false, roadSectionId: RoadSectionId | null = null, interpT: number = 0.5): StationId {
-    return this.model.addStation({ name, textAlign, textHAlign, textRotation, flipped, interpT, roadSectionId });
+    return this.model.addStation({ name, textAlign, textHAlign, textRotation, flipped, interpT, roadSectionId }).id;
   }
 
   public async handleGetStationInfo(stationId: StationId): Promise<void> {
@@ -173,7 +172,7 @@ export class StationController extends BaseController {
 
     const lines: Array<LineAtStationData> = [];
     for (const { line, path } of getStationStopsAcrossLines(stationId, state)) {
-      const arrDir = getLineDirectionAtStop(line, path.index, state);
+      const arrDir = line.getDirectionAtStop(path.index);
       const facing: 'left' | 'right' = arrDir === 'ascending' ? 'right' : 'left';
       lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing, stops: path.stops });
     }
@@ -230,28 +229,26 @@ export class StationController extends BaseController {
     const interpTOffset = direction === 'forwards' ? 0.1 : -0.1;
     const newInterpT = Math.max(0, Math.min(1, station.interpT + interpTOffset));
 
-    const newStationId = this.model.addStation({
+    const newStation = this.model.addStation({
       name: station.name,
       textAlign: station.textAlign,
       textHAlign: station.textHAlign,
       textRotation: station.textRotation,
       flipped: station.flipped,
       interpT: newInterpT,
-      roadSectionId: station.roadSectionId,
+      roadSectionId: station.roadSection?.id ?? null,
     });
-    const newStation = this.model.getState().stations.get(newStationId);
-    if (!newStation) return;
 
     if (this.connectionController) {
       const linesAtStation = this.model.getLineStackingOrderForStation(stationId);
       for (const lineId of linesAtStation) {
-        this.connectionController.insertStationIntoLine(lineId, newStationId, stationId, direction === 'forwards');
+        this.connectionController.insertStationIntoLine(lineId, newStation.id, stationId, direction === 'forwards');
       }
     }
 
     await this.view.stationRenderer.renderStation(newStation, this.model.getState());
     await this.save();
-    await this.handleSelectStation(newStationId);
+    await this.handleSelectStation(newStation.id);
   }
 
   private async handleCombineStations(sourceStationId: StationId, targetStationId: StationId): Promise<void> {
@@ -265,8 +262,8 @@ export class StationController extends BaseController {
 
     for (const line of this.model.getState().lines.values()) {
       for (const path of line.paths) {
-        if (path.kind === 'station-stop' && path.stationId === sourceStationId) {
-          path.stationId = targetStationId;
+        if (path.kind === 'station-stop' && path.station.id === sourceStationId) {
+          path.station = targetStation;
         }
       }
     }

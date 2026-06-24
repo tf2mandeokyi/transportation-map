@@ -9,7 +9,7 @@ import { createDashedLine, bezierPathToSegments } from "./segment-nodes";
 type StopInfo = { pathIdx: number; station: Station };
 
 function collectStopsAndRSEs(
-  line: Line, state: Readonly<MapState>
+  line: Line,
 ): { stops: StopInfo[]; rsesBefore: RoadSectionChange[][] } {
   const stops: StopInfo[] = [];
   const rsesBefore: RoadSectionChange[][] = [];
@@ -19,12 +19,9 @@ function collectStopsAndRSEs(
     if (p.kind === 'road-section-change') {
       pendingRSEs.push(p);
     } else if (p.kind === 'station-stop') {
-      const station = state.stations.get(p.stationId);
-      if (station) {
-        stops.push({ pathIdx: p.index, station });
-        rsesBefore.push(pendingRSEs);
-        pendingRSEs = [];
-      }
+      stops.push({ pathIdx: p.index, station: p.station });
+      rsesBefore.push(pendingRSEs);
+      pendingRSEs = [];
     }
   }
   return { stops, rsesBefore };
@@ -55,7 +52,7 @@ export class LineRenderer {
 
     const segmentNodes: SceneNode[] = [];
     const color = hexToRgb(line.color);
-    const { stops, rsesBefore } = collectStopsAndRSEs(line, state);
+    const { stops, rsesBefore } = collectStopsAndRSEs(line);
 
     for (let si = 0; si < stops.length - 1; si++) {
       const { pathIdx: startPathIdx, station: startStation } = stops[si];
@@ -101,7 +98,7 @@ export class LineRenderer {
       return null;
     }
 
-    if (isInvalidJump(startStation, endStation, rseBetween, state)) {
+    if (isInvalidJump(startStation, endStation, rseBetween)) {
       return { kind: 'dashed', node: createDashedLine(startPoint, endPoint, color) };
     }
 

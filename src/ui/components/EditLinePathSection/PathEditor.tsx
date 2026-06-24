@@ -62,8 +62,8 @@ const PathEditor: React.FC = () => {
 
   const toLinePathInputs = (paths: LinePath[]): LinePathInput[] =>
     paths.map(p => p.kind === 'station-stop'
-      ? { kind: 'station-stop' as const, stationId: p.stationId }
-      : { kind: 'road-section-change' as const, nodeId: p.nodeId, exiting: p.exiting, entering: p.entering }
+      ? { kind: 'station-stop' as const, stationId: p.station.id }
+      : { kind: 'road-section-change' as const, nodeId: p.node.id, exiting: p.exiting?.id ?? null, entering: p.entering?.id ?? null }
     );
 
   const getSourceAt = (pathIndex: number): { roadId: RoadId | null; sectionId: RoadSectionId | null } => {
@@ -71,11 +71,11 @@ const PathEditor: React.FC = () => {
     const p = linePaths[pathIndex];
     if (!p) return { roadId: null, sectionId: null };
     if (p.kind === 'road-section-change') {
-      const sectionId = p.entering;
+      const sectionId = p.entering?.id ?? null;
       const roadId = sectionId ? (roads.find(r => r.sections.some(s => s.id === sectionId))?.id ?? null) : null;
       return { roadId, sectionId };
     }
-    return { roadId: stationRoadIds[p.stationId] ?? null, sectionId: stationSectionIds[p.stationId] ?? null };
+    return { roadId: stationRoadIds[p.station.id] ?? null, sectionId: stationSectionIds[p.station.id] ?? null };
   };
 
   // ─── Station adding ────────────────────────────────────────────────────────

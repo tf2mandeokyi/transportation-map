@@ -61,7 +61,6 @@ export class RoadCreationStateMachine {
         { endpointPos: startPos, groupNumber: 0 },
         { endpointPos: endPos,   groupNumber: 0 },
       ],
-      sections: new Map(),
     });
     await onRoadCreated();
     this.exit();

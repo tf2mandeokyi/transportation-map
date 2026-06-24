@@ -18,7 +18,7 @@ function makeVectorCurve(pathData: string, color: RGB, weight: number): VectorNo
 }
 
 export function buildRoadVisuals(road: Road, state: Readonly<MapState>): SceneNode[] {
-  if (!state.nodes.get(road.startNodeId) || !state.nodes.get(road.endNodeId)) return [];
+  if (!road.startNode || !road.endNode) return [];
 
   const baseCurve = elevateToCubic({
     p0: road.endpoints[0].endpointPos,

@@ -22,11 +22,9 @@ export function buildNodePolygon(node: Node, state: Readonly<MapState>): VectorN
   return vn;
 }
 
-function computeJunctionCenter(node: Node, bounds: Rect, state: Readonly<MapState>): Vector {
+function computeJunctionCenter(node: Node, bounds: Rect): Vector {
   let jx = 0, jy = 0, jc = 0;
-  for (const { roadId, endpointIndex } of node.roadConnections) {
-    const road = state.roads.get(roadId);
-    if (!road) continue;
+  for (const { road, endpointIndex } of node.roadConnections) {
     jx += road.endpoints[endpointIndex].endpointPos.x;
     jy += road.endpoints[endpointIndex].endpointPos.y;
     jc++;
@@ -53,7 +51,7 @@ export async function buildAndAppendJunction(node: Node, state: Readonly<MapStat
   frame.name = `Junction: ${node.name ?? node.id}`;
   frame.setPluginData(FIGMA_KEY_NODE_ID, node.id);
 
-  const center = computeJunctionCenter(node, bounds, state);
+  const center = computeJunctionCenter(node, bounds);
   frame.setPluginData(FIGMA_KEY_JUNCTION_OFFSET_X, String(center.x - bounds.x));
   frame.setPluginData(FIGMA_KEY_JUNCTION_OFFSET_Y, String(center.y - bounds.y));
 
@@ -65,11 +63,9 @@ export async function buildAndAppendJunction(node: Node, state: Readonly<MapStat
   return true;
 }
 
-function resolveNodePosition(node: Node, state: Readonly<MapState>): Vector | null {
+function resolveNodePosition(node: Node): Vector | null {
   let x = 0, y = 0, count = 0;
-  for (const { roadId, endpointIndex } of node.roadConnections) {
-    const road = state.roads.get(roadId);
-    if (!road) continue;
+  for (const { road, endpointIndex } of node.roadConnections) {
     x += road.endpoints[endpointIndex].endpointPos.x;
     y += road.endpoints[endpointIndex].endpointPos.y;
     count++;
@@ -83,8 +79,8 @@ function resolveNodePosition(node: Node, state: Readonly<MapState>): Vector | nu
   return node.isolatedPos;
 }
 
-export async function buildNodeMarker(node: Node, state: Readonly<MapState>): Promise<FrameNode | null> {
-  const pos = resolveNodePosition(node, state);
+export async function buildNodeMarker(node: Node): Promise<FrameNode | null> {
+  const pos = resolveNodePosition(node);
   if (!pos) return null;
 
   const frame = await renderEditHandle({ fill: '#333333', size: NODE_RADIUS * 2 }).intoNode() as FrameNode;

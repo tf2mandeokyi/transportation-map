@@ -50,20 +50,21 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
       elements.push(
         <StationPathItem
           key={`stop-${i}`}
-          name={stationNames[path.stationId] ?? path.stationId}
+          name={stationNames[path.station.id] ?? path.station.id}
           index={i}
           stops={path.stops}
           onRemove={() => onRemoveStop(path.index)}
-          onSelect={() => onSelectStation(path.stationId)}
+          onSelect={() => onSelectStation(path.station.id)}
           onToggleStops={stops => onToggleStops(path.index, stops)}
         />
       );
     } else {
-      const enteringRoad = path.entering ? roads.find(r => r.sections.some(s => s.id === path.entering)) : null;
+      const enteringId = path.entering?.id ?? null;
+      const enteringRoad = enteringId ? roads.find(r => r.sections.some(s => s.id === enteringId)) : null;
       elements.push(
         <div key={`rse-${i}`} className="station-path-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span className="station-number" style={{ paddingLeft: '4px', paddingRight: '4px' }}>{i + 1}</span>
-          <span style={{ flex: 1, fontStyle: 'italic', color: '#666' }}>↪ {enteringRoad?.name ?? (path.entering ?? '?')}</span>
+          <span style={{ flex: 1, fontStyle: 'italic', color: '#666' }}>↪ {enteringRoad?.name ?? (enteringId ?? '?')}</span>
           {inactive && (
             <button className="button button--secondary small-btn" onClick={() => onRemoveRse(i)}>X</button>
           )}

@@ -4,7 +4,7 @@ import { renderStation, renderStationLine } from "../../figmls";
 import { LineId, StationId } from "@/common/types";
 import { computeStationPosition, computeStationTangentAngle } from "./position";
 import { getLinesForStation } from "./layout";
-import { getLinesForSection, findRoadForSection } from "../../utils/section";
+import { getLinesForSection } from "../../utils/section";
 import { LINE_SPACING } from "../../utils/constants";
 import { RenderResult } from "../../figml-parser/result";
 
@@ -23,18 +23,12 @@ async function renderStationWithTemplate(
 ): Promise<{ line: Line; segmentIndex: number; node: SceneNode; passThrough: boolean }[]> {
   const flipLR = (f: 'left' | 'right'): 'left' | 'right' => f === 'left' ? 'right' : 'left';
 
-  // Total directed runs on the section determines the lane band width.
-  // Using this as effectiveCount keeps each line at a fixed lateral position
-  // regardless of how many lines visit any particular station.
-  const road = station.roadSectionId ? findRoadForSection(station.roadSectionId, state) : null;
-  const section = road && station.roadSectionId ? road.sections.get(station.roadSectionId) : null;
+  const section = station.roadSection;
   const noRefCount = section ? getLinesForSection(section, state).length : 0;
 
   const lines = getLinesForStation(station, state);
-  // effectiveNoRef: reserve at least as many slots as visiting lines
   const effectiveNoRef = Math.max(noRefCount, lines.length);
 
-  // Render each visiting line's indicator (in rank-sorted order, facing flipped for flipped stations).
   const indicators = lines.map(({ line, segmentIndex, facing, passThrough }) => ({
     line,
     segmentIndex,
@@ -48,16 +42,11 @@ async function renderStationWithTemplate(
     }),
   }));
 
-  // Build slot items: indicators occupy slots 0..lines.length-1, with a trailing
-  // invisible spacer for the remaining empty slots so each indicator sits at the
-  // correct absolute lane offset for the full section band.
   type SlotItem = { kind: 'indicator'; idx: number } | { kind: 'spacer'; height: number };
   const items: SlotItem[] = indicators.map((_, idx) => ({ kind: 'indicator' as const, idx }));
   const trailing = effectiveNoRef - lines.length;
   if (trailing > 0) items.push({ kind: 'spacer', height: trailing * LINE_SPACING });
 
-  // Flipped stations are rotated 180°, so reverse the slot order to keep
-  // each indicator at the same physical lane position after rotation.
   const orderedItems = station.flipped ? [...items].reverse() : items;
 
   const stationChildren: RenderResult[] = orderedItems.map(item => {
@@ -123,12 +112,9 @@ export class StationRenderer {
     frame.children.forEach(child => child.remove());
 
     const position    = computeStationPosition(station, state);
-    const tangentAngle = computeStationTangentAngle(station, state);
+    const tangentAngle = computeStationTangentAngle(station);
     const children = await renderStationWithTemplate(frame, station, state, tangentAngle);
 
-    // Figma's rotation is CCW on screen; atan2 gives a CW angle, so negate.
-    // Center = R(θ) * [w/2, h/2]^T + [tx, ty], where R(-θ) is Figma's CCW rotation.
-    // When flipped, add 180° to rotate the entire station frame upside-down.
     const w = frame.width;
     const h = frame.height;
     const effectiveAngle = station.flipped ? tangentAngle + 180 : tangentAngle;

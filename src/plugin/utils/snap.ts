@@ -1,7 +1,6 @@
 import { MapState } from '../models/structures';
 import { RoadSectionId } from '@/common/types';
 import { QuadBezierPoints, evalQuadraticBezier, evalQuadraticBezierTangent } from './bezier';
-import { computeRoadBezier } from './section';
 import { computeSectionOffset } from './line-queries';
 
 const SAMPLES = 20;
@@ -18,7 +17,6 @@ function nearestTOnQuadBezier(bezier: QuadBezierPoints, point: Vector): number {
     const d = distSq(evalQuadraticBezier(bezier, t), point);
     if (d < bestDist) { bestDist = d; bestT = t; }
   }
-  // Golden-section refine within the nearest sample interval
   let lo = Math.max(0, bestT - 1 / SAMPLES);
   let hi = Math.min(1, bestT + 1 / SAMPLES);
   for (let i = 0; i < 8; i++) {
@@ -53,7 +51,7 @@ export function findNearestRoadSection(point: Vector, state: Readonly<MapState>)
   let bestDist = Infinity;
 
   for (const road of state.roads.values()) {
-    const bezier = computeRoadBezier(road, state);
+    const bezier = road.computeBezier();
     if (!bezier) continue;
     const sections = Array.from(road.sections.values());
     if (sections.length === 0) continue;

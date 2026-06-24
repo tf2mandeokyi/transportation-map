@@ -42,11 +42,11 @@ export class Model implements IModel {
 
   // ─── Node ───
 
-  public addNode(node: NodeProps): NodeId {
+  public addNode(node: NodeProps): Node {
     const id = generateUniqueId(this.state.nodes);
     const obj = new Node(this, id, node);
     this.state.nodes.set(id, obj);
-    return id;
+    return obj;
   }
 
   public updateIsolatedNodePos(id: NodeId, pos: Vector): void {
@@ -62,7 +62,7 @@ export class Model implements IModel {
   public removeNode(id: NodeId): void {
     const node = this.state.nodes.get(id);
     if (!node) return;
-    const roadIds = node.roadConnections.map(rc => rc.roadId);
+    const roadIds = node.roadConnections.map(rc => rc.road.id);
     for (const roadId of roadIds) {
       this.removeRoad(roadId);
     }
@@ -72,9 +72,7 @@ export class Model implements IModel {
   public moveNodeConnections(id: NodeId, delta: { x: number; y: number }): void {
     const node = this.state.nodes.get(id);
     if (!node) return;
-    for (const { roadId, endpointIndex } of node.roadConnections) {
-      const road = this.state.roads.get(roadId);
-      if (!road) continue;
+    for (const { road, endpointIndex } of node.roadConnections) {
       const conn = road.endpoints[endpointIndex];
       road.endpoints[endpointIndex] = {
         ...conn,
@@ -85,18 +83,24 @@ export class Model implements IModel {
 
   // ─── Road ───
 
-  public addRoad(road: RoadProps): RoadId {
+  public addRoad(road: RoadProps): Road {
     const id = generateUniqueId(this.state.roads);
     const obj = new Road(this, id, road);
     this.state.roads.set(id, obj);
 
     const startNode = this.state.nodes.get(road.startNodeId);
-    if (startNode) startNode.roadConnections.push({ roadId: id, endpointIndex: 0 });
+    if (startNode) {
+      obj.startNode = startNode;
+      startNode.roadConnections.push({ road: obj, endpointIndex: 0 });
+    }
 
     const endNode = this.state.nodes.get(road.endNodeId);
-    if (endNode) endNode.roadConnections.push({ roadId: id, endpointIndex: 1 });
+    if (endNode) {
+      obj.endNode = endNode;
+      endNode.roadConnections.push({ road: obj, endpointIndex: 1 });
+    }
 
-    return id;
+    return obj;
   }
 
   public updateRoadEndpoints(id: RoadId, endpoints: [Connection, Connection]): void {
@@ -114,11 +118,11 @@ export class Model implements IModel {
     if (!road) return;
 
     for (const node of this.state.nodes.values()) {
-      node.roadConnections = node.roadConnections.filter(rc => rc.roadId !== id);
+      node.roadConnections = node.roadConnections.filter(rc => rc.road.id !== id);
     }
 
     for (const section of road.sections.values()) {
-      const stationIds = [...section.stationIds];
+      const stationIds = section.stations.map(s => s.id);
       for (const stationId of stationIds) {
         this.removeStation(stationId);
       }
@@ -130,11 +134,10 @@ export class Model implements IModel {
 
   // ─── RoadSection ───
 
-  public addRoadSection(roadId: RoadId, section: RoadSectionProps): RoadSectionId {
+  public addRoadSection(roadId: RoadId, section: RoadSectionProps): RoadSection {
     const road = this.state.roads.get(roadId);
     if (!road) throw new Error(`Road ${roadId} not found`);
 
-    // Generate unique ID across all sections of all roads
     const allSectionIds = new Map<RoadSectionId, true>();
     for (const r of this.state.roads.values()) {
       for (const sid of r.sections.keys()) allSectionIds.set(sid, true);
@@ -142,8 +145,9 @@ export class Model implements IModel {
     const id = generateUniqueId(allSectionIds);
 
     const obj = new RoadSection(this, id, section);
+    obj.road = road;
     road.sections.set(id, obj);
-    return id;
+    return obj;
   }
 
   public removeRoadSection(roadId: RoadId, sectionId: RoadSectionId): void {
@@ -152,7 +156,7 @@ export class Model implements IModel {
 
     const section = road.sections.get(sectionId);
     if (section) {
-      const stationIds = [...section.stationIds];
+      const stationIds = section.stations.map(s => s.id);
       for (const stationId of stationIds) {
         this.removeStation(stationId);
       }
@@ -163,12 +167,12 @@ export class Model implements IModel {
 
   private _removeRoadFromLines(roadId: RoadId): void {
     const road = this.state.roads.get(roadId);
-    const sectionIds = road ? new Set(road.sections.keys()) : new Set<RoadSectionId>();
+    const sectionSet = road ? new Set(road.sections.values()) : new Set<RoadSection>();
     for (const line of this.state.lines.values()) {
       line.paths = line.paths.filter(p => {
         if (p.kind !== 'road-section-change') return true;
-        return !((p.exiting !== null && sectionIds.has(p.exiting)) ||
-                 (p.entering !== null && sectionIds.has(p.entering)));
+        return !((p.exiting !== null && sectionSet.has(p.exiting)) ||
+                 (p.entering !== null && sectionSet.has(p.entering)));
       });
       this._reindexLinePaths(line);
     }
@@ -176,32 +180,32 @@ export class Model implements IModel {
 
   // ─── Station ───
 
-  public addStation(station: Omit<StationProps, 'figmaNodeId'>): StationId {
+  public addStation(station: StationProps): Station {
     const id = generateUniqueId(this.state.stations);
-    const obj = new Station(this, id, { ...station, figmaNodeId: null });
+    const obj = new Station(this, id, station);
     this.state.stations.set(id, obj);
 
     if (station.roadSectionId) {
       const section = this._findSection(station.roadSectionId);
-      if (section) section.stationIds.push(id);
+      if (section) {
+        obj.roadSection = section;
+        section.stations.push(obj);
+      }
     }
 
-    return id;
+    return obj;
   }
 
   public removeStation(id: StationId): void {
     const station = this.state.stations.get(id);
     if (!station) return;
 
-    if (station.roadSectionId) {
-      const section = this._findSection(station.roadSectionId);
-      if (section) {
-        section.stationIds = section.stationIds.filter(sid => sid !== id);
-      }
+    if (station.roadSection) {
+      station.roadSection.stations = station.roadSection.stations.filter(s => s.id !== id);
     }
 
     for (const line of this.state.lines.values()) {
-      line.paths = line.paths.filter(p => !(p.kind === 'station-stop' && p.stationId === id));
+      line.paths = line.paths.filter(p => !(p.kind === 'station-stop' && p.station.id === id));
       this._reindexLinePaths(line);
     }
 
@@ -232,14 +236,14 @@ export class Model implements IModel {
 
   // ─── Line ───
 
-  public addLine(line: Omit<LineProps, 'figmaGroupId'>): LineId {
+  public addLine(line: Omit<LineProps, 'figmaGroupId'>): Line {
     const id = generateUniqueId(this.state.lines);
-    const obj = new Line(this, id, { ...line, figmaGroupId: null });
+    const obj = new Line(this, id, line);
     this.state.lines.set(id, obj);
     if (!this.state.lineStackingOrder.includes(id)) {
       this.state.lineStackingOrder.push(id);
     }
-    return id;
+    return obj;
   }
 
   public removeLine(id: LineId): void {
@@ -274,23 +278,26 @@ export class Model implements IModel {
     if (!line) return;
     const index = line.paths.length;
     if (path.kind === 'station-stop') {
-      line.paths.push({ kind: 'station-stop', index, stationId: path.stationId, rank: this._nextRankForStation(path.stationId), stops: true });
+      const station = this.state.stations.get(path.stationId);
+      if (!station) return;
+      line.paths.push({ kind: 'station-stop', index, station, rank: this._nextRankForStation(path.stationId), stops: true });
     } else {
+      const node = this.state.nodes.get(path.nodeId);
+      if (!node) return;
+      const exiting = path.exiting ? this._findSection(path.exiting) : null;
+      const entering = path.entering ? this._findSection(path.entering) : null;
       const exitRank = this._nextRankForSection(path.nodeId, path.exiting);
       const enterRank = this._nextRankForSection(path.nodeId, path.entering);
-      line.paths.push({ kind: 'road-section-change', index, nodeId: path.nodeId, exiting: path.exiting, entering: path.entering, exitRank, enterRank });
+      line.paths.push({ kind: 'road-section-change', index, node, exiting, entering, exitRank, enterRank });
     }
-    line.paths = validateLinePaths(line, this.state);
+    line.paths = validateLinePaths(line);
   }
 
-  // Returns the next available rank in the unified pool of all exit AND enter ranks
-  // for the given section at the given junction node. This ensures that exit and
-  // enter passes on the same section never share a lateral slot.
   private _nextRankForSection(nodeId: NodeId, sectionId: RoadSectionId | null): number {
     let max = -1;
     for (const { path: p } of getRscEntriesForNode(nodeId, this.state)) {
-      if (p.exiting  === sectionId) max = Math.max(max, p.exitRank);
-      if (p.entering === sectionId) max = Math.max(max, p.enterRank);
+      if (p.exiting?.id === sectionId) max = Math.max(max, p.exitRank);
+      if (p.entering?.id === sectionId) max = Math.max(max, p.enterRank);
     }
     return max + 1;
   }
@@ -311,7 +318,7 @@ export class Model implements IModel {
       const line = this.state.lines.get(lineId);
       if (!line) continue;
       const path = line.paths.find(p => p.index === pathIndex);
-      if (path?.kind === 'station-stop' && path.stationId === stationId) {
+      if (path?.kind === 'station-stop' && path.station.id === stationId) {
         path.rank = rank;
       }
     }
@@ -325,7 +332,7 @@ export class Model implements IModel {
       const line = this.state.lines.get(lineId);
       if (!line) continue;
       const path = line.paths.find(p => p.index === pathIndex);
-      if (path?.kind === 'road-section-change' && path.nodeId === nodeId) {
+      if (path?.kind === 'road-section-change' && path.node.id === nodeId) {
         path.exitRank = exitRank;
         path.enterRank = enterRank;
       }
@@ -350,14 +357,12 @@ export class Model implements IModel {
     const path = line.paths.find(p => p.index === pathIndex);
     if (!path || path.kind !== 'station-stop') return;
     if (stops) {
-      // Promote pass-through to explicit stop; keep its existing rank.
       path.stops = true;
-      line.paths = validateLinePaths(line, this.state);
+      line.paths = validateLinePaths(line);
     } else {
-      // Remove explicit stop; validator will re-insert as pass-through if bracketed.
       line.paths = line.paths.filter(p => p.index !== pathIndex);
       this._reindexLinePaths(line);
-      line.paths = validateLinePaths(line, this.state);
+      line.paths = validateLinePaths(line);
     }
   }
 
@@ -366,7 +371,7 @@ export class Model implements IModel {
     if (!line) return;
     line.paths = line.paths.filter(p => p.index !== pathIndex);
     this._reindexLinePaths(line);
-    line.paths = validateLinePaths(line, this.state);
+    line.paths = validateLinePaths(line);
   }
 
   public replaceLinePaths(lineId: LineId, paths: LinePathInput[]): void {
@@ -375,24 +380,34 @@ export class Model implements IModel {
     const existingStationRanks = new Map<StationId, number>();
     const existingRscRanks = new Map<string, { exitRank: number; enterRank: number }>();
     for (const p of line.paths) {
-      if (p.kind === 'station-stop') existingStationRanks.set(p.stationId, p.rank);
+      if (p.kind === 'station-stop') existingStationRanks.set(p.station.id, p.rank);
       if (p.kind === 'road-section-change') {
-        existingRscRanks.set(`${p.nodeId}:${p.exiting}:${p.entering}`, { exitRank: p.exitRank, enterRank: p.enterRank });
+        existingRscRanks.set(`${p.node.id}:${p.exiting?.id ?? null}:${p.entering?.id ?? null}`, { exitRank: p.exitRank, enterRank: p.enterRank });
       }
     }
-    line.paths = paths.map((p, i) => {
+    const newPaths: typeof line.paths = [];
+    for (let i = 0; i < paths.length; i++) {
+      const p = paths[i];
       if (p.kind === 'station-stop') {
-        return { kind: 'station-stop', index: i, stationId: p.stationId, rank: existingStationRanks.get(p.stationId) ?? 0, stops: true };
+        const station = this.state.stations.get(p.stationId);
+        if (!station) continue;
+        newPaths.push({ kind: 'station-stop', index: i, station, rank: existingStationRanks.get(p.stationId) ?? 0, stops: true });
+      } else {
+        const node = this.state.nodes.get(p.nodeId);
+        if (!node) continue;
+        const exiting = p.exiting ? this._findSection(p.exiting) : null;
+        const entering = p.entering ? this._findSection(p.entering) : null;
+        const existing = existingRscRanks.get(`${p.nodeId}:${p.exiting ?? null}:${p.entering ?? null}`);
+        newPaths.push({ kind: 'road-section-change', index: i, node, exiting, entering, exitRank: existing?.exitRank ?? 0, enterRank: existing?.enterRank ?? 0 } as RoadSectionChange);
       }
-      const existing = existingRscRanks.get(`${p.nodeId}:${p.exiting}:${p.entering}`);
-      return { kind: 'road-section-change', index: i, nodeId: p.nodeId, exiting: p.exiting, entering: p.entering, exitRank: existing?.exitRank ?? 0, enterRank: existing?.enterRank ?? 0 } as RoadSectionChange;
-    });
-    line.paths = validateLinePaths(line, this.state);
+    }
+    line.paths = newPaths;
+    line.paths = validateLinePaths(line);
   }
 
   public validateAllLinePaths(): void {
     for (const line of this.state.lines.values()) {
-      line.paths = validateLinePaths(line, this.state);
+      line.paths = validateLinePaths(line);
     }
   }
 

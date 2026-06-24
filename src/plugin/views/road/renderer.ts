@@ -35,7 +35,7 @@ export class RoadRenderer {
   private static async renderNodeMarkers(state: Readonly<MapState>, nodesWithJunction: Set<string>): Promise<void> {
     for (const node of state.nodes.values()) {
       if (nodesWithJunction.has(node.id)) continue;
-      const marker = await buildNodeMarker(node, state);
+      const marker = await buildNodeMarker(node);
       if (marker) {
         figma.currentPage.appendChild(marker);
         console.log(`[renderAll] appended marker for node ${node.id} at (${marker.x}, ${marker.y})`);

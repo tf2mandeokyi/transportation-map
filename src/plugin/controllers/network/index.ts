@@ -21,8 +21,6 @@ export class NetworkController extends BaseController {
   private isRendering = false;
   private renderDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private isAddingRseMode = false;
-  // Caches the initial placement position for newly created isolated nodes
-  // (nodes with no road connections yet) so road creation can use it.
   private readonly nodePositionCache = new Map<NodeId, { x: number; y: number }>();
 
   constructor(model: Model, view: View, listener: NodeChangeListener, sessionManager: PluginSessionManager) {
@@ -41,13 +39,11 @@ export class NetworkController extends BaseController {
     router.register('start-adding-rse-mode', async () => this.startAddingRseSession());
   }
 
-  // ── Public message handlers (node/road CRUD) ────────────────────────────
-
   public async handleAddNode(msg: Extract<UIToPluginMessage, { type: 'add-node' }>): Promise<void> {
     const pos = msg.node.pos ?? figma.viewport.center;
     console.log(`[handleAddNode] pos =`, pos);
-    const id = this.model.addNode({ name: msg.node.name, isolatedPos: pos, roadConnections: [] });
-    this.nodePositionCache.set(id, pos);
+    const node = this.model.addNode({ name: msg.node.name, isolatedPos: pos });
+    this.nodePositionCache.set(node.id, pos);
     this.isRendering = true;
     try { await this.render(); await this.save(); } finally { this.isRendering = false; }
     this.syncNetworkToUI();
@@ -85,7 +81,7 @@ export class NetworkController extends BaseController {
   public async handlePatchRoad(roadId: RoadId, patch: RoadPatch): Promise<void> {
     switch (patch.op) {
       case 'add-section':
-        this.model.addRoadSection(roadId, { ...patch.section, stationIds: [] });
+        this.model.addRoadSection(roadId, { ...patch.section });
         break;
       case 'remove-section':
         this.model.removeRoadSection(roadId, patch.sectionId);
@@ -94,8 +90,6 @@ export class NetworkController extends BaseController {
     await this.save();
     this.syncNetworkToUI();
   }
-
-  // ── Road creation mode ──────────────────────────────────────────────────
 
   private async startRoadCreationSession(): Promise<void> {
     this.roadCreation.start();
@@ -110,8 +104,6 @@ export class NetworkController extends BaseController {
       () => { this.isAddingRseMode = false; }
     ));
   }
-
-  // ── Figma event entry points ────────────────────────────────────────────
 
   public async handleSelectionChange(): Promise<void> {
     const selection = figma.currentPage.selection;
@@ -138,7 +130,6 @@ export class NetworkController extends BaseController {
       return;
     }
 
-    // In RSE mode any road click is reported to the UI; all other interactions are suppressed.
     if (this.isAddingRseMode) {
       const roadId = first.getPluginData(FIGMA_KEY_ROAD_ID) as RoadId;
       if (roadId) postMessageToUI({ type: 'road-clicked', roadId });
@@ -226,8 +217,6 @@ export class NetworkController extends BaseController {
     this.roadControl.cleanup();
   }
 
-  // ── Network sync ────────────────────────────────────────────────────────
-
   public syncNetworkToUI(): void {
     postMessageToUI({ type: 'network-data', ...this.buildNetworkPayload() });
   }
@@ -240,8 +229,8 @@ export class NetworkController extends BaseController {
     const roads: RoadData[] = Array.from(state.roads.values()).map(r => ({
       id: r.id,
       name: r.name,
-      startNodeId: r.startNodeId,
-      endNodeId: r.endNodeId,
+      startNodeId: r.startNode.id,
+      endNodeId: r.endNode.id,
       sections: Array.from(r.sections.values()).map((s): RoadSectionData => ({
         id: s.id, name: s.name, index: s.index,
       })),
@@ -249,14 +238,9 @@ export class NetworkController extends BaseController {
     return { nodes, roads };
   }
 
-  // ── Private helpers ─────────────────────────────────────────────────────
-
   private async onNodePositionChanged(nodeId: NodeId, newPos: { x: number; y: number }): Promise<void> {
     const currentCenter = this.getNodeCenter(nodeId);
     const delta = { x: newPos.x - currentCenter.x, y: newPos.y - currentCenter.y };
-    // Ignore sub-pixel deltas: our own render places nodes at exactly the model
-    // position, so the post-render documentchange always produces delta ≈ 0.
-    // A real user drag in Figma always moves by at least a pixel.
     if (Math.abs(delta.x) < 0.5 && Math.abs(delta.y) < 0.5) return;
     const node = this.model.getState().nodes.get(nodeId);
     if (node && node.roadConnections.length > 0) {
@@ -292,13 +276,10 @@ export class NetworkController extends BaseController {
   }
 
   private getNodeCenter(nodeId: NodeId): { x: number; y: number } {
-    const state = this.model.getState();
-    const node = state.nodes.get(nodeId);
+    const node = this.model.getState().nodes.get(nodeId);
     if (node) {
       let sumX = 0, sumY = 0, count = 0;
-      for (const { roadId, endpointIndex } of node.roadConnections) {
-        const road = state.roads.get(roadId);
-        if (!road) continue;
+      for (const { road, endpointIndex } of node.roadConnections) {
         sumX += road.endpoints[endpointIndex].endpointPos.x;
         sumY += road.endpoints[endpointIndex].endpointPos.y;
         count++;
@@ -318,7 +299,8 @@ export class NetworkController extends BaseController {
     const state = this.model.getState();
     const lines: LineAtNodeData[] = getRscEntriesForNode(nodeId, state).map(({ line, path: p }) => ({
       lineId: line.id, lineName: line.name, lineColor: line.color, pathIndex: p.index,
-      exitingSectionId: p.exiting, enteringSectionId: p.entering, exitRank: p.exitRank, enterRank: p.enterRank,
+      exitingSectionId: p.exiting?.id ?? null, enteringSectionId: p.entering?.id ?? null,
+      exitRank: p.exitRank, enterRank: p.enterRank,
     }));
     postMessageToUI({ type: 'node-lines-data', nodeId, lines });
   }
@@ -330,8 +312,8 @@ export class NetworkController extends BaseController {
       kind: 'road',
       roadId,
       name: road.name,
-      startNodeId: road.startNodeId,
-      endNodeId: road.endNodeId,
+      startNodeId: road.startNode.id,
+      endNodeId: road.endNode.id,
       sections: Array.from(road.sections.values()).map(s => ({
         id: s.id, name: s.name, index: s.index,
       })),

@@ -1,18 +1,14 @@
 import { MapState, Station } from "../../models/structures";
-import { computeRoadBezier, findRoadForSection } from "../../utils/section";
 import { computeSectionOffset } from "../../utils/line-queries";
 import { evalQuadraticBezier, evalQuadraticBezierTangent } from "../../utils/bezier";
 
 export function computeStationPosition(station: Station, state: Readonly<MapState>): Vector {
-  if (!station.roadSectionId) return { x: 0, y: 0 };
-  const road = findRoadForSection(station.roadSectionId, state);
-  if (!road) return { x: 0, y: 0 };
-
-  const base = computeRoadBezier(road, state);
-  if (!base) return { x: 0, y: 0 };
-
-  const section = road.sections.get(station.roadSectionId);
+  const section = station.roadSection;
   if (!section) return { x: 0, y: 0 };
+  const road = section.road;
+
+  const base = road.computeBezier();
+  if (!base) return { x: 0, y: 0 };
 
   const offset = computeSectionOffset(section, road, state);
 
@@ -25,12 +21,12 @@ export function computeStationPosition(station: Station, state: Readonly<MapStat
   return { x: pos.x + (-tangent.y / len) * offset, y: pos.y + (tangent.x / len) * offset };
 }
 
-export function computeStationTangentAngle(station: Station, state: Readonly<MapState>): number {
-  if (!station.roadSectionId) return 0;
-  const road = findRoadForSection(station.roadSectionId, state);
-  if (!road) return 0;
+export function computeStationTangentAngle(station: Station): number {
+  const section = station.roadSection;
+  if (!section) return 0;
+  const road = section.road;
 
-  const base = computeRoadBezier(road, state);
+  const base = road.computeBezier();
   if (!base) return 0;
 
   const tangent = evalQuadraticBezierTangent(base, station.interpT);

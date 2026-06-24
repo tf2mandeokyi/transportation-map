@@ -2,6 +2,7 @@ import { NodeId, RoadId, RoadSectionId } from "@/common/types";
 import { QuadBezierPoints } from '../../utils/bezier';
 import { Connection, IModel, Serializable } from './types';
 import { RoadSection, SerializedRoadSection } from './road-section';
+import type { Node } from './node';
 
 interface SerializedConnection {
   p: { x: number; y: number }; // endpointPos
@@ -18,39 +19,39 @@ export interface SerializedRoad {
   c: SerializedRoadSection[];                         // sections
 }
 
-export interface RoadProps {
+export interface RoadCoreProps {
   name?: string;
-  startNodeId: NodeId;
-  endNodeId: NodeId;
   bezierMidPoint: Vector;
   endpoints: [Connection, Connection];
-  sections: Map<RoadSectionId, RoadSection>;
 }
 
-export class Road implements RoadProps, Serializable<SerializedRoad> {
+export interface RoadProps extends RoadCoreProps {
+  startNodeId: NodeId;
+  endNodeId: NodeId;
+}
+
+export class Road implements Serializable<SerializedRoad> {
   parent: IModel;
   id: RoadId;
   name?: string;
-  startNodeId: NodeId;
-  endNodeId: NodeId;
+  startNode!: Node;
+  endNode!: Node;
   bezierMidPoint: Vector;
   endpoints: [Connection, Connection];
-  sections: Map<RoadSectionId, RoadSection>;
+  sections: Map<RoadSectionId, RoadSection> = new Map();
+  private _startNodeId!: NodeId;
+  private _endNodeId!: NodeId;
 
-  constructor(parent: IModel, id: RoadId, props: RoadProps) {
+  constructor(parent: IModel, id: RoadId, props: RoadCoreProps) {
     this.parent = parent;
     this.id = id;
     this.name = props.name;
-    this.startNodeId = props.startNodeId;
-    this.endNodeId = props.endNodeId;
     this.bezierMidPoint = props.bezierMidPoint;
     this.endpoints = props.endpoints;
-    this.sections = props.sections;
   }
 
   computeBezier(): QuadBezierPoints | null {
-    const { nodes } = this.parent.getState();
-    if (!nodes.has(this.startNodeId) || !nodes.has(this.endNodeId)) return null;
+    if (!this.startNode || !this.endNode) return null;
     return {
       p0: this.endpoints[0].endpointPos,
       p1: this.bezierMidPoint,
@@ -62,28 +63,31 @@ export class Road implements RoadProps, Serializable<SerializedRoad> {
     return {
       i: this.id,
       n: this.name,
-      s: this.startNodeId,
-      e: this.endNodeId,
+      s: this.startNode.id,
+      e: this.endNode.id,
       b: this.bezierMidPoint,
       p: [serializeConnection(this.endpoints[0]), serializeConnection(this.endpoints[1])],
       c: Array.from(this.sections.values()).map(sec => sec.serialize()),
     };
   }
 
+  resolve(nodes: Map<NodeId, Node>): void {
+    const startNode = nodes.get(this._startNodeId);
+    const endNode = nodes.get(this._endNodeId);
+    if (startNode) this.startNode = startNode;
+    if (endNode) this.endNode = endNode;
+    for (const section of this.sections.values()) section.resolve(this);
+  }
+
   static deserialize(ser: SerializedRoad, parent: IModel): Road {
-    const sections = new Map<RoadSectionId, RoadSection>();
-    for (const sec of ser.c || []) {
-      const section = RoadSection.deserialize(sec, parent);
-      sections.set(section.id, section);
-    }
-    return new Road(parent, ser.i as RoadId, {
+    const road = new Road(parent, ser.i as RoadId, {
       name: ser.n,
-      startNodeId: ser.s as NodeId,
-      endNodeId: ser.e as NodeId,
       bezierMidPoint: ser.b,
       endpoints: [deserializeConnection(ser.p[0]), deserializeConnection(ser.p[1])],
-      sections,
     });
+    road._startNodeId = ser.s as NodeId;
+    road._endNodeId = ser.e as NodeId;
+    return road;
   }
 }
 

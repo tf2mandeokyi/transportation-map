@@ -1,7 +1,8 @@
-import { LineId, NodeId, RoadId, StationId } from "@/common/types";
+import { LineId, NodeId, RoadId, RoadSectionId, StationId } from "@/common/types";
 import { IModel, MapState } from '../structures/types';
 import { Node } from '../structures/node';
 import { Road } from '../structures/road';
+import { RoadSection } from '../structures/road-section';
 import { Station } from '../structures/station';
 import { Line } from '../structures/line';
 
@@ -19,6 +20,8 @@ export function deserializeMapState(json: string, parent: IModel): MapState | nu
   try {
     const data = JSON.parse(json);
 
+    // ── Phase 1: create all instances ──────────────────────────────────────
+
     const nodes = new Map<NodeId, Node>();
     for (const n of data.n || []) {
       const node = Node.deserialize(n, parent);
@@ -26,8 +29,14 @@ export function deserializeMapState(json: string, parent: IModel): MapState | nu
     }
 
     const roads = new Map<RoadId, Road>();
+    const sections = new Map<RoadSectionId, RoadSection>();
     for (const r of data.r || []) {
       const road = Road.deserialize(r, parent);
+      for (const c of r.c || []) {
+        const section = RoadSection.deserialize(c, parent);
+        road.sections.set(section.id, section);
+        sections.set(section.id, section);
+      }
       roads.set(road.id, road);
     }
 
@@ -42,6 +51,13 @@ export function deserializeMapState(json: string, parent: IModel): MapState | nu
       const line = Line.deserialize(l, parent);
       lines.set(line.id, line);
     }
+
+    // ── Phase 2: resolve all cross-references ─────────────────────────────
+
+    for (const node of nodes.values()) node.resolve(roads);
+    for (const road of roads.values()) road.resolve(nodes);  // also calls section.resolve(road)
+    for (const station of stations.values()) station.resolve(sections);
+    for (const line of lines.values()) line.resolve(stations, nodes, sections);
 
     return { nodes, roads, stations, lines, lineStackingOrder: (data.o || []) as LineId[] };
   } catch (error) {

@@ -15,53 +15,49 @@ export interface SerializedStation {
   s: string | null;                 // roadSectionId
 }
 
-export interface StationProps {
+export interface StationCoreProps {
   name: string;
-  figmaNodeId: string | null;
   textAlign: HVAlign;
   textHAlign: 'left' | 'center' | 'right';
   textRotation: number;
   flipped: boolean;
   interpT: number;
+}
+
+export interface StationProps extends StationCoreProps {
   roadSectionId: RoadSectionId | null;
 }
 
-export class Station implements StationProps, Serializable<SerializedStation> {
+export class Station implements Serializable<SerializedStation> {
   parent: IModel;
   id: StationId;
   name: string;
-  figmaNodeId: string | null;
+  figmaNodeId: string | null = null;
   textAlign: HVAlign;
   textHAlign: 'left' | 'center' | 'right';
   textRotation: number;
   flipped: boolean;
   interpT: number;
-  roadSectionId: RoadSectionId | null;
+  roadSection: RoadSection | null = null;
+  private _roadSectionId: RoadSectionId | null = null;
 
-  constructor(parent: IModel, id: StationId, props: StationProps) {
+  constructor(parent: IModel, id: StationId, props: StationCoreProps) {
     this.parent = parent;
     this.id = id;
     this.name = props.name;
-    this.figmaNodeId = props.figmaNodeId;
     this.textAlign = props.textAlign;
     this.textHAlign = props.textHAlign;
     this.textRotation = props.textRotation;
     this.flipped = props.flipped;
     this.interpT = props.interpT;
-    this.roadSectionId = props.roadSectionId;
   }
 
   getRoad(): Road | null {
-    if (!this.roadSectionId) return null;
-    for (const road of this.parent.getState().roads.values()) {
-      if (road.sections.has(this.roadSectionId)) return road;
-    }
-    return null;
+    return this.roadSection?.road ?? null;
   }
 
   getRoadSection(): RoadSection | null {
-    if (!this.roadSectionId) return null;
-    return this.getRoad()?.sections.get(this.roadSectionId) ?? null;
+    return this.roadSection;
   }
 
   serialize(): SerializedStation {
@@ -74,21 +70,30 @@ export class Station implements StationProps, Serializable<SerializedStation> {
       r: this.textRotation || undefined,
       l: this.flipped || undefined,
       p: this.interpT,
-      s: this.roadSectionId,
+      s: this.roadSection?.id ?? null,
     };
   }
 
+  resolve(sections: Map<RoadSectionId, RoadSection>): void {
+    if (!this._roadSectionId) return;
+    const section = sections.get(this._roadSectionId);
+    if (section) {
+      this.roadSection = section;
+      section.stations.push(this);
+    }
+  }
+
   static deserialize(ser: SerializedStation, parent: IModel): Station {
-    const id = ser.i as StationId;
-    return new Station(parent, id, {
+    const station = new Station(parent, ser.i as StationId, {
       name: ser.n,
-      figmaNodeId: ser.f,
       textAlign: ser.t,
       textHAlign: ser.h ?? 'left',
       textRotation: ser.r ?? 0,
       flipped: ser.l ?? false,
       interpT: ser.p,
-      roadSectionId: ser.s as RoadSectionId | null
     });
+    station.figmaNodeId = ser.f;
+    station._roadSectionId = (ser.s as RoadSectionId) ?? null;
+    return station;
   }
 }

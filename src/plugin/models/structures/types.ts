@@ -1,6 +1,7 @@
-import { LineId, NodeId, RoadId, RoadSectionId, StationId } from "@/common/types";
+import { LineId, NodeId, RoadId, StationId } from "@/common/types";
 import type { Node } from './node';
 import type { Road } from './road';
+import type { RoadSection } from './road-section';
 import type { Station } from './station';
 import type { Line } from './line';
 
@@ -20,7 +21,7 @@ export interface Connection {
 export interface StationStop {
   kind: 'station-stop';
   index: number;
-  stationId: StationId;
+  station: Station;
   rank: number;
   stops: boolean; // false = passes through without stopping
 }
@@ -28,9 +29,9 @@ export interface StationStop {
 export interface RoadSectionChange {
   kind: 'road-section-change';
   index: number;
-  nodeId: NodeId;
-  exiting: RoadSectionId | null;
-  entering: RoadSectionId | null;
+  node: Node;
+  exiting: RoadSection | null;
+  entering: RoadSection | null;
   exitRank: number;
   enterRank: number;
 }
