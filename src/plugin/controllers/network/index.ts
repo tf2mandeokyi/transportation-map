@@ -297,7 +297,9 @@ export class NetworkController extends BaseController {
 
   public emitNodeLinesData(nodeId: NodeId): void {
     const state = this.model.getState();
-    const lines: LineAtNodeData[] = getRscEntriesForNode(nodeId, state).map(({ line, path: p }) => ({
+    const node = state.nodes.get(nodeId);
+    if (!node) return;
+    const lines: LineAtNodeData[] = getRscEntriesForNode(node, state).map(({ line, path: p }) => ({
       lineId: line.id, lineName: line.name, lineColor: line.color, pathIndex: p.index,
       exitingSectionId: p.exiting?.id ?? null, enteringSectionId: p.entering?.id ?? null,
       exitRank: p.exitRank, enterRank: p.enterRank,

@@ -212,11 +212,6 @@ export class Model implements IModel {
     this.state.stations.delete(id);
   }
 
-  public updateStationFigmaNodeId(id: StationId, figmaNodeId: string): void {
-    const station = this.state.stations.get(id);
-    if (station) station.figmaNodeId = figmaNodeId;
-  }
-
   public findStationByFigmaId(figmaNodeId: string): Station | null {
     for (const station of this.state.stations.values()) {
       if (station.figmaNodeId === figmaNodeId) return station;
@@ -252,23 +247,8 @@ export class Model implements IModel {
     if (index !== -1) this.state.lineStackingOrder.splice(index, 1);
   }
 
-  public updateLineName(id: LineId, name: string): void {
-    const line = this.state.lines.get(id);
-    if (line) line.name = name;
-  }
-
-  public updateLineColor(id: LineId, color: string): void {
-    const line = this.state.lines.get(id);
-    if (line) line.color = color;
-  }
-
   public updateLineStackingOrder(newOrder: LineId[]): void {
     this.state.lineStackingOrder = [...newOrder];
-  }
-
-  public updateLineFigmaGroupId(id: LineId, figmaGroupId: string): void {
-    const line = this.state.lines.get(id);
-    if (line) line.figmaGroupId = figmaGroupId;
   }
 
   // ─── LinePath ───
@@ -280,31 +260,31 @@ export class Model implements IModel {
     if (path.kind === 'station-stop') {
       const station = this.state.stations.get(path.stationId);
       if (!station) return;
-      line.paths.push({ kind: 'station-stop', index, station, rank: this._nextRankForStation(path.stationId), stops: true });
+      line.paths.push({ kind: 'station-stop', index, station, rank: this._nextRankForStation(station), stops: true });
     } else {
       const node = this.state.nodes.get(path.nodeId);
       if (!node) return;
       const exiting = path.exiting ? this._findSection(path.exiting) : null;
       const entering = path.entering ? this._findSection(path.entering) : null;
-      const exitRank = this._nextRankForSection(path.nodeId, path.exiting);
-      const enterRank = this._nextRankForSection(path.nodeId, path.entering);
+      const exitRank = this._nextRankForSection(node, path.exiting);
+      const enterRank = this._nextRankForSection(node, path.entering);
       line.paths.push({ kind: 'road-section-change', index, node, exiting, entering, exitRank, enterRank });
     }
     line.paths = validateLinePaths(line);
   }
 
-  private _nextRankForSection(nodeId: NodeId, sectionId: RoadSectionId | null): number {
+  private _nextRankForSection(node: Node, sectionId: RoadSectionId | null): number {
     let max = -1;
-    for (const { path: p } of getRscEntriesForNode(nodeId, this.state)) {
+    for (const { path: p } of getRscEntriesForNode(node, this.state)) {
       if (p.exiting?.id === sectionId) max = Math.max(max, p.exitRank);
       if (p.entering?.id === sectionId) max = Math.max(max, p.enterRank);
     }
     return max + 1;
   }
 
-  private _nextRankForStation(stationId: StationId): number {
+  private _nextRankForStation(station: Station): number {
     let max = -1;
-    for (const { path: p } of getStationStopsAcrossLines(stationId, this.state)) {
+    for (const { path: p } of getStationStopsAcrossLines(station, this.state)) {
       if (p.stops) max = Math.max(max, p.rank);
     }
     return max + 1;
@@ -337,18 +317,6 @@ export class Model implements IModel {
         path.enterRank = enterRank;
       }
     }
-  }
-
-  public fixStationRankConflicts(stationId: StationId): void {
-    const stops = getStationStopsAcrossLines(stationId, this.state)
-      .filter(({ path }) => path.stops)
-      .map(({ line, path }) => ({ path, lineId: line.id }));
-    stops.sort((a, b) => {
-      if (a.path.rank !== b.path.rank) return a.path.rank - b.path.rank;
-      if (a.lineId !== b.lineId) return a.lineId < b.lineId ? -1 : 1;
-      return a.path.index - b.path.index;
-    });
-    stops.forEach(({ path }, i) => { path.rank = i; });
   }
 
   public setStationStopFlag(lineId: LineId, pathIndex: number, stops: boolean): void {
@@ -423,11 +391,6 @@ export class Model implements IModel {
       if (section) return section;
     }
     return null;
-  }
-
-  public getLineStackingOrderForStation(stationId: StationId): LineId[] {
-    const lineIds = new Set(getStationStopsAcrossLines(stationId, this.state).map(e => e.line.id));
-    return this.state.lineStackingOrder.filter(id => lineIds.has(id));
   }
 
   // ─── Persistence ───

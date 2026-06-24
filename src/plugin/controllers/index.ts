@@ -1,4 +1,4 @@
-import { HVAlign, LineId, StationId } from "@/common/types";
+import { LineId, StationId } from "@/common/types";
 import { setUIMessageHandler } from "../figma";
 import { Model } from "../models";
 import { View } from "../views";
@@ -109,11 +109,6 @@ export class Controller {
   private async handleRequestInitialData(): Promise<void> {
     this.lineController.syncLinesToUI();
     this.networkController.syncNetworkToUI();
-  }
-
-  // Public API for demo map / external use
-  public createStation(name: string, textAlign: HVAlign = 'right'): StationId {
-    return this.stationController.createStation(name, textAlign);
   }
 
   public connectStationsWithLine(lineId: LineId, startStationId: StationId, endStationId: StationId): void {
