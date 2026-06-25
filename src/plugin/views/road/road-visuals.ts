@@ -18,7 +18,7 @@ function makeVectorCurve(pathData: string, color: RGB, weight: number): VectorNo
 }
 
 export function buildRoadVisuals(road: Road, state: Readonly<MapState>): SceneNode[] {
-  if (!road.startNode || !road.endNode) return [];
+  if (!road.endpoints[0]?.node || !road.endpoints[1]?.node) return [];
 
   const baseCurve = elevateToCubic({
     p0: road.endpoints[0].endpointPos,
@@ -26,7 +26,7 @@ export function buildRoadVisuals(road: Road, state: Readonly<MapState>): SceneNo
     p2: road.endpoints[1].endpointPos,
   });
 
-  const sections = Array.from(road.sections.values()).sort((a, b) => a.index - b.index);
+  const sections = road.getSectionsByIndex();
   if (sections.length === 0) {
     const node = makeVectorCurve(bezierListPathData([baseCurve]), SECTION_COLOR, ROAD_MIN_WIDTH);
     node.name = 'centerline';

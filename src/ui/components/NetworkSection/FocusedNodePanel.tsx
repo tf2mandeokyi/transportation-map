@@ -21,10 +21,10 @@ const FocusedNodePanel: React.FC<{ element: Extract<NetworkFocusedElement, { kin
   const getSectionLabel = (sectionId: RoadSectionId | null): string => {
     if (!sectionId) return '(none)';
     for (const road of roads) {
-      const sec = road.sections.find(s => s.id === sectionId);
+      const sec = road.sections.find(s => s.id[0] === sectionId[0] && s.id[1] === sectionId[1]);
       if (sec) return sec.name ? `${road.name ?? road.id} / ${sec.name}` : road.name ?? road.id;
     }
-    return sectionId;
+    return sectionId.join(':');
   };
 
   const allSectionIds = [
@@ -62,7 +62,7 @@ const FocusedNodePanel: React.FC<{ element: Extract<NetworkFocusedElement, { kin
 
         return (
           <NodeArmList
-            key={sectionId}
+            key={sectionId.join(':')}
             label={`${getSectionLabel(sectionId)} (drag to reorder)`}
             nodeId={element.nodeId}
             items={items}

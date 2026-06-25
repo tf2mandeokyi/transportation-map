@@ -43,7 +43,7 @@ export class NetworkController extends BaseController {
   public async handleAddNode(msg: Extract<UIToPluginMessage, { type: 'add-node' }>): Promise<void> {
     const pos = msg.node.pos ?? figma.viewport.center;
     console.log(`[handleAddNode] pos =`, pos);
-    const node = this.model.addNode({ name: msg.node.name, isolatedPos: pos });
+    const node = this.model.addNode({ name: msg.node.name });
     this.nodePositionCache.set(node.id, pos);
     this.isRendering = true;
     try { await this.render(); await this.save(); } finally { this.isRendering = false; }
@@ -51,7 +51,7 @@ export class NetworkController extends BaseController {
   }
 
   public async handlePatchNode(nodeId: NodeId, patch: NodePatch): Promise<void> {
-    const node = this.model.state.nodes.get(nodeId);
+    const node = this.model.state.getNode(nodeId);
     switch (patch.op) {
       case 'update-name':
         node?.updateName(patch.name);
@@ -69,14 +69,14 @@ export class NetworkController extends BaseController {
 
   public async handleRemoveNode(nodeId: NodeId): Promise<void> {
     this.nodePositionCache.delete(nodeId);
-    const node = this.model.state.nodes.get(nodeId);
+    const node = this.model.state.getNode(nodeId);
     if (node) this.model.removeNode(node);
     await this.save();
     this.syncNetworkToUI();
   }
 
   public async handleRemoveRoad(roadId: RoadId): Promise<void> {
-    const road = this.model.state.roads.get(roadId);
+    const road = this.model.state.getRoad(roadId);
     if (!road) return;
     this.model.removeRoad(road);
     await this.save();
@@ -84,13 +84,13 @@ export class NetworkController extends BaseController {
   }
 
   public async handlePatchRoad(roadId: RoadId, patch: RoadPatch): Promise<void> {
-    const road = this.model.state.roads.get(roadId);
+    const road = this.model.state.getRoad(roadId);
     switch (patch.op) {
       case 'add-section':
         if (road) this.model.addRoadSection(road, { ...patch.section });
         break;
       case 'remove-section': {
-        const section = road?.sections.get(patch.sectionId);
+        const section = road?.hasSection(patch.sectionId[1]) ? road.getSectionHarsh(patch.sectionId[1]) : undefined;
         if (section) this.model.removeRoadSection(section);
         break;
       }
@@ -154,7 +154,7 @@ export class NetworkController extends BaseController {
     if (nodeId) {
       await this.roadControl.remove();
       postMessageToUI({ type: 'network-element-focused', element: this.buildNodeElement(nodeId) });
-      const node = this.model.state.nodes.get(nodeId);
+      const node = this.model.state.getNode(nodeId);
       if (node) this.emitNodeLinesData(node);
       return;
     }
@@ -232,16 +232,16 @@ export class NetworkController extends BaseController {
 
   private buildNetworkPayload(): { nodes: NodeData[]; roads: RoadData[] } {
     const state = this.model.state;
-    const nodes: NodeData[] = Array.from(state.nodes.values()).map(n => ({
+    const nodes: NodeData[] = [...state.getNodes()].map(n => ({
       id: n.id, name: n.name, pos: this.computeNodeCenter(n),
     }));
-    const roads: RoadData[] = Array.from(state.roads.values()).map(r => ({
+    const roads: RoadData[] = [...state.getRoads()].map(r => ({
       id: r.id,
       name: r.name,
-      startNodeId: r.startNode.id,
-      endNodeId: r.endNode.id,
-      sections: Array.from(r.sections.values()).map((s): RoadSectionData => ({
-        id: s.id, name: s.name, index: s.index,
+      startNodeId: r.endpoints[0].node.id,
+      endNodeId: r.endpoints[1].node.id,
+      sections: [...r.getSections()].map((s): RoadSectionData => ({
+        id: s.getRoadSectionId(), name: s.name, index: s.index,
       })),
     }));
     return { nodes, roads };
@@ -251,12 +251,11 @@ export class NetworkController extends BaseController {
     const currentCenter = this.getNodeCenter(nodeId);
     const delta = { x: newPos.x - currentCenter.x, y: newPos.y - currentCenter.y };
     if (Math.abs(delta.x) < 0.5 && Math.abs(delta.y) < 0.5) return;
-    const node = this.model.state.nodes.get(nodeId);
+    const node = this.model.state.getNode(nodeId);
     if (node && node.roadConnections.length > 0) {
       this.model.moveNodeConnections(node, delta);
     } else {
       this.nodePositionCache.set(nodeId, newPos);
-      if (node) node.isolatedPos = newPos;
     }
     await this.roadControl.remove();
 
@@ -285,24 +284,17 @@ export class NetworkController extends BaseController {
   }
 
   private computeNodeCenter(node: Node): { x: number; y: number } {
-    let sumX = 0, sumY = 0, count = 0;
-    for (const { road, endpointIndex } of node.roadConnections) {
-      sumX += road.endpoints[endpointIndex].endpointPos.x;
-      sumY += road.endpoints[endpointIndex].endpointPos.y;
-      count++;
-    }
-    if (count > 0) return { x: sumX / count, y: sumY / count };
-    return node.isolatedPos ?? this.nodePositionCache.get(node.id) ?? { x: 0, y: 0 };
+    return node.computeCenter(this.nodePositionCache.get(node.id) ?? { x: 0, y: 0 });
   }
 
   private getNodeCenter(nodeId: NodeId): { x: number; y: number } {
-    const node = this.model.state.nodes.get(nodeId);
+    const node = this.model.state.getNode(nodeId);
     if (node) return this.computeNodeCenter(node);
     return this.nodePositionCache.get(nodeId) ?? { x: 0, y: 0 };
   }
 
   private buildNodeElement(nodeId: NodeId): NetworkFocusedElement {
-    const node = this.model.state.nodes.get(nodeId);
+    const node = this.model.state.getNode(nodeId);
     return { kind: 'node', nodeId, name: node?.name, pos: node ? this.computeNodeCenter(node) : (this.nodePositionCache.get(nodeId) ?? { x: 0, y: 0 }) };
   }
 
@@ -310,23 +302,24 @@ export class NetworkController extends BaseController {
     const state = this.model.state;
     const lines: LineAtNodeData[] = getRscEntriesForNode(node, state).map(({ line, path: p }) => ({
       lineId: line.id, lineName: line.name, lineColor: line.color, pathIndex: p.index,
-      exitingSectionId: p.exiting?.id ?? null, enteringSectionId: p.entering?.id ?? null,
+      exitingSectionId: p.exiting?.section.getRoadSectionId() ?? null,
+      enteringSectionId: p.entering?.section.getRoadSectionId() ?? null,
       exitRank: p.exitRank, enterRank: p.enterRank,
     }));
     postMessageToUI({ type: 'node-lines-data', nodeId: node.id, lines });
   }
 
   private buildRoadElement(roadId: RoadId): NetworkFocusedElement {
-    const road = this.model.state.roads.get(roadId);
+    const road = this.model.state.getRoad(roadId);
     if (!road) return { kind: 'road', roadId, startNodeId: '' as NodeId, endNodeId: '' as NodeId, sections: [] };
     return {
       kind: 'road',
       roadId,
       name: road.name,
-      startNodeId: road.startNode.id,
-      endNodeId: road.endNode.id,
-      sections: Array.from(road.sections.values()).map(s => ({
-        id: s.id, name: s.name, index: s.index,
+      startNodeId: road.endpoints[0].node.id,
+      endNodeId: road.endpoints[1].node.id,
+      sections: [...road.getSections()].map(s => ({
+        id: s.getRoadSectionId(), name: s.name, index: s.index,
       })),
     };
   }

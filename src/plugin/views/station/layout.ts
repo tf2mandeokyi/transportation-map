@@ -23,10 +23,8 @@ export function getLinesForStation(
   const entries: CollectedEntry[] = [];
 
   for (const { line, path } of getStationStopsAcrossLines(station, state)) {
-    const stackingOrder = state.lineStackingOrder.indexOf(line.id);
-    const arrivalDir = line.getDirectionAtStop(path.index);
-    const facing: 'left' | 'right' = arrivalDir === 'ascending' ? 'right' : 'left';
-    entries.push({ line, segmentIndex: path.index, rank: path.rank, facing, passThrough: !path.stops, stackingOrder });
+    const facing: 'left' | 'right' = path.direction === 'ascending' ? 'right' : 'left';
+    entries.push({ line, segmentIndex: path.index, rank: path.rank, facing, passThrough: !path.stops, stackingOrder: 0 });
   }
 
   entries.sort((a, b) => a.rank !== b.rank ? a.rank - b.rank : a.stackingOrder - b.stackingOrder);

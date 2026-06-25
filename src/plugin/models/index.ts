@@ -1,7 +1,8 @@
-import { IModel, Line, LineProps, MapState, Node, NodeProps, Road, RoadProps, RoadSection, RoadSectionProps, Station, StationProps } from "./structures";
+import { LineId, NodeId, RoadId, RoadSectionId, SectionId, StationId } from "@/common/types";
+import { Line, LineProps, MapState, Node, NodeProps, Road, RoadProps, RoadSection, RoadSectionProps, Station, StationProps } from "./structures";
 import { deserializeMapState, serializeMapState } from "./serde";
-import { LineId, RoadSectionId } from "@/common/types";
 import { validateLinePaths } from "../utils/line-validator";
+import { own } from "@/common/utils/ownership";
 
 function generateBase62(length: number): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -12,11 +13,11 @@ function generateBase62(length: number): string {
   return result;
 }
 
-function generateUniqueId<T extends string>(map: Map<T, unknown>): T {
+function generateUniqueId<T extends string>(hasId: (id: T) => boolean): T {
   let length = 1;
   while (true) {
     const id = generateBase62(length) as T;
-    if (!map.has(id)) return id;
+    if (!hasId(id)) return id;
     length++;
   }
 }
@@ -25,83 +26,65 @@ export class Model {
   readonly state: MapState;
 
   constructor() {
-    this.state = {
-      nodes: new Map(),
-      roads: new Map(),
-      stations: new Map(),
-      lines: new Map(),
-      lineStackingOrder: [],
-    };
+    this.state = new MapState();
   }
 
   // ─── Node ───
 
   public addNode(node: NodeProps): Node {
-    const id = generateUniqueId(this.state.nodes);
-    const obj = new Node(this, id, node);
-    this.state.nodes.set(id, obj);
+    const id = generateUniqueId<NodeId>(id => this.state.hasNode(id));
+    const obj = own(new Node(this.state, id).applyProps(node));
+    this.state.addNode(obj);
     return obj;
   }
 
   public removeNode(node: Node): void {
-    for (const road of node.roadConnections.map(rc => rc.road)) {
+    for (const { road } of [...node.roadConnections]) {
       this.removeRoad(road);
     }
-    this.state.nodes.delete(node.id);
+    this.state.removeNode(node);
   }
 
   public moveNodeConnections(node: Node, delta: { x: number; y: number }): void {
     for (const { road, endpointIndex } of node.roadConnections) {
       const conn = road.endpoints[endpointIndex];
-      road.endpoints[endpointIndex] = {
+      road.endpoints[endpointIndex] = own({
         ...conn,
         endpointPos: { x: conn.endpointPos.x + delta.x, y: conn.endpointPos.y + delta.y },
-      };
+      });
     }
   }
 
   // ─── Road ───
 
   public addRoad(road: RoadProps): Road {
-    const id = generateUniqueId(this.state.roads);
-    const obj = new Road(this, id, road);
-    this.state.roads.set(id, obj);
-
-    obj.startNode = road.startNode;
-    road.startNode.roadConnections.push({ road: obj, endpointIndex: 0 });
-    obj.endNode = road.endNode;
-    road.endNode.roadConnections.push({ road: obj, endpointIndex: 1 });
-
+    const id = generateUniqueId<RoadId>(id => this.state.hasRoad(id));
+    const obj = own(new Road(this.state, id).applyProps(road));
+    this.state.addRoad(obj);
+    road.endpoints[0].node.addRoadConnection(obj, 0);
+    road.endpoints[1].node.addRoadConnection(obj, 1);
     return obj;
   }
 
   public removeRoad(road: Road): void {
-    for (const node of this.state.nodes.values()) {
+    for (const node of this.state.getNodes()) {
       node.roadConnections = node.roadConnections.filter(rc => rc.road !== road);
     }
-
-    for (const section of road.sections.values()) {
+    for (const section of road.getSections()) {
       for (const station of [...section.stations]) {
         this.removeStation(station);
       }
     }
-
     this._removeRoadFromLines(road);
-    this.state.roads.delete(road.id);
+    this.state.removeRoad(road);
   }
 
   // ─── RoadSection ───
 
   public addRoadSection(road: Road, section: RoadSectionProps): RoadSection {
-    const allSectionIds = new Map<RoadSectionId, true>();
-    for (const r of this.state.roads.values()) {
-      for (const sid of r.sections.keys()) allSectionIds.set(sid, true);
-    }
-    const id = generateUniqueId(allSectionIds);
-
-    const obj = new RoadSection(this, id, section);
-    obj.road = road;
-    road.sections.set(id, obj);
+    const id = generateUniqueId<SectionId>(id => road.hasSection(id));
+    const obj = own(new RoadSection(this.state, id).applyProps(road, section));
+    road.addSection(obj);
     return obj;
   }
 
@@ -109,16 +92,16 @@ export class Model {
     for (const station of [...section.stations]) {
       this.removeStation(station);
     }
-    section.road.sections.delete(section.id);
+    section.parentRoad.removeSection(section);
   }
 
   private _removeRoadFromLines(road: Road): void {
-    const sectionSet = new Set(road.sections.values());
-    for (const line of this.state.lines.values()) {
+    const sectionSet = new Set(road.getSections());
+    for (const line of this.state.getLines()) {
       line.paths = line.paths.filter(p => {
         if (p.kind !== 'road-section-change') return true;
-        return !((p.exiting !== null && sectionSet.has(p.exiting)) ||
-                 (p.entering !== null && sectionSet.has(p.entering)));
+        return !((p.exiting !== null && sectionSet.has(p.exiting.section)) ||
+                 (p.entering !== null && sectionSet.has(p.entering.section)));
       });
       this._reindexLinePaths(line);
     }
@@ -127,37 +110,38 @@ export class Model {
   // ─── Station ───
 
   public addStation(station: StationProps): Station {
-    const id = generateUniqueId(this.state.stations);
-    const obj = new Station(this.state, id, station);
-    this.state.stations.set(id, obj);
-
+    const id = generateUniqueId<StationId>(id => this.state.hasStation(id));
+    const obj = own(new Station(this.state, id).applyProps(station));
+    this.state.addStation(obj);
     if (station.roadSection) {
-      obj.roadSection = station.roadSection;
+      obj.setParent(station.roadSection);
       station.roadSection.stations.push(obj);
     }
-
     return obj;
   }
 
   public findSection(sectionId: RoadSectionId): RoadSection | null {
-    return this._findSection(sectionId);
+    try {
+      return this.state.getRoadSectionHarsh(sectionId);
+    } catch {
+      return null;
+    }
   }
 
   public removeStation(station: Station): void {
-    if (station.roadSection) {
-      station.roadSection.stations = station.roadSection.stations.filter(s => s !== station);
+    const parentSection = station.parentRoadSection as RoadSection | undefined;
+    if (parentSection) {
+      parentSection.stations = parentSection.stations.filter(s => s !== station);
     }
-
-    for (const line of this.state.lines.values()) {
+    for (const line of this.state.getLines()) {
       line.paths = line.paths.filter(p => !(p.kind === 'station-stop' && p.station === station));
       this._reindexLinePaths(line);
     }
-
-    this.state.stations.delete(station.id);
+    this.state.removeStation(station);
   }
 
   public findStationByFigmaId(figmaNodeId: string): Station | null {
-    for (const station of this.state.stations.values()) {
+    for (const station of this.state.getStations()) {
       if (station.figmaNodeId === figmaNodeId) return station;
     }
     return null;
@@ -176,46 +160,31 @@ export class Model {
   // ─── Line ───
 
   public addLine(line: Omit<LineProps, 'figmaGroupId'>): Line {
-    const id = generateUniqueId(this.state.lines);
-    const obj = new Line(this, id, line);
-    this.state.lines.set(id, obj);
-    if (!this.state.lineStackingOrder.includes(id)) {
-      this.state.lineStackingOrder.push(id);
-    }
+    const id = generateUniqueId<LineId>(id => this.state.hasLine(id));
+    const obj = own(new Line(this.state, id).applyProps({ ...line, figmaGroupId: null }));
+    this.state.addLine(obj);
     return obj;
   }
 
   public removeLine(id: LineId): void {
-    this.state.lines.delete(id);
-    const index = this.state.lineStackingOrder.indexOf(id);
-    if (index !== -1) this.state.lineStackingOrder.splice(index, 1);
+    const line = this.state.getLine(id);
+    if (line) this.state.removeLine(line);
   }
 
-  public updateLineStackingOrder(newOrder: LineId[]): void {
-    this.state.lineStackingOrder = [...newOrder];
+  public updateLineStackingOrder(_newOrder: LineId[]): void {
+    // lineStackingOrder deprecated — no-op kept for call-site compatibility
   }
 
   // ─── LinePath ───
 
-
   public validateAllLinePaths(): void {
-    for (const line of this.state.lines.values()) {
+    for (const line of this.state.getLines()) {
       line.paths = validateLinePaths(line);
     }
   }
 
   private _reindexLinePaths(line: Line): void {
     line.paths.forEach((p, i) => { p.index = i; });
-  }
-
-  // ─── Helpers ───
-
-  private _findSection(sectionId: RoadSectionId): RoadSection | null {
-    for (const road of this.state.roads.values()) {
-      const section = road.sections.get(sectionId);
-      if (section) return section;
-    }
-    return null;
   }
 
   // ─── Persistence ───
@@ -230,10 +199,9 @@ export class Model {
     if (!data) return null;
 
     const model = new Model();
-    const state = deserializeMapState(data, model);
-    if (!state) return null;
+    const success = deserializeMapState(data, model.state);
+    if (!success) return null;
 
-    Object.assign(model.state, state);
     model.validateAllLinePaths();
     return model;
   }

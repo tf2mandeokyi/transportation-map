@@ -49,10 +49,10 @@ export function findNearestRoadSection(point: Vector, state: Readonly<MapState>)
   let best: SnapResult | null = null;
   let bestDist = Infinity;
 
-  for (const road of state.roads.values()) {
+  for (const road of state.getRoads()) {
     const bezier = road.computeBezier();
     if (!bezier) continue;
-    const sections = Array.from(road.sections.values());
+    const sections = [...road.getSections()];
     if (sections.length === 0) continue;
 
     const t = nearestTOnQuadBezier(bezier, point);

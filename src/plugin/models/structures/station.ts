@@ -33,7 +33,7 @@ export class Station extends TransportationMapObject<StationId> {
   textRotation!: number;
   flipped!: boolean;
   interpT!: number;
-  parent!: RoadSection;
+  parentRoadSection!: RoadSection;
 
   applyProps(props: StationProps): this {
     this.name = props.name;
@@ -56,7 +56,7 @@ export class Station extends TransportationMapObject<StationId> {
   }
 
   setParent(roadSection: RoadSection): void {
-    this.parent = roadSection;
+    this.parentRoadSection = roadSection;
   }
 
   makePassThroughStop(rank: number, direction: 'ascending' | 'descending'): Owned<StationStop> {

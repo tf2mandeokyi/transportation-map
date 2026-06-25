@@ -32,7 +32,7 @@ export namespace LinePath {
   export function fromLinePathInput(mapState: Readonly<MapState>, input: LinePathInput): Owned<LinePath> {
     if (input.kind === 'station-stop') {
       const ss = new StationStop(mapState);
-      ss.station = mapState.getStation(input.stationId);
+      ss.station = mapState.getStationHarsh(input.stationId);
       ss.rank = 0;
       ss.stops = true;
       ss.direction = input.direction;
@@ -40,12 +40,12 @@ export namespace LinePath {
     }
     else {
       const rsc = new RoadSectionChange(mapState);
-      rsc.node = mapState.getNode(input.nodeId);
+      rsc.node = mapState.getNodeHarsh(input.nodeId);
       rsc.exiting = input.exiting
-        ? { section: mapState.getRoadSection(input.exiting.sectionId), side: input.exiting.side }
+        ? { section: mapState.getRoadSectionHarsh(input.exiting.sectionId), side: input.exiting.side }
         : null;
       rsc.entering = input.entering
-        ? { section: mapState.getRoadSection(input.entering.sectionId), side: input.entering.side }
+        ? { section: mapState.getRoadSectionHarsh(input.entering.sectionId), side: input.entering.side }
         : null;
       rsc.exitRank = 0;
       rsc.enterRank = 0;
@@ -82,7 +82,7 @@ export class StationStop {
   applySerialized(ser: SerializedLinePath): this {
     if (ser.k !== 'ss') throw new Error(`Invalid serialized data for StationStop: ${JSON.stringify(ser)}`);
     if (!ser.i) throw new Error(`Serialized StationStop is missing stationId: ${JSON.stringify(ser)}`);
-    this.station = this.mapState.getStation(ser.i);
+    this.station = this.mapState.getStationHarsh(ser.i);
     this.rank = ser.r ?? 0;
     this.stops = true; // default to true if not specified
     this.direction = ser.d === 'd' ? 'descending' : 'ascending';
@@ -101,15 +101,15 @@ export class StationStop {
   autoInsertRSCTo(currStop: StationStop): Owned<RoadSectionChange> | null {
     const prevStation = this.station;
     const currStation = currStop.station;
-    const prevRoad = prevStation.parent.parent;
-    const currRoad = currStation.parent.parent;
+    const prevRoad = prevStation.parentRoadSection.parentRoad;
+    const currRoad = currStation.parentRoadSection.parentRoad;
     if (prevRoad === currRoad) return null;
     const node = findSharedNode(prevRoad, currRoad);
     if (!node) return null;
     const rsc = new RoadSectionChange(this.mapState);
     rsc.node = node;
-    rsc.exiting = { section: prevStation.parent, side: node === prevRoad.endpoints[0].node ? 0 : 1 };
-    rsc.entering = { section: currStation.parent, side: node === currRoad.endpoints[0].node ? 0 : 1 };
+    rsc.exiting = { section: prevStation.parentRoadSection, side: node === prevRoad.endpoints[0].node ? 0 : 1 };
+    rsc.entering = { section: currStation.parentRoadSection, side: node === currRoad.endpoints[0].node ? 0 : 1 };
     rsc.exitRank = this.rank;
     rsc.enterRank = currStop.rank;
     return own(rsc);
@@ -133,9 +133,9 @@ export class RoadSectionChange {
   applySerialized(ser: SerializedLinePath): this {
     if (ser.k !== 'sc') throw new Error(`Invalid serialized data for RoadSectionChange: ${JSON.stringify(ser)}`);
     if (!ser.n) throw new Error(`Serialized RoadSectionChange is missing nodeId: ${JSON.stringify(ser)}`);
-    this.node = this.mapState.getNode(ser.n);
-    this.exiting = ser.e ? { section: this.mapState.getRoadSection(ser.e[0]), side: ser.e[1] } : null;
-    this.entering = ser.a ? { section: this.mapState.getRoadSection(ser.a[0]), side: ser.a[1] } : null;
+    this.node = this.mapState.getNodeHarsh(ser.n);
+    this.exiting = ser.e ? { section: this.mapState.getRoadSectionHarsh(ser.e[0]), side: ser.e[1] } : null;
+    this.entering = ser.a ? { section: this.mapState.getRoadSectionHarsh(ser.a[0]), side: ser.a[1] } : null;
     this.exitRank = ser.f ?? 0;
     this.enterRank = ser.g ?? 0;
     return this;

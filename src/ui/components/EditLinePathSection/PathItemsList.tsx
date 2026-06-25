@@ -59,12 +59,12 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
         />
       );
     } else {
-      const enteringId = path.entering?.id ?? null;
-      const enteringRoad = enteringId ? roads.find(r => r.sections.some(s => s.id === enteringId)) : null;
+      const enteringId = path.entering ? path.entering.section.getRoadSectionId() : null;
+      const enteringRoad = enteringId ? roads.find(r => r.id === enteringId[0]) : null;
       elements.push(
         <div key={`rse-${i}`} className="station-path-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span className="station-number" style={{ paddingLeft: '4px', paddingRight: '4px' }}>{i + 1}</span>
-          <span style={{ flex: 1, fontStyle: 'italic', color: '#666' }}>↪ {enteringRoad?.name ?? (enteringId ?? '?')}</span>
+          <span style={{ flex: 1, fontStyle: 'italic', color: '#666' }}>↪ {enteringRoad?.name ?? (enteringId ? enteringId.join(':') : '?')}</span>
           {inactive && (
             <button className="button button--secondary small-btn" onClick={() => onRemoveRse(i)}>X</button>
           )}

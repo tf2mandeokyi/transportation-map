@@ -15,21 +15,21 @@ function pushToBack(children: readonly SceneNode[], predicate: (c: SceneNode) =>
 export class RoadRenderer {
   public static async renderAll(state: Readonly<MapState>): Promise<void> {
     await RoadRenderer.clearPrevious();
-    for (const road of state.roads.values()) renderRoad(road, state);
+    for (const road of state.getRoads()) renderRoad(road, state);
     const nodesWithJunction = await RoadRenderer.renderJunctions(state);
     await RoadRenderer.renderNodeMarkers(state, nodesWithJunction);
   }
 
   private static async renderJunctions(state: Readonly<MapState>): Promise<Set<string>> {
     const nodesWithJunction = new Set<string>();
-    for (const node of state.nodes.values()) {
+    for (const node of state.getNodes()) {
       if (await buildAndAppendJunction(node, state)) nodesWithJunction.add(node.id);
     }
     return nodesWithJunction;
   }
 
   private static async renderNodeMarkers(state: Readonly<MapState>, nodesWithJunction: Set<string>): Promise<void> {
-    for (const node of state.nodes.values()) {
+    for (const node of state.getNodes()) {
       if (nodesWithJunction.has(node.id)) continue;
       const marker = await buildNodeMarker(node);
       if (marker) {

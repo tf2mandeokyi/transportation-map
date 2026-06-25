@@ -20,21 +20,21 @@ export class RoadSection extends TransportationMapObject<SectionId> {
   name?: string;
   index!: number;
   stations: Station[] = [];
-  parent!: Road;
+  parentRoad!: Road;
 
   applyProps(parent: Road, props: RoadSectionProps): this {
-    this.parent = parent;
+    this.parentRoad = parent;
     this.name = props.name;
     this.index = props.index;
     return this;
   }
 
   applySerialized(parent: Road, ser: SerializedRoadSection): this {
-    this.parent = parent;
+    this.parentRoad = parent;
     this.name = ser.n;
     this.index = ser.x;
     this.stations = ser.s.map(stationId => {
-      const station = this.mapState.getStation(stationId);
+      const station = this.mapState.getStationHarsh(stationId);
       station.setParent(this);
       return station;
     });
@@ -42,7 +42,7 @@ export class RoadSection extends TransportationMapObject<SectionId> {
   }
 
   getRoadSectionId(): RoadSectionId {
-    return [this.parent.id, this.id];
+    return [this.parentRoad.id, this.id];
   }
 
   serialize(): SerializedRoadSection {

@@ -62,8 +62,8 @@ const PathEditor: React.FC = () => {
 
   const toLinePathInputs = (paths: LinePath[]): LinePathInput[] =>
     paths.map(p => p.kind === 'station-stop'
-      ? { kind: 'station-stop' as const, stationId: p.station.id }
-      : { kind: 'road-section-change' as const, nodeId: p.node.id, exiting: p.exiting?.id ?? null, entering: p.entering?.id ?? null }
+      ? { kind: 'station-stop' as const, stationId: p.station.id, direction: p.direction }
+      : { kind: 'road-section-change' as const, nodeId: p.node.id, exiting: p.exiting ? { sectionId: p.exiting.section.getRoadSectionId(), side: p.exiting.side } : null, entering: p.entering ? { sectionId: p.entering.section.getRoadSectionId(), side: p.entering.side } : null }
     );
 
   const getSourceAt = (pathIndex: number): { roadId: RoadId | null; sectionId: RoadSectionId | null } => {
@@ -71,8 +71,8 @@ const PathEditor: React.FC = () => {
     const p = linePaths[pathIndex];
     if (!p) return { roadId: null, sectionId: null };
     if (p.kind === 'road-section-change') {
-      const sectionId = p.entering?.id ?? null;
-      const roadId = sectionId ? (roads.find(r => r.sections.some(s => s.id === sectionId))?.id ?? null) : null;
+      const sectionId = p.entering ? p.entering.section.getRoadSectionId() : null;
+      const roadId = sectionId ? (roads.find(r => r.id === sectionId[0])?.id ?? null) : null;
       return { roadId, sectionId };
     }
     return { roadId: stationRoadIds[p.station.id] ?? null, sectionId: stationSectionIds[p.station.id] ?? null };
@@ -89,7 +89,7 @@ const PathEditor: React.FC = () => {
 
   const handleFinishAdding = (stations: Array<{ id: StationId; name: string }>) => {
     if (!currentEditingLineId || stations.length === 0) return;
-    const newStopInputs: LinePathInput[] = stations.map(s => ({ kind: 'station-stop' as const, stationId: s.id }));
+    const newStopInputs: LinePathInput[] = stations.map(s => ({ kind: 'station-stop' as const, stationId: s.id, direction: 'ascending' as const }));
     const fullPathInputs = toLinePathInputs(linePaths);
     const insertAt = stationInsertAfterIndex === null ? fullPathInputs.length
       : stationInsertAfterIndex === -1 ? 0
@@ -122,7 +122,7 @@ const PathEditor: React.FC = () => {
   const commitRse = (afterPathIndex: number, exitingSectionId: RoadSectionId | null, nodeId: NodeId, enteringSectionId: RoadSectionId | null) => {
     if (!currentEditingLineId) return;
     const fullPaths = toLinePathInputs(linePathsRef.current);
-    const rsc: LinePathInput = { kind: 'road-section-change', nodeId, exiting: exitingSectionId, entering: enteringSectionId };
+    const rsc: LinePathInput = { kind: 'road-section-change', nodeId, exiting: exitingSectionId ? { sectionId: exitingSectionId, side: 0 } : null, entering: enteringSectionId ? { sectionId: enteringSectionId, side: 0 } : null };
     const newPaths = [...fullPaths.slice(0, afterPathIndex + 1), rsc, ...fullPaths.slice(afterPathIndex + 1)];
     postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'update-path', paths: newPaths } });
     postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });

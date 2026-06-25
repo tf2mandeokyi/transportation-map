@@ -19,7 +19,7 @@ export class ConnectionController extends BaseController {
   }
 
   public async handleGetLinePath(lineId: LineId): Promise<void> {
-    const line = this.model.state.lines.get(lineId);
+    const line = this.model.state.getLine(lineId);
     if (!line) { console.error("Line not found:", lineId); return; }
 
     const stationNames: Record<StationId, string> = {};
@@ -29,8 +29,8 @@ export class ConnectionController extends BaseController {
       if (path.kind === 'station-stop') {
         const station = path.station;
         stationNames[station.id] = station.name;
-        stationRoadIds[station.id] = station.roadSection?.road?.id ?? null;
-        stationSectionIds[station.id] = station.roadSection?.id ?? null;
+        stationRoadIds[station.id] = station.parentRoadSection?.parentRoad?.id ?? null;
+        stationSectionIds[station.id] = station.parentRoadSection?.getRoadSectionId() ?? null;
       }
     }
 
@@ -38,14 +38,14 @@ export class ConnectionController extends BaseController {
   }
 
   public insertStationIntoLine(lineId: LineId, newStation: Station, relativeToStation: Station, insertAfter: boolean): boolean {
-    const line = this.model.state.lines.get(lineId);
+    const line = this.model.state.getLine(lineId);
     if (!line) return false;
 
     const refIndex = line.paths.findIndex(p => p.kind === 'station-stop' && p.station === relativeToStation);
     if (refIndex === -1) return false;
 
     const insertAt = insertAfter ? refIndex + 1 : refIndex;
-    const newStop: { kind: 'station-stop'; stationId: StationId } = { kind: 'station-stop', stationId: newStation.id };
+    const newStop: LinePathInput = { kind: 'station-stop', stationId: newStation.id, direction: 'ascending' };
 
     const before = line.paths.slice(0, insertAt).map(p => this.pathToInput(p));
     const after  = line.paths.slice(insertAt).map(p => this.pathToInput(p));
@@ -55,14 +55,14 @@ export class ConnectionController extends BaseController {
   }
 
   public connectStationsWithLine(lineId: LineId, startStation: Station, endStation: Station): void {
-    const line = this.model.state.lines.get(lineId);
+    const line = this.model.state.getLine(lineId);
     if (!line) return;
 
     const hasStart = line.paths.some(p => p.kind === 'station-stop' && p.station === startStation);
     if (!hasStart) {
-      line.addPath({ kind: 'station-stop', stationId: startStation.id });
+      line.addPath({ kind: 'station-stop', stationId: startStation.id, direction: 'ascending' });
     }
-    line.addPath({ kind: 'station-stop', stationId: endStation.id });
+    line.addPath({ kind: 'station-stop', stationId: endStation.id, direction: 'ascending' });
   }
 
   public handleSelectionChange(): void {
@@ -74,8 +74,7 @@ export class ConnectionController extends BaseController {
       const state = this.model.state;
       const lines = [];
       for (const { line, path } of getStationStopsAcrossLines(station, state)) {
-        const arrDir = line.getDirectionAtStop(path.index);
-        const facing: 'left' | 'right' = arrDir === 'ascending' ? 'right' : 'left';
+        const facing: 'left' | 'right' = path.direction === 'ascending' ? 'right' : 'left';
         lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing, stops: path.stops });
       }
       postMessageToUI({
@@ -88,7 +87,12 @@ export class ConnectionController extends BaseController {
   }
 
   private pathToInput(p: LinePath): LinePathInput {
-    if (p.kind === 'station-stop') return { kind: 'station-stop', stationId: p.station.id };
-    return { kind: 'road-section-change', nodeId: p.node.id, exiting: p.exiting?.id ?? null, entering: p.entering?.id ?? null };
+    if (p.kind === 'station-stop') return { kind: 'station-stop', stationId: p.station.id, direction: p.direction };
+    return {
+      kind: 'road-section-change',
+      nodeId: p.node.id,
+      exiting: p.exiting ? { sectionId: p.exiting.section.getRoadSectionId(), side: p.exiting.side } : null,
+      entering: p.entering ? { sectionId: p.entering.section.getRoadSectionId(), side: p.entering.side } : null,
+    };
   }
 }

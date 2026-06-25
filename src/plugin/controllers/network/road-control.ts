@@ -1,6 +1,7 @@
 import { RoadId } from "@/common/types";
 import { Node } from "../../models/structures/node";
 import { Model } from "../../models";
+import { own } from "@/common/utils/ownership";
 import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_ROAD_ID } from "../../views/road";
 import { renderEditHandle } from "../../figmls";
 import { elevateToCubic, bezierPathData, offsetBezier } from "../../utils/bezier";
@@ -39,11 +40,11 @@ export class RoadControlManager {
     await this.remove();
 
     const state = this.model.state;
-    const road = state.roads.get(roadId);
+    const road = state.getRoad(roadId);
     if (!road) return;
 
-    const startNode = road.startNode;
-    const endNode   = road.endNode;
+    const startNode = road.endpoints[0].node;
+    const endNode   = road.endpoints[1].node;
     if (!startNode || !endNode) return;
 
     const p0  = road.endpoints[0].endpointPos;
@@ -124,13 +125,13 @@ export class RoadControlManager {
   async onEndpointHandleMoved(roadId: RoadId, side: 'start' | 'end', handle: FrameNode): Promise<void> {
     const handlePos = { x: handle.x + HANDLE_RADIUS, y: handle.y + HANDLE_RADIUS };
     const state = this.model.state;
-    const road = state.roads.get(roadId);
+    const road = state.getRoad(roadId);
     if (!road) return;
 
     if (side === 'start') {
-      road.endpoints = [{ ...road.endpoints[0], endpointPos: handlePos }, road.endpoints[1]];
+      road.endpoints = [own({ ...road.endpoints[0], endpointPos: handlePos }), road.endpoints[1]];
     } else {
-      road.endpoints = [road.endpoints[0], { ...road.endpoints[1], endpointPos: handlePos }];
+      road.endpoints = [road.endpoints[0], own({ ...road.endpoints[1], endpointPos: handlePos })];
     }
 
     await this.updateRoadAndStems(roadId);
@@ -138,7 +139,7 @@ export class RoadControlManager {
 
   async onBezierHandleMoved(roadId: RoadId, handle: FrameNode): Promise<void> {
     const handlePos = { x: handle.x + HANDLE_RADIUS, y: handle.y + HANDLE_RADIUS };
-    const road = this.model.state.roads.get(roadId);
+    const road = this.model.state.getRoad(roadId);
     if (!road) return;
     road.bezierMidPoint = handlePos;
     await this.updateRoadAndStems(roadId);
@@ -146,7 +147,7 @@ export class RoadControlManager {
 
   private async updateRoadAndStems(roadId: RoadId): Promise<void> {
     const state = this.model.state;
-    const road = state.roads.get(roadId);
+    const road = state.getRoad(roadId);
     if (!road) return;
 
     const p0  = road.endpoints[0].endpointPos;
@@ -166,8 +167,8 @@ export class RoadControlManager {
           data: `M ${from.x - tx} ${from.y - ty} L ${to.x - tx} ${to.y - ty}`,
         }];
       };
-      const startCenter = this.computeNodeCenter(road.startNode);
-      const endCenter   = this.computeNodeCenter(road.endNode);
+      const startCenter = this.computeNodeCenter(road.endpoints[0].node);
+      const endCenter   = this.computeNodeCenter(road.endpoints[1].node);
       await updateStem(ids.startNodeStem, startCenter, p0);
       await updateStem(ids.startToMid,   p0,  mid);
       await updateStem(ids.endNodeStem,   endCenter,   p2);
@@ -180,7 +181,7 @@ export class RoadControlManager {
     if (!roadGroup || roadGroup.removed || !('children' in roadGroup)) return;
 
     const group = roadGroup as GroupNode;
-    const sections = Array.from(road.sections.values()).sort((a, b) => a.index - b.index);
+    const sections = road.getSectionsByIndex();
     const children = group.children;
 
     const toLocalBezier = (child: VectorNode, pts: { p0: Vector; p1: Vector; p2: Vector; p3: Vector }) => {

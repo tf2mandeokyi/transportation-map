@@ -22,7 +22,7 @@ function countPassesOnSection(line: Line, section: RoadSection): number {
         enteredViaRse = false;
       }
       onSection = false;
-      if (p.entering === section) enteredViaRse = true;
+      if (p.entering?.section === section) enteredViaRse = true;
       continue;
     }
     if (!sectionStationSet.has(p.station)) {
@@ -58,7 +58,7 @@ export function getLinesForSection(
 ): LinePass[] {
   if (referenceStation) {
     const passes: Array<LinePass & { rank: number }> = [];
-    for (const line of state.lines.values()) {
+    for (const line of state.getLines()) {
       for (const p of line.paths) {
         if (p.kind === 'station-stop' && p.station === referenceStation) {
           passes.push({ line, segmentIndex: p.index, rank: p.rank });
@@ -67,16 +67,14 @@ export function getLinesForSection(
     }
     passes.sort((a, b) => {
       if (a.rank !== b.rank) return a.rank - b.rank;
-      const sa = state.lineStackingOrder.indexOf(a.line.id);
-      const sb = state.lineStackingOrder.indexOf(b.line.id);
-      return sa - sb;
+      return a.line.id < b.line.id ? -1 : 1;
     });
     return passes;
   }
 
   // No reference station: count directed runs per line for road-width sizing.
   const allPasses: LinePass[] = [];
-  for (const line of state.lines.values()) {
+  for (const line of state.getLines()) {
     const count = countPassesOnSection(line, section);
     for (let i = 0; i < count; i++) {
       allPasses.push({ line, segmentIndex: -1 });

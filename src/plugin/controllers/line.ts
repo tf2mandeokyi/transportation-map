@@ -37,7 +37,7 @@ export class LineController extends BaseController {
   }
 
   private async handleUpdateLineName(lineId: LineId, name: string): Promise<void> {
-    const line = this.model.state.lines.get(lineId);
+    const line = this.model.state.getLine(lineId);
     if (!line) return;
     line.name = name;
     await this.save();
@@ -45,7 +45,7 @@ export class LineController extends BaseController {
   }
 
   private async handleUpdateLineColor(lineId: LineId, color: string): Promise<void> {
-    const line = this.model.state.lines.get(lineId);
+    const line = this.model.state.getLine(lineId);
     if (!line) return;
     line.color = color;
     await this.save();
@@ -53,14 +53,14 @@ export class LineController extends BaseController {
   }
 
   private async handleUpdateLinePath(lineId: LineId, paths: LinePathInput[]): Promise<void> {
-    const line = this.model.state.lines.get(lineId);
+    const line = this.model.state.getLine(lineId);
     if (!line) { console.error("Line not found:", lineId); return; }
     line.replacePaths(paths);
     await this.save();
   }
 
   private async handleRemoveStationFromLine(lineId: LineId, pathIndex: number): Promise<void> {
-    const line = this.model.state.lines.get(lineId);
+    const line = this.model.state.getLine(lineId);
     if (!line) { console.warn(`Line ${lineId} not found`); return; }
     line.removePath(pathIndex);
     await this.save();
@@ -68,7 +68,7 @@ export class LineController extends BaseController {
   }
 
   private async handleToggleStops(lineId: LineId, pathIndex: number, stops: boolean): Promise<void> {
-    const line = this.model.state.lines.get(lineId);
+    const line = this.model.state.getLine(lineId);
     if (!line) return;
     line.setStopFlag(pathIndex, stops);
     await this.save();
@@ -76,7 +76,7 @@ export class LineController extends BaseController {
   }
 
   private async handleRotateLinePath(lineId: LineId, steps: number): Promise<void> {
-    const line = this.model.state.lines.get(lineId);
+    const line = this.model.state.getLine(lineId);
     if (!line) { console.error("Line not found:", lineId); return; }
     if (line.paths.length === 0) { console.warn("Cannot rotate empty path"); return; }
 
@@ -99,15 +99,18 @@ export class LineController extends BaseController {
   }
 
   public syncLinesToUI(): void {
-    const state = this.model.state;
-    for (const lineId of state.lineStackingOrder) {
-      const line = state.lines.get(lineId);
-      if (line) postMessageToUI({ type: 'line-added', id: line.id, name: line.name, color: line.color });
+    for (const line of this.model.state.getLines()) {
+      postMessageToUI({ type: 'line-added', id: line.id, name: line.name, color: line.color });
     }
   }
 
   private pathToInput(p: LinePath): LinePathInput {
-    if (p.kind === 'station-stop') return { kind: 'station-stop', stationId: p.station.id };
-    return { kind: 'road-section-change', nodeId: p.node.id, exiting: p.exiting?.id ?? null, entering: p.entering?.id ?? null };
+    if (p.kind === 'station-stop') return { kind: 'station-stop', stationId: p.station.id, direction: p.direction };
+    return {
+      kind: 'road-section-change',
+      nodeId: p.node.id,
+      exiting: p.exiting ? { sectionId: p.exiting.section.getRoadSectionId(), side: p.exiting.side } : null,
+      entering: p.entering ? { sectionId: p.entering.section.getRoadSectionId(), side: p.entering.side } : null,
+    };
   }
 }

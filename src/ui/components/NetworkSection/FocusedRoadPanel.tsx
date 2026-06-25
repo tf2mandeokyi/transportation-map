@@ -32,7 +32,7 @@ const FocusedRoadPanel: React.FC<{
         <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Sections</label>
         {element.sections.length === 0 && <p style={{ color: '#999', fontSize: '11px', margin: '0 0 8px 0' }}>No sections yet.</p>}
         {element.sections.map(section => (
-          <div key={section.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+          <div key={section.id.join(':')} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
             <span style={{ flex: 1 }}>{section.name ?? `Section ${section.index}`}</span>
             <button className="button button--secondary small-btn" onClick={() => postMessageToPlugin({ type: 'patch-road', roadId: element.roadId, patch: { op: 'remove-section', sectionId: section.id } })}>×</button>
           </div>

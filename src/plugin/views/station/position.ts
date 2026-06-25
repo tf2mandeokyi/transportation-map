@@ -1,12 +1,12 @@
-import { MapState } from "../../models/structures";
+import { MapState, RoadSection } from "../../models/structures";
 import { Station } from "../../models/structures/station";
 import { computeSectionOffset } from "../../utils/line-queries";
 import { evalQuadraticBezier, evalQuadraticBezierTangent } from "../../utils/bezier";
 
 export function computeStationPosition(station: Station, state: Readonly<MapState>): Vector {
-  const section = station.roadSection;
+  const section = station.parentRoadSection as RoadSection | undefined;
   if (!section) return { x: 0, y: 0 };
-  const road = section.road;
+  const road = section.parentRoad;
 
   const base = road.computeBezier();
   if (!base) return { x: 0, y: 0 };
@@ -23,9 +23,9 @@ export function computeStationPosition(station: Station, state: Readonly<MapStat
 }
 
 export function computeStationTangentAngle(station: Station): number {
-  const section = station.roadSection;
+  const section = station.parentRoadSection as RoadSection | undefined;
   if (!section) return 0;
-  const road = section.road;
+  const road = section.parentRoad;
 
   const base = road.computeBezier();
   if (!base) return 0;

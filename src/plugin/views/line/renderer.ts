@@ -104,7 +104,7 @@ export class LineRenderer {
   }
 
   public async moveSegmentsToBack(state: Readonly<MapState>): Promise<void> {
-    for (const line of state.lines.values()) {
+    for (const line of state.getLines()) {
       if (!line.figmaGroupId) continue;
       try {
         const lineGroup = await figma.getNodeByIdAsync(line.figmaGroupId);

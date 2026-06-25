@@ -12,87 +12,61 @@ export class MapState {
   private readonly stations: Map<StationId, Owned<Station>> = new Map();
   private readonly lines: Map<LineId, Owned<Line>> = new Map();
 
-  // deprecated
-  private readonly lineStackingOrder: LineId[] = [];
-
-  getNodes(): IterableIterator<Node> {
-    return this.nodes.values();
-  }
-
-  getNode(nodeId: NodeId | undefined): Node {
+  getNodeHarsh(nodeId: NodeId | undefined): Node {
     if (!nodeId) throw new Error(`Node ID is undefined`);
     const node = this.nodes.get(nodeId);
     if (!node) throw new Error(`Node with ID ${nodeId} not found`);
     return node;
   }
 
-  addNode(node: Owned<Node>): void {
-    this.nodes.set(node.id, node);
-  }
-
-  removeNode(node: Node): void {
-    this.nodes.delete(node.id);
-  }
-
-  getRoads(): IterableIterator<Road> {
-    return this.roads.values();
-  }
-
-  getRoad(roadId: RoadId | undefined): Road {
+  getRoadHarsh(roadId: RoadId | undefined): Road {
     if (!roadId) throw new Error(`Road ID is undefined`);
     const road = this.roads.get(roadId);
     if (!road) throw new Error(`Road with ID ${roadId} not found`);
     return road;
   }
 
-  addRoad(road: Owned<Road>): void {
-    this.roads.set(road.id, road);
-  }
-
-  removeRoad(road: Road): void {
-    this.roads.delete(road.id);
-  }
-
-  getRoadSection(sectionId: RoadSectionId | undefined): RoadSection {
+  getRoadSectionHarsh(sectionId: RoadSectionId | undefined): RoadSection {
     if (!sectionId) throw new Error(`RoadSection ID is undefined`);
-    return this.getRoad(sectionId[0]).getSection(sectionId[1]);
+    return this.getRoadHarsh(sectionId[0]).getSectionHarsh(sectionId[1]);
   }
 
-  getStations(): IterableIterator<Station> {
-    return this.stations.values();
-  }
-
-  getStation(stationId: StationId | undefined): Station {
+  getStationHarsh(stationId: StationId | undefined): Station {
     if (!stationId) throw new Error(`Station ID is undefined`);
     const station = this.stations.get(stationId);
     if (!station) throw new Error(`Station with ID ${stationId} not found`);
     return station;
   }
 
-  addStation(station: Owned<Station>): void {
-    this.stations.set(station.id, station);
-  }
-
-  removeStation(station: Station): void {
-    this.stations.delete(station.id);
-  }
-
-  getLines(): IterableIterator<Line> {
-    return this.lines.values();
-  }
-
-  getLine(lineId: LineId | undefined): Line {
+  getLineHarsh(lineId: LineId | undefined): Line {
     if (!lineId) throw new Error(`Line ID is undefined`);
     const line = this.lines.get(lineId);
     if (!line) throw new Error(`Line with ID ${lineId} not found`);
     return line;
   }
 
-  addLine(line: Owned<Line>): void {
-    this.lines.set(line.id, line);
-  }
+  getNodes(): IterableIterator<Node> { return this.nodes.values(); }
+  getRoads(): IterableIterator<Road> { return this.roads.values(); }
+  getStations(): IterableIterator<Station> { return this.stations.values(); }
+  getLines(): IterableIterator<Line> { return this.lines.values(); }
 
-  removeLine(line: Line): void {
-    this.lines.delete(line.id);
-  }
+  getNode(id: NodeId): Node | undefined { return this.nodes.get(id); }
+  getRoad(id: RoadId): Road | undefined { return this.roads.get(id); }
+  getStation(id: StationId): Station | undefined { return this.stations.get(id); }
+  getLine(id: LineId): Line | undefined { return this.lines.get(id); }
+
+  addNode(node: Owned<Node>): void { this.nodes.set(node.id, node); }
+  addRoad(road: Owned<Road>): void { this.roads.set(road.id, road); }
+  addStation(station: Owned<Station>): void { this.stations.set(station.id, station); }
+  addLine(line: Owned<Line>): void { this.lines.set(line.id, line); }
+
+  removeNode(node: Node): void { this.nodes.delete(node.id); }
+  removeRoad(road: Road): void { this.roads.delete(road.id); }
+  removeStation(station: Station): void { this.stations.delete(station.id); }
+  removeLine(line: Line): void { this.lines.delete(line.id); }
+
+  hasNode(id: NodeId): boolean { return this.nodes.has(id); }
+  hasRoad(id: RoadId): boolean { return this.roads.has(id); }
+  hasStation(id: StationId): boolean { return this.stations.has(id); }
+  hasLine(id: LineId): boolean { return this.lines.has(id); }
 }

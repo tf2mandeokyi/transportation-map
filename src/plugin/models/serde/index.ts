@@ -1,67 +1,66 @@
-import { LineId, NodeId, RoadId, RoadSectionId, StationId } from "@/common/types";
-import { IModel, MapState } from '../structures/types';
-import { Node } from '../structures/node';
-import { Road } from '../structures/road';
-import { RoadSection } from '../structures/road-section';
-import { Station } from '../structures/station';
-import { Line } from '../structures/line';
+import { LineId, NodeId, SectionId, StationId, RoadId } from "@/common/types";
+import { MapState, Node, SerializedNode, Road, SerializedRoad, RoadSection, Station, SerializedStation, Line, SerializedLine } from "../structures";
+import { own } from "@/common/utils/ownership";
 
 export function serializeMapState(state: MapState): string {
-  return JSON.stringify({
-    n: Array.from(state.nodes.values()).map(n => n.serialize()),
-    r: Array.from(state.roads.values()).map(r => r.serialize()),
-    s: Array.from(state.stations.values()).map(s => s.serialize()),
-    l: Array.from(state.lines.values()).map(l => l.serialize()),
-    o: state.lineStackingOrder,
-  });
+  const n: Record<string, SerializedNode> = {};
+  for (const node of state.getNodes()) n[node.id] = node.serialize();
+
+  const r: Record<string, SerializedRoad> = {};
+  for (const road of state.getRoads()) r[road.id] = road.serialize();
+
+  const s: Record<string, SerializedStation> = {};
+  for (const station of state.getStations()) s[station.id] = station.serialize();
+
+  const l: Record<string, SerializedLine> = {};
+  for (const line of state.getLines()) l[line.id] = line.serialize();
+
+  return JSON.stringify({ n, r, s, l });
 }
 
-export function deserializeMapState(json: string, parent: IModel): MapState | null {
+export function deserializeMapState(json: string, state: MapState): boolean {
   try {
     const data = JSON.parse(json);
 
-    // ── Phase 1: create all instances ──────────────────────────────────────
-
-    const nodes = new Map<NodeId, Node>();
-    for (const n of data.n || []) {
-      const node = Node.deserialize(n, parent);
-      nodes.set(node.id, node);
+    // Phase 1: create bare node instances
+    for (const id of Object.keys(data.n || {})) {
+      state.addNode(own(new Node(state, id as NodeId)));
     }
 
-    const roads = new Map<RoadId, Road>();
-    const sections = new Map<RoadSectionId, RoadSection>();
-    for (const r of data.r || []) {
-      const road = Road.deserialize(r, parent);
-      for (const c of r.c || []) {
-        const section = RoadSection.deserialize(c, parent);
-        road.sections.set(section.id, section);
-        sections.set(section.id, section);
+    // Phase 2: create bare road + section instances
+    for (const [id, ser] of Object.entries(data.r || {})) {
+      const road = own(new Road(state, id as RoadId));
+      for (const secId of Object.keys((ser as SerializedRoad).c || {})) {
+        road.addSection(own(new RoadSection(state, secId as SectionId)));
       }
-      roads.set(road.id, road);
+      state.addRoad(road);
     }
 
-    const stations = new Map<StationId, Station>();
-    for (const s of data.s || []) {
-      const station = Station.deserialize(s, parent);
-      stations.set(station.id, station);
+    // Phase 3: create bare station instances
+    for (const id of Object.keys(data.s || {})) {
+      state.addStation(own(new Station(state, id as StationId)));
     }
 
-    const lines = new Map<LineId, Line>();
-    for (const l of data.l || []) {
-      const line = Line.deserialize(l, parent);
-      lines.set(line.id, line);
+    // Phase 4: apply serialized data in dependency order
+    for (const [id, ser] of Object.entries(data.n || {})) {
+      state.getNodeHarsh(id as NodeId).applySerialized(ser as SerializedNode);
+    }
+    // Road.applySerialized also applies sections (which set station parents via setParent)
+    for (const [id, ser] of Object.entries(data.r || {})) {
+      state.getRoadHarsh(id as RoadId).applySerialized(ser as SerializedRoad);
+    }
+    for (const [id, ser] of Object.entries(data.s || {})) {
+      const station = state.getStationHarsh(id as StationId);
+      station.applySerialized(ser as SerializedStation);
+      station.figmaNodeId = (ser as SerializedStation).f;
+    }
+    for (const [id, ser] of Object.entries(data.l || {})) {
+      state.addLine(own(new Line(state, id as LineId).applySerialized(ser as SerializedLine)));
     }
 
-    // ── Phase 2: resolve all cross-references ─────────────────────────────
-
-    for (const node of nodes.values()) node.resolve(roads);
-    for (const road of roads.values()) road.resolve(nodes);  // also calls section.resolve(road)
-    for (const station of stations.values()) station.resolve(sections);
-    for (const line of lines.values()) line.resolve(stations, nodes, sections);
-
-    return { nodes, roads, stations, lines, lineStackingOrder: (data.o || []) as LineId[] };
+    return true;
   } catch (error) {
     console.error('Failed to deserialize map state:', error);
-    return null;
+    return false;
   }
 }

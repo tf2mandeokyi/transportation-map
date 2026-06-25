@@ -8,9 +8,8 @@ export function isInvalidJump(
   endStation: Station,
   rseBetween: RoadSectionChange[],
 ): boolean {
-  if (!startStation.roadSection || !endStation.roadSection) return false;
-  const startRoad = startStation.roadSection.road;
-  const endRoad   = endStation.roadSection.road;
+  const startRoad = startStation.parentRoadSection.parentRoad;
+  const endRoad = endStation.parentRoadSection.parentRoad;
   if (startRoad === endRoad) return false;
   return rseBetween.length === 0;
 }
@@ -44,7 +43,7 @@ function buildTraversals(
     road: startRoad,
     section: startSection,
     entryT: startStation.interpT,
-    exitT: firstRsc.node === startRoad.endNode ? 1 : 0,
+    exitT: firstRsc.node === startRoad.endpoints[1].node ? 1 : 0,
     depStation: startStation,
     arrStation: undefined,
     depPathSegIdx: startPathIdx,
@@ -57,12 +56,12 @@ function buildTraversals(
     const rsc     = rseBetween[k];
     const nextRsc = rseBetween[k + 1];
     if (!rsc.entering) return traversals;
-    const road = rsc.entering.road;
+    const road = rsc.entering.section.parentRoad;
     traversals.push({
       road,
-      section: rsc.entering,
-      entryT: rsc.node === road.startNode ? 0 : 1,
-      exitT:  nextRsc.node === road.endNode ? 1 : 0,
+      section: rsc.entering.section,
+      entryT: rsc.node === road.endpoints[0].node ? 0 : 1,
+      exitT:  nextRsc.node === road.endpoints[1].node ? 1 : 0,
       depStation: undefined,
       arrStation: undefined,
       depPathSegIdx: undefined,
@@ -74,11 +73,11 @@ function buildTraversals(
 
   const lastRsc = rseBetween[rseBetween.length - 1];
   if (!lastRsc.entering) return traversals;
-  const lastRoad = lastRsc.entering.road;
+  const lastRoad = lastRsc.entering.section.parentRoad;
   traversals.push({
     road: lastRoad,
     section: endSection,
-    entryT: lastRsc.node === lastRoad.startNode ? 0 : 1,
+    entryT: lastRsc.node === lastRoad.endpoints[0].node ? 0 : 1,
     exitT: endStation.interpT,
     depStation: undefined,
     arrStation: endStation,
@@ -113,13 +112,10 @@ export function buildSegmentPath(
   startPathIdx: number,
   endPathIdx: number,
 ): string {
-  const startSection = startStation.roadSection;
-  const endSection   = endStation.roadSection;
-  if (!startSection || !endSection) return `M ${headCanvas.x} ${headCanvas.y} L ${tailCanvas.x} ${tailCanvas.y}`;
+  const startSection = startStation.parentRoadSection;
+  const endSection = endStation.parentRoadSection;
 
-  const startRoad = startSection.road;
-  const endRoad   = endSection.road;
-  if (!startRoad || !endRoad) return `M ${headCanvas.x} ${headCanvas.y} L ${tailCanvas.x} ${tailCanvas.y}`;
+  const startRoad = startSection.parentRoad;
 
   const fallback = new PathBuilder().moveTo(headCanvas).lineTo(tailCanvas).build();
   const t1 = startStation.interpT;

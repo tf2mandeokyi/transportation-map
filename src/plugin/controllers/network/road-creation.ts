@@ -2,6 +2,7 @@ import { NodeId } from "@/common/types";
 import { postMessageToUI } from "../../figma";
 import { Model } from "../../models";
 import { Node } from "../../models/structures";
+import { own } from "@/common/utils/ownership";
 
 type Mode = 'idle' | 'first-node' | 'second-node';
 
@@ -30,7 +31,7 @@ export class RoadCreationStateMachine {
     if (!this.isActive) return false;
 
     if (this.mode === 'first-node') {
-      const node = model.state.nodes.get(nodeId);
+      const node = model.state.getNode(nodeId);
       if (!node) return false;
       this.startNode = node;
       this.mode = 'second-node';
@@ -39,7 +40,7 @@ export class RoadCreationStateMachine {
     }
 
     if (this.mode === 'second-node' && this.startNode) {
-      const endNode = model.state.nodes.get(nodeId);
+      const endNode = model.state.getNode(nodeId);
       if (!endNode || endNode === this.startNode) return true;
       const startPos = getNodeCenter(this.startNode);
       const endPos   = getNodeCenter(endNode);
@@ -58,12 +59,10 @@ export class RoadCreationStateMachine {
   ): Promise<void> {
     model.addRoad({
       name: undefined,
-      startNode,
-      endNode,
       bezierMidPoint: { x: (startPos.x + endPos.x) / 2, y: (startPos.y + endPos.y) / 2 },
       endpoints: [
-        { endpointPos: startPos, groupNumber: 0 },
-        { endpointPos: endPos,   groupNumber: 0 },
+        own({ node: startNode, endpointPos: startPos, groupNumber: 0 }),
+        own({ node: endNode,   endpointPos: endPos,   groupNumber: 0 }),
       ],
     });
     await onRoadCreated();

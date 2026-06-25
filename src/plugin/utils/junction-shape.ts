@@ -26,7 +26,7 @@ function buildArm(road: Road, endpointIndex: 0 | 1, state: Readonly<MapState>): 
   // perp(dir) rotates 90° CW in screen coords (Y-down)
   const n: Vector = { x: -dir.y, y: dir.x };
 
-  const sections = Array.from(road.sections.values()).sort((a, b) => a.index - b.index);
+  const sections = road.getSectionsByIndex();
   let posOff: number;
   let negOff: number;
 

@@ -16,7 +16,7 @@ export function computeSectionOffset(
   road: Road,
   state: Readonly<MapState>,
 ): number {
-  const sections = Array.from(road.sections.values()).sort((a, b) => a.index - b.index);
+  const sections = road.getSectionsByIndex();
   const widths = sections.map(s => sectionBandWidth(getLinesForSection(s, state).length));
   const gapTotal = Math.max(0, sections.length - 1) * SECTION_GAP;
   const totalWidth = widths.reduce((a, b) => a + b, 0) + gapTotal;
@@ -39,15 +39,15 @@ type PathEntry<T extends LinePath> = {
 
 function computeEntry(line: Line, path: LinePath): PathEntry<LinePath> {
   if (path.kind === 'station-stop') {
-    const station = path.station;
-    const section = station.roadSection ?? null;
-    const road = section?.road ?? null;
+    const section = (path.station.parentRoadSection as RoadSection | undefined) ?? null;
+    const road = section?.parentRoad ?? null;
     return { line, path, rank: path.rank, road, section };
   }
-  const section = path.exiting ?? path.entering;
-  const road = section?.road ?? null;
+  const entry = path.exiting ?? path.entering;
+  const section = entry?.section ?? null;
+  const road = section?.parentRoad ?? null;
   const rank = path.exiting !== null ? path.exitRank : path.enterRank;
-  return { line, path, rank, road, section: section ?? null };
+  return { line, path, rank, road, section };
 }
 
 function applyLateralOffset(pos: Vector, tan: Vector, offset: number): Vector {
@@ -72,7 +72,7 @@ function computePosition<T extends LinePath>(entry: PathEntry<T>, state: Readonl
     return applyLateralOffset(pos, evalQuadraticBezierTangent(bezier, station.interpT), totalOffset);
   }
 
-  const isStart = road.startNode === path.node;
+  const isStart = road.endpoints[0].node === path.node;
   const ep = road.endpoints[isStart ? 0 : 1].endpointPos;
   if (totalOffset === 0) return ep;
   return applyLateralOffset(ep, evalQuadraticBezierTangent(bezier, isStart ? 0 : 1), totalOffset * (isStart ? 1 : -1));
@@ -83,7 +83,7 @@ function getLinePaths<T extends LinePath>(
   match: (p: LinePath) => p is T,
 ): Array<{ line: Line; path: T; position: Vector }> {
   const groups = new Map<string | null, PathEntry<T>[]>();
-  for (const line of state.lines.values()) {
+  for (const line of state.getLines()) {
     for (const p of line.paths) {
       if (!match(p)) continue;
       const e = computeEntry(line, p) as PathEntry<T>;

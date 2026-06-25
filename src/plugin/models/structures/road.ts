@@ -23,7 +23,7 @@ function serializeConnection(c: Connection): SerializedConnection {
 }
 
 function deserializeConnection(mapState: Readonly<MapState>, c: SerializedConnection): Connection {
-  return { node: mapState.getNode(c.n), endpointPos: c.p, groupNumber: c.g };
+  return { node: mapState.getNodeHarsh(c.n), endpointPos: c.p, groupNumber: c.g };
 }
 
 export interface SerializedRoad {
@@ -74,7 +74,7 @@ export class Road extends TransportationMapObject<RoadId> {
       n: this.name,
       b: this.bezierMidPoint,
       p: [serializeConnection(this.endpoints[0]), serializeConnection(this.endpoints[1])],
-      c: Object.fromEntries(Array.from(this.sections.entries()).map(([secId, sec]) => [secId, sec.serialize()])),
+      c: Object.fromEntries([...this.sections.entries()].map(([secId, sec]) => [secId, sec.serialize()])),
     };
   }
 
@@ -82,7 +82,11 @@ export class Road extends TransportationMapObject<RoadId> {
     return this.sections.values();
   }
 
-  getSection(sectionId: SectionId | undefined): RoadSection {
+  getSectionsByIndex(): Array<RoadSection> {
+    return [...this.sections.values()].sort((a, b) => a.index - b.index);
+  }
+
+  getSectionHarsh(sectionId: SectionId | undefined): RoadSection {
     if (!sectionId) throw new Error(`SectionId is undefined`);
     const section = this.sections.get(sectionId);
     if (!section) throw new Error(`Section with ID ${sectionId} not found`);
@@ -97,6 +101,8 @@ export class Road extends TransportationMapObject<RoadId> {
     }
     return undefined;
   }
+
+  hasSection(id: SectionId): boolean { return this.sections.has(id); }
 
   addSection(section: Owned<RoadSection>): void {
     this.sections.set(section.id, section);

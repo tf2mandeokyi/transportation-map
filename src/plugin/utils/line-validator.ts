@@ -13,12 +13,12 @@ function getRoadSpans(
   arrStation: Station,
   rsesBetween: RoadSectionChange[],
 ): RoadSpan[] {
-  const depRoad = depStation.parent.parent;
-  const arrRoad = arrStation.parent.parent;
+  const depRoad = depStation.parentRoadSection.parentRoad;
+  const arrRoad = arrStation.parentRoadSection.parentRoad;
 
   if (rsesBetween.length === 0) {
     if (depRoad !== arrRoad) return [];
-    return [{ road: depRoad, tEntry: depStation.interpT, tExit: arrStation.interpT, section: depStation.parent }];
+    return [{ road: depRoad, tEntry: depStation.interpT, tExit: arrStation.interpT, section: depStation.parentRoadSection }];
   }
 
   const spans: RoadSpan[] = [];
@@ -29,7 +29,7 @@ function getRoadSpans(
     road: depRoad,
     tEntry: depStation.interpT,
     tExit: firstRsc.node === depRoad.endpoints[1].node ? 1 : 0,
-    section: depStation.parent,
+    section: depStation.parentRoadSection,
   });
 
   // Middle spans: one per road entered by an RSC (all except the last).
@@ -37,7 +37,7 @@ function getRoadSpans(
     const rsc     = rsesBetween[k];
     const nextRsc = rsesBetween[k + 1];
     if (!rsc.entering) return spans;
-    const road = rsc.entering.section.parent;
+    const road = rsc.entering.section.parentRoad;
     spans.push({
       road,
       tEntry: rsc.node === road.endpoints[0].node ? 0 : 1,
@@ -49,12 +49,12 @@ function getRoadSpans(
   // Last span: last junction node → arrival station.
   const lastRsc = rsesBetween[rsesBetween.length - 1];
   if (!lastRsc.entering) return spans;
-  const lastRoad = lastRsc.entering.section.parent;
+  const lastRoad = lastRsc.entering.section.parentRoad;
   spans.push({
     road: lastRoad,
     tEntry: lastRsc.node === lastRoad.endpoints[0].node ? 0 : 1,
     tExit: arrStation.interpT,
-    section: arrStation.parent,
+    section: arrStation.parentRoadSection,
   });
 
   return spans;

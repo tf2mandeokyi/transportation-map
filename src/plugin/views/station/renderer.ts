@@ -1,6 +1,6 @@
 import { Line } from "../../models/structures/line";
 import { Station } from "../../models/structures/station";
-import { MapState } from "../../models/structures";
+import { MapState, RoadSection } from "../../models/structures";
 import { renderStation, renderStationLine } from "../../figmls";
 import { computeStationPosition, computeStationTangentAngle } from "./position";
 import { getLinesForStation } from "./layout";
@@ -23,7 +23,7 @@ async function renderStationWithTemplate(
 ): Promise<{ line: Line; segmentIndex: number; node: SceneNode; passThrough: boolean }[]> {
   const flipLR = (f: 'left' | 'right'): 'left' | 'right' => f === 'left' ? 'right' : 'left';
 
-  const section = station.roadSection;
+  const section = station.parentRoadSection as RoadSection | undefined;
   const noRefCount = section ? getLinesForSection(section, state).length : 0;
 
   const lines = getLinesForStation(station, state);

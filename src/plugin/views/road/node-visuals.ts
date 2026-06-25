@@ -71,12 +71,7 @@ function resolveNodePosition(node: Node): Vector | null {
     count++;
   }
   if (count > 0) return { x: x / count, y: y / count };
-  if (!node.isolatedPos) {
-    console.warn(`[buildNodeMarker] isolated node ${node.id} has no isolatedPos — skipping`);
-    return null;
-  }
-  console.log(`[buildNodeMarker] isolated node ${node.id} at isolatedPos`, node.isolatedPos);
-  return node.isolatedPos;
+  return null;
 }
 
 export async function buildNodeMarker(node: Node): Promise<FrameNode | null> {
