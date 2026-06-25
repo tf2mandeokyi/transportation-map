@@ -1,8 +1,19 @@
 import { LineId, NodeId, RoadSectionId, StationId } from "../types"
 
+type StationStopInput = {
+  stationId: StationId;
+  direction: 'ascending' | 'descending';
+}
+
+type RoadSectionChangeInput = {
+  nodeId: NodeId;
+  exiting: { sectionId: RoadSectionId; side: 0 | 1 } | null;
+  entering: { sectionId: RoadSectionId; side: 0 | 1 } | null;
+}
+
 export type LinePathInput =
-  | { kind: 'station-stop'; stationId: StationId }
-  | { kind: 'road-section-change'; nodeId: NodeId; exiting: { sectionId: RoadSectionId; side: 0 | 1 } | null; entering: { sectionId: RoadSectionId; side: 0 | 1 } | null };
+  | { kind: 'station-stop' } & StationStopInput
+  | { kind: 'road-section-change' } & RoadSectionChangeInput;
 
 export type LineData = { id: LineId; name: string; color: string };
 

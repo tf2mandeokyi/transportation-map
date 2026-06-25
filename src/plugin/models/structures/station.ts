@@ -3,6 +3,7 @@ import { TransportationMapObject } from './types';
 import type { RoadSection } from './road-section';
 import { StationStop } from "./line-path";
 import { Line } from "./line";
+import { own, Owned } from "@/common/utils/ownership";
 
 export interface SerializedStation {
   n: string;                        // name
@@ -56,6 +57,15 @@ export class Station extends TransportationMapObject<StationId> {
 
   setParent(roadSection: RoadSection): void {
     this.parent = roadSection;
+  }
+
+  makePassThroughStop(rank: number, direction: 'ascending' | 'descending'): Owned<StationStop> {
+    const ss = new StationStop(this.mapState);
+    ss.station = this;
+    ss.rank = rank;
+    ss.stops = false;
+    ss.direction = direction;
+    return own(ss);
   }
 
   serialize(): SerializedStation {
