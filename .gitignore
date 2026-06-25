@@ -5,7 +5,12 @@ node_modules
 
 out/
 dist/
+.tsbuild/
 code.js
+
+# Generated declaration files (tsc composite output)
+src/**/*.d.ts
+!src/plugin/figml.d.ts
 
 .claude/
 CLAUDE.md

@@ -5,6 +5,7 @@
   "main": "code.js",
   "scripts": {
     "build": "webpack",
+    "typecheck": "tsc -b tsconfig.solution.json --noEmit",
     "lint": "eslint --ext .ts,.tsx --ignore-pattern node_modules .",
     "lint:fix": "eslint --ext .ts,.tsx --ignore-pattern node_modules --fix .",
     "watch": "npm run build -- --watch"

@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "outDir": "../../.tsbuild/ui",
+    "jsx": "react"
+  },
+  "include": ["./**/*.ts", "./**/*.tsx"],
+  "references": [{ "path": "../common" }]
+}
