@@ -38,7 +38,7 @@ export class RoadControlManager {
   async activate(roadId: RoadId): Promise<void> {
     await this.remove();
 
-    const state = this.model.getState();
+    const state = this.model.state;
     const road = state.roads.get(roadId);
     if (!road) return;
 
@@ -123,7 +123,7 @@ export class RoadControlManager {
 
   async onEndpointHandleMoved(roadId: RoadId, side: 'start' | 'end', handle: FrameNode): Promise<void> {
     const handlePos = { x: handle.x + HANDLE_RADIUS, y: handle.y + HANDLE_RADIUS };
-    const state = this.model.getState();
+    const state = this.model.state;
     const road = state.roads.get(roadId);
     if (!road) return;
 
@@ -138,14 +138,14 @@ export class RoadControlManager {
 
   async onBezierHandleMoved(roadId: RoadId, handle: FrameNode): Promise<void> {
     const handlePos = { x: handle.x + HANDLE_RADIUS, y: handle.y + HANDLE_RADIUS };
-    const road = this.model.getState().roads.get(roadId);
+    const road = this.model.state.roads.get(roadId);
     if (!road) return;
     road.bezierMidPoint = handlePos;
     await this.updateRoadAndStems(roadId);
   }
 
   private async updateRoadAndStems(roadId: RoadId): Promise<void> {
-    const state = this.model.getState();
+    const state = this.model.state;
     const road = state.roads.get(roadId);
     if (!road) return;
 

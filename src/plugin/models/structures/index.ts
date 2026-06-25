@@ -1,11 +1,7 @@
-export type { IModel, Connection, StationStop, RoadSectionChange, LinePath, MapState, Serializable } from './types';
-export { Node } from './node';
-export type { SerializedNode, NodeProps } from './node';
-export { RoadSection } from './road-section';
-export type { SerializedRoadSection, RoadSectionProps } from './road-section';
-export { Road } from './road';
-export type { SerializedRoad, RoadCoreProps, RoadProps } from './road';
-export { Station } from './station';
-export type { SerializedStation, StationCoreProps, StationProps } from './station';
-export { Line } from './line';
-export type { SerializedLine, SerializedLinePath, LineProps } from './line';
+export { Node, SerializedNode, NodeProps } from './node';
+export { RoadSection, SerializedRoadSection, RoadSectionProps } from './road-section';
+export { Road, SerializedRoad, RoadProps } from './road';
+export { Station, SerializedStation, StationProps } from './station';
+export { Line, SerializedLine, SerializedLinePath, LineProps } from './line';
+export { LinePath, StationStop, RoadSectionChange } from './line-path';
+export { MapState } from './map-state';

@@ -1,47 +1,11 @@
-import { LineId, NodeId, RoadId, StationId } from "@/common/types";
-import type { Node } from './node';
-import type { Road } from './road';
-import type { RoadSection } from './road-section';
-import type { Station } from './station';
-import type { Line } from './line';
+import { MapState } from "./map-state";
 
-export interface IModel {
-  getState(): Readonly<MapState>;
-}
+export abstract class TransportationMapObject<Id> {
+  protected readonly mapState: Readonly<MapState>;
+  id: Id;
 
-export interface Serializable<T> {
-  serialize(): T;
-}
-
-export interface Connection {
-  endpointPos: Vector;
-  groupNumber: number;
-}
-
-export interface StationStop {
-  kind: 'station-stop';
-  index: number;
-  station: Station;
-  rank: number;
-  stops: boolean; // false = passes through without stopping
-}
-
-export interface RoadSectionChange {
-  kind: 'road-section-change';
-  index: number;
-  node: Node;
-  exiting: RoadSection | null;
-  entering: RoadSection | null;
-  exitRank: number;
-  enterRank: number;
-}
-
-export type LinePath = StationStop | RoadSectionChange;
-
-export interface MapState {
-  nodes: Map<NodeId, Node>;
-  roads: Map<RoadId, Road>;
-  stations: Map<StationId, Station>;
-  lines: Map<LineId, Line>;
-  lineStackingOrder: LineId[];
+  constructor(mapState: Readonly<MapState>, id: Id) {
+    this.mapState = mapState;
+    this.id = id;
+  }
 }

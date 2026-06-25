@@ -21,8 +21,8 @@ function generateUniqueId<T extends string>(map: Map<T, unknown>): T {
   }
 }
 
-export class Model implements IModel {
-  private readonly state: MapState;
+export class Model {
+  readonly state: MapState;
 
   constructor() {
     this.state = {
@@ -32,10 +32,6 @@ export class Model implements IModel {
       lines: new Map(),
       lineStackingOrder: [],
     };
-  }
-
-  public getState(): Readonly<MapState> {
-    return this.state;
   }
 
   // ─── Node ───
@@ -71,17 +67,10 @@ export class Model implements IModel {
     const obj = new Road(this, id, road);
     this.state.roads.set(id, obj);
 
-    const startNode = this.state.nodes.get(road.startNodeId);
-    if (startNode) {
-      obj.startNode = startNode;
-      startNode.roadConnections.push({ road: obj, endpointIndex: 0 });
-    }
-
-    const endNode = this.state.nodes.get(road.endNodeId);
-    if (endNode) {
-      obj.endNode = endNode;
-      endNode.roadConnections.push({ road: obj, endpointIndex: 1 });
-    }
+    obj.startNode = road.startNode;
+    road.startNode.roadConnections.push({ road: obj, endpointIndex: 0 });
+    obj.endNode = road.endNode;
+    road.endNode.roadConnections.push({ road: obj, endpointIndex: 1 });
 
     return obj;
   }
@@ -139,7 +128,7 @@ export class Model implements IModel {
 
   public addStation(station: StationProps): Station {
     const id = generateUniqueId(this.state.stations);
-    const obj = new Station(this, id, station);
+    const obj = new Station(this.state, id, station);
     this.state.stations.set(id, obj);
 
     if (station.roadSection) {

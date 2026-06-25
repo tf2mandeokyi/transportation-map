@@ -19,7 +19,7 @@ export class ConnectionController extends BaseController {
   }
 
   public async handleGetLinePath(lineId: LineId): Promise<void> {
-    const line = this.model.getState().lines.get(lineId);
+    const line = this.model.state.lines.get(lineId);
     if (!line) { console.error("Line not found:", lineId); return; }
 
     const stationNames: Record<StationId, string> = {};
@@ -38,7 +38,7 @@ export class ConnectionController extends BaseController {
   }
 
   public insertStationIntoLine(lineId: LineId, newStation: Station, relativeToStation: Station, insertAfter: boolean): boolean {
-    const line = this.model.getState().lines.get(lineId);
+    const line = this.model.state.lines.get(lineId);
     if (!line) return false;
 
     const refIndex = line.paths.findIndex(p => p.kind === 'station-stop' && p.station === relativeToStation);
@@ -55,7 +55,7 @@ export class ConnectionController extends BaseController {
   }
 
   public connectStationsWithLine(lineId: LineId, startStation: Station, endStation: Station): void {
-    const line = this.model.getState().lines.get(lineId);
+    const line = this.model.state.lines.get(lineId);
     if (!line) return;
 
     const hasStart = line.paths.some(p => p.kind === 'station-stop' && p.station === startStation);
@@ -71,7 +71,7 @@ export class ConnectionController extends BaseController {
 
     const station = this.model.findStationFromNode(selection[0]);
     if (station) {
-      const state = this.model.getState();
+      const state = this.model.state;
       const lines = [];
       for (const { line, path } of getStationStopsAcrossLines(station, state)) {
         const arrDir = line.getDirectionAtStop(path.index);

@@ -1,7 +1,7 @@
 import React from 'react';
 import { StationId } from '@/common/types';
 import { RoadData } from '@/common/messages';
-import { LinePath } from '@/plugin/models/structures';
+import { LinePath } from '@/plugin/models/structures/line-path';
 import StationPathItem from './StationPathItem';
 import InsertionButtons from './InsertionButtons';
 

@@ -67,7 +67,7 @@ export class StationController extends BaseController {
     preview.name = '_station-placing-preview';
     figma.currentPage.appendChild(preview);
 
-    const initialSnap = findNearestRoadSection(center, this.model.getState());
+    const initialSnap = findNearestRoadSection(center, this.model.state);
     if (initialSnap) {
       preview.x = initialSnap.pos.x - PREVIEW_SIZE / 2;
       preview.y = initialSnap.pos.y - PREVIEW_SIZE / 2;
@@ -89,7 +89,7 @@ export class StationController extends BaseController {
       const h = handleNode as EllipseNode;
       const handleCenter = { x: h.x + h.width / 2, y: h.y + h.height / 2 };
 
-      const snap = findNearestRoadSection(handleCenter, this.model.getState());
+      const snap = findNearestRoadSection(handleCenter, this.model.state);
       if (!snap) return;
 
       const previewNode = await figma.getNodeByIdAsync(previewId);
@@ -117,7 +117,7 @@ export class StationController extends BaseController {
     await this.cancelPlacingMode();
 
     const station = this.model.addStation({ name, textAlign, textHAlign, textRotation, flipped, interpT: snap?.interpT ?? 0.5, roadSection: snap?.section ?? null });
-    await this.view.stationRenderer.renderStation(station, this.model.getState());
+    await this.view.stationRenderer.renderStation(station, this.model.state);
     await this.save();
   }
 
@@ -138,7 +138,7 @@ export class StationController extends BaseController {
   public async handleAddStation({ name, textAlign, textHAlign, textRotation, flipped, roadSectionId, interpT }: StationParams & { roadSectionId: RoadSectionId | null; interpT: number }): Promise<void> {
     const roadSection = roadSectionId ? this.model.findSection(roadSectionId) : null;
     const station = this.model.addStation({ name, textAlign, textHAlign, textRotation, flipped, interpT, roadSection });
-    await this.view.stationRenderer.renderStation(station, this.model.getState());
+    await this.view.stationRenderer.renderStation(station, this.model.state);
     await this.save();
   }
 
@@ -155,7 +155,7 @@ export class StationController extends BaseController {
   // ── Individual handlers ───────────────────────────────────────────────────
 
   public async handleGetStationInfo(stationId: StationId): Promise<void> {
-    const state = this.model.getState();
+    const state = this.model.state;
     const station = state.stations.get(stationId);
     if (!station) {
       console.warn(`Station ${stationId} not found`);
@@ -181,7 +181,7 @@ export class StationController extends BaseController {
     stationId: StationId,
     stops: Array<{ lineId: LineId; pathIndex: number; rank: number }>
   ): Promise<void> {
-    const station = this.model.getState().stations.get(stationId);
+    const station = this.model.state.stations.get(stationId);
     if (!station) return;
     station.updateStopRanks(stops);
     await this.render();
@@ -190,7 +190,7 @@ export class StationController extends BaseController {
   }
 
   private async handleUpdateStation(stationId: StationId, { name, textAlign, textHAlign, textRotation, flipped }: StationParams): Promise<void> {
-    const station = this.model.getState().stations.get(stationId);
+    const station = this.model.state.stations.get(stationId);
     if (!station) { console.warn(`Station ${stationId} not found`); return; }
 
     station.name = name;
@@ -204,7 +204,7 @@ export class StationController extends BaseController {
   }
 
   private async handleDeleteStation(stationId: StationId): Promise<void> {
-    const station = this.model.getState().stations.get(stationId);
+    const station = this.model.state.stations.get(stationId);
     if (!station) { console.warn(`Station ${stationId} not found`); return; }
 
     if (station.figmaNodeId) {
@@ -217,7 +217,7 @@ export class StationController extends BaseController {
   }
 
   private async handleCopyStation(stationId: StationId, direction: 'forwards' | 'backwards'): Promise<void> {
-    const station = this.model.getState().stations.get(stationId);
+    const station = this.model.state.stations.get(stationId);
     if (!station) { console.warn(`Station ${stationId} not found`); return; }
 
     const interpTOffset = direction === 'forwards' ? 0.1 : -0.1;
@@ -234,27 +234,27 @@ export class StationController extends BaseController {
     });
 
     if (this.connectionController) {
-      const linesAtStation = station.getLineStackingOrder();
+      const linesAtStation = station.getLineStackingRanks();
       for (const lineId of linesAtStation) {
         this.connectionController.insertStationIntoLine(lineId, newStation, station, direction === 'forwards');
       }
     }
 
-    await this.view.stationRenderer.renderStation(newStation, this.model.getState());
+    await this.view.stationRenderer.renderStation(newStation, this.model.state);
     await this.save();
     await this.handleSelectStation(newStation.id);
   }
 
   private async handleCombineStations(sourceStationId: StationId, targetStationId: StationId): Promise<void> {
-    const sourceStation = this.model.getState().stations.get(sourceStationId);
-    const targetStation = this.model.getState().stations.get(targetStationId);
+    const sourceStation = this.model.state.stations.get(sourceStationId);
+    const targetStation = this.model.state.stations.get(targetStationId);
 
     if (!sourceStation || !targetStation) {
       console.warn(`Station not found: ${sourceStationId} or ${targetStationId}`);
       return;
     }
 
-    for (const line of this.model.getState().lines.values()) {
+    for (const line of this.model.state.lines.values()) {
       for (const path of line.paths) {
         if (path.kind === 'station-stop' && path.station === sourceStation) {
           path.station = targetStation;
@@ -272,7 +272,7 @@ export class StationController extends BaseController {
   }
 
   public async handleSelectStation(stationId: StationId): Promise<void> {
-    const station = this.model.getState().stations.get(stationId);
+    const station = this.model.state.stations.get(stationId);
     if (!station) { console.warn(`Station ${stationId} not found`); return; }
 
     if (station.figmaNodeId) {

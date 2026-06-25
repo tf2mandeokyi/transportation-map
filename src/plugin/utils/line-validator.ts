@@ -1,5 +1,4 @@
-import { Line, LinePath, Road, RoadSection, RoadSectionChange, Station, StationStop } from "../models/structures";
-import { Node } from "../models/structures";
+import { Node, Line, LinePath, Road, RoadSection, RoadSectionChange, Station, StationStop } from "../models/structures";
 
 function findRoadForStation(station: Station): Road | null {
   return station.roadSection?.road ?? null;

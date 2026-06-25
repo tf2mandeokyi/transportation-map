@@ -22,7 +22,7 @@ async function main() {
   await controller.initialize();
   figma.on('close', () => controller.cleanup());
 
-  const hasExistingData = model.getState().stations.size > 0 || model.getState().lines.size > 0;
+  const hasExistingData = model.state.stations.size > 0 || model.state.lines.size > 0;
   if (hasExistingData) {
     console.log("Existing map data found, skipping initial render");
     controller.syncLinesToUI();
@@ -50,7 +50,7 @@ async function createDemoMap(controller: Controller, model: Model) {
   // Create roads between nodes with absolute endpoint and bezier positions
   const road1 = model.addRoad({
     name: 'West-Central',
-    startNodeId: n1.id, endNodeId: n2.id,
+    startNode: n1, endNode: n2,
     bezierMidPoint: { x: (n1Pos.x + n2Pos.x) / 2, y: (n1Pos.y + n2Pos.y) / 2 },
     endpoints: [
       { endpointPos: n1Pos, groupNumber: 0 },
@@ -60,7 +60,7 @@ async function createDemoMap(controller: Controller, model: Model) {
 
   const road2 = model.addRoad({
     name: 'Central-East',
-    startNodeId: n2.id, endNodeId: n3.id,
+    startNode: n2, endNode: n3,
     bezierMidPoint: { x: (n2Pos.x + n3Pos.x) / 2, y: (n2Pos.y + n3Pos.y) / 2 },
     endpoints: [
       { endpointPos: n2Pos, groupNumber: 0 },
@@ -70,7 +70,7 @@ async function createDemoMap(controller: Controller, model: Model) {
 
   const road3 = model.addRoad({
     name: 'Central-North',
-    startNodeId: n2.id, endNodeId: n4.id,
+    startNode: n2, endNode: n4,
     bezierMidPoint: { x: (n2Pos.x + n4Pos.x) / 2, y: (n2Pos.y + n4Pos.y) / 2 },
     endpoints: [
       { endpointPos: n2Pos, groupNumber: 0 },

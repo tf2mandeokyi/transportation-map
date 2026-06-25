@@ -1,4 +1,5 @@
-import { MapState, Station } from "../../models/structures";
+import { MapState } from "../../models/structures";
+import { Station } from "../../models/structures/station";
 import { computeSectionOffset } from "../../utils/line-queries";
 import { evalQuadraticBezier, evalQuadraticBezierTangent } from "../../utils/bezier";
 

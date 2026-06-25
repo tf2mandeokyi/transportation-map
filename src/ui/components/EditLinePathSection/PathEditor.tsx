@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { NodeId, RoadId, RoadSectionId, StationId } from '@/common/types';
 import { LinePathInput } from '@/common/messages';
-import { LinePath } from '@/plugin/models/structures';
+import { LinePath } from '@/plugin/models/structures/line-path';
 import { postMessageToPlugin } from '../../figma';
 import { useLinesContext } from '../../contexts/LinesContext';
 import { useNetworkContext } from '../../contexts/NetworkContext';

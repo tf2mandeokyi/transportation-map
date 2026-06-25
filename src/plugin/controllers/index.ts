@@ -39,7 +39,7 @@ export class Controller {
   }
 
   public async render(): Promise<void> {
-    await this.view.render(this.model.getState());
+    await this.view.render(this.model.state);
   }
 
   public async save(): Promise<void> {

@@ -1,4 +1,6 @@
-import { Line, MapState, Station } from "../../models/structures";
+import { Line } from "../../models/structures/line";
+import { Station } from "../../models/structures/station";
+import { MapState } from "../../models/structures";
 import { renderStation, renderStationLine } from "../../figmls";
 import { computeStationPosition, computeStationTangentAngle } from "./position";
 import { getLinesForStation } from "./layout";

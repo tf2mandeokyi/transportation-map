@@ -1,8 +1,8 @@
-import { LineId, NodeId, RoadSectionId, StationId } from "../types";
+import { LineId, NodeId, RoadSectionId, StationId } from "../types"
 
 export type LinePathInput =
   | { kind: 'station-stop'; stationId: StationId }
-  | { kind: 'road-section-change'; nodeId: NodeId; exiting: RoadSectionId | null; entering: RoadSectionId | null };
+  | { kind: 'road-section-change'; nodeId: NodeId; exiting: { sectionId: RoadSectionId; side: 0 | 1 } | null; entering: { sectionId: RoadSectionId; side: 0 | 1 } | null };
 
 export type LineData = { id: LineId; name: string; color: string };
 
