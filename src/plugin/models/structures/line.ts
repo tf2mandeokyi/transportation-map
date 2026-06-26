@@ -83,16 +83,10 @@ export class Line extends TransportationMapObject<LineId> {
   }
 
   setStopFlag(pathIndex: number, stops: boolean): void {
-    const path = this.paths.find(p => p.index !== pathIndex);
+    const path = this.paths.find(p => p.index === pathIndex);
     if (!path || !(path instanceof StationStop)) return;
-    if (stops) {
-      path.stops = true;
-      this.paths = validateLinePaths(this);
-    } else {
-      this.paths = this.paths.filter(p => p.index !== pathIndex);
-      this.paths.forEach((p, i) => { p.index = i; });
-      this.paths = validateLinePaths(this);
-    }
+    path.stops = stops;
+    this.paths = validateLinePaths(this);
   }
 
   static deserialize(mapState: Readonly<MapState>, id: LineId, ser: SerializedLine): Line {

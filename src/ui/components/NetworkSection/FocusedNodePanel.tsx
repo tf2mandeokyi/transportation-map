@@ -27,11 +27,13 @@ const FocusedNodePanel: React.FC<{ element: Extract<NetworkFocusedElement, { kin
     return sectionId.join(':');
   };
 
+  const sectionIdKey = (id: RoadSectionId) => id.join(':');
+
   const allSectionIds = [
-    ...new Set([
+    ...new Map([
       ...lines.map(l => l.exitingSectionId),
       ...lines.map(l => l.enteringSectionId),
-    ].filter(Boolean) as RoadSectionId[]),
+    ].filter(Boolean).map(id => [sectionIdKey(id as RoadSectionId), id as RoadSectionId])).values(),
   ];
 
   return (
@@ -55,14 +57,15 @@ const FocusedNodePanel: React.FC<{ element: Extract<NetworkFocusedElement, { kin
       <div style={{ color: '#999', fontSize: '11px', marginTop: '4px' }}>Drag the junction marker on the canvas to move it.</div>
 
       {allSectionIds.map(sectionId => {
+        const key = sectionIdKey(sectionId);
         const items: ArmItem[] = [
-          ...lines.filter(l => l.exitingSectionId === sectionId).map(l => ({ line: l, role: 'exit' as const, rank: l.exitRank })),
-          ...lines.filter(l => l.enteringSectionId === sectionId).map(l => ({ line: l, role: 'enter' as const, rank: l.enterRank })),
+          ...lines.filter(l => l.exitingSectionId && sectionIdKey(l.exitingSectionId) === key).map(l => ({ line: l, role: 'exit' as const, rank: l.exitRank })),
+          ...lines.filter(l => l.enteringSectionId && sectionIdKey(l.enteringSectionId) === key).map(l => ({ line: l, role: 'enter' as const, rank: l.enterRank })),
         ].sort((a, b) => a.rank - b.rank);
 
         return (
           <NodeArmList
-            key={sectionId.join(':')}
+            key={key}
             label={`${getSectionLabel(sectionId)} (drag to reorder)`}
             nodeId={element.nodeId}
             items={items}
