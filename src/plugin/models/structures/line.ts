@@ -1,5 +1,5 @@
 import { LineId } from "@/common/types";
-import { LinePathInput } from "@/common/messages";
+import { LinePathData } from "@/common/messages";
 import { MapState } from './map-state';
 import { LinePath, SerializedLinePath, StationStop } from './line-path';
 import { validateLinePaths } from '../../utils/line-validator';
@@ -59,16 +59,16 @@ export class Line extends TransportationMapObject<LineId> {
     };
   }
 
-  addPath(path: LinePathInput): void {
-    this.paths.push(LinePath.fromLinePathInput(this.mapState, path));
+  addPath(path: LinePathData): void {
+    this.paths.push(LinePath.fromLinePathData(this.mapState, path));
     this.paths = validateLinePaths(this);
   }
 
-  replacePaths(paths: LinePathInput[]): void {
+  replacePaths(paths: LinePathData[]): void {
     const newPaths: Owned<LinePath>[] = [];
     for (let i = 0; i < paths.length; i++) {
       const p = paths[i];
-      const linePath = LinePath.fromLinePathInput(this.mapState, p);
+      const linePath = LinePath.fromLinePathData(this.mapState, p);
       linePath.index = i;
       newPaths.push(linePath);
     }

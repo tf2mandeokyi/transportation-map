@@ -1,5 +1,5 @@
 import { LineId } from "@/common/types";
-import { LinePatch, LinePathInput } from "@/common/messages";
+import { LinePatch, LinePathData } from "@/common/messages";
 import { LinePath } from "../models/structures";
 import { postMessageToUI } from "../figma";
 import { BaseController } from "./base";
@@ -52,7 +52,7 @@ export class LineController extends BaseController {
     postMessageToUI({ type: 'line-added', id: lineId, name: line.name, color: line.color });
   }
 
-  private async handleUpdateLinePath(lineId: LineId, paths: LinePathInput[]): Promise<void> {
+  private async handleUpdateLinePath(lineId: LineId, paths: LinePathData[]): Promise<void> {
     const line = this.model.state.getLine(lineId);
     if (!line) { console.error("Line not found:", lineId); return; }
     line.replacePaths(paths);
@@ -87,7 +87,7 @@ export class LineController extends BaseController {
     const rotated = [
       ...line.paths.slice(normalized),
       ...line.paths.slice(0, normalized),
-    ].map(p => this.pathToInput(p));
+    ].map(p => this.pathToData(p));
 
     line.replacePaths(rotated);
     await this.save();
@@ -104,10 +104,11 @@ export class LineController extends BaseController {
     }
   }
 
-  private pathToInput(p: LinePath): LinePathInput {
-    if (p.kind === 'station-stop') return { kind: 'station-stop', stationId: p.station.id, direction: p.direction };
+  private pathToData(p: LinePath): LinePathData {
+    if (p.kind === 'station-stop') return { kind: 'station-stop', index: p.index, stationId: p.station.id, direction: p.direction, stops: p.stops };
     return {
       kind: 'road-section-change',
+      index: p.index,
       nodeId: p.node.id,
       exiting: p.exiting ? { sectionId: p.exiting.section.getRoadSectionId(), side: p.exiting.side } : null,
       entering: p.entering ? { sectionId: p.entering.section.getRoadSectionId(), side: p.entering.side } : null,

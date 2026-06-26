@@ -1,26 +1,27 @@
 import { LineId, NodeId, RoadSectionId, StationId } from "../types"
 
-type StationStopInput = {
-  stationId: StationId;
-  direction: 'ascending' | 'descending';
-}
-
-type RoadSectionChangeInput = {
-  nodeId: NodeId;
-  exiting: { sectionId: RoadSectionId; side: 0 | 1 } | null;
-  entering: { sectionId: RoadSectionId; side: 0 | 1 } | null;
-}
-
-export type LinePathInput =
-  | { kind: 'station-stop' } & StationStopInput
-  | { kind: 'road-section-change' } & RoadSectionChangeInput;
+export type LinePathData =
+  | {
+      kind: 'station-stop';
+      stationId: StationId;
+      direction: 'ascending' | 'descending';
+      stops?: boolean;
+      index?: number;
+    }
+  | {
+      kind: 'road-section-change';
+      nodeId: NodeId;
+      exiting: { sectionId: RoadSectionId; side: 0 | 1 } | null;
+      entering: { sectionId: RoadSectionId; side: 0 | 1 } | null;
+      index?: number;
+    };
 
 export type LineData = { id: LineId; name: string; color: string };
 
 export type LinePatch =
   | { op: 'update-name'; name: string }
   | { op: 'update-color'; color: string }
-  | { op: 'update-path'; paths: LinePathInput[] }
+  | { op: 'update-path'; paths: LinePathData[] }
   | { op: 'rotate-path'; steps: number }
   | { op: 'remove-station'; pathIndex: number }
   | { op: 'toggle-stops'; pathIndex: number; stops: boolean };

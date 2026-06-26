@@ -1,12 +1,11 @@
 import React from 'react';
 import { StationId } from '@/common/types';
-import { RoadData } from '@/common/messages';
-import { LinePath } from '@/plugin/models/structures/line-path';
+import { LinePathData, RoadData } from '@/common/messages';
 import StationPathItem from './StationPathItem';
 import InsertionButtons from './InsertionButtons';
 
 interface PathItemsListProps {
-  linePaths: LinePath[];
+  linePaths: LinePathData[];
   stationNames: Record<string, string>;
   roads: RoadData[];
   inactive: boolean;
@@ -50,16 +49,16 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
       elements.push(
         <StationPathItem
           key={`stop-${i}`}
-          name={stationNames[path.station.id] ?? path.station.id}
+          name={stationNames[path.stationId] ?? path.stationId}
           index={i}
-          stops={path.stops}
-          onRemove={() => onRemoveStop(path.index)}
-          onSelect={() => onSelectStation(path.station.id)}
-          onToggleStops={stops => onToggleStops(path.index, stops)}
+          stops={path.stops ?? true}
+          onRemove={() => onRemoveStop(path.index ?? i)}
+          onSelect={() => onSelectStation(path.stationId)}
+          onToggleStops={stops => onToggleStops(path.index ?? i, stops)}
         />
       );
     } else {
-      const enteringId = path.entering ? path.entering.section.getRoadSectionId() : null;
+      const enteringId = path.entering ? path.entering.sectionId : null;
       const enteringRoad = enteringId ? roads.find(r => r.id === enteringId[0]) : null;
       elements.push(
         <div key={`rse-${i}`} className="station-path-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

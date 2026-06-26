@@ -4,7 +4,7 @@ import { Node } from "./node";
 import type { Road } from "./road";
 import { NodeId, RoadSectionId, StationId } from "@/common/types";
 import { MapState } from "./map-state";
-import { LinePathInput } from "@/common/messages/line";
+import { LinePathData } from "@/common/messages/line";
 import { own, Owned } from "@/common/utils/ownership";
 
 function findSharedNode(roadA: Road, roadB: Road): Node | null {
@@ -29,12 +29,12 @@ export type LinePath = StationStop | RoadSectionChange;
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace LinePath {
-  export function fromLinePathInput(mapState: Readonly<MapState>, input: LinePathInput): Owned<LinePath> {
+  export function fromLinePathData(mapState: Readonly<MapState>, input: LinePathData): Owned<LinePath> {
     if (input.kind === 'station-stop') {
       const ss = new StationStop(mapState);
       ss.station = mapState.getStationHarsh(input.stationId);
       ss.rank = 0;
-      ss.stops = true;
+      ss.stops = input.stops ?? true;
       ss.direction = input.direction;
       return own(ss);
     }

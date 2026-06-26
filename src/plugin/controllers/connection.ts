@@ -1,5 +1,5 @@
 import { LineId, RoadId, RoadSectionId, StationId } from "@/common/types";
-import { LinePathInput } from "@/common/messages";
+import { LinePathData } from "@/common/messages";
 import { AddingStationsPluginSession } from "../sessions/adding-stations";
 import { LinePath, Station } from "../models/structures";
 import { getStationStopsAcrossLines } from "../utils/line-queries";
@@ -34,7 +34,7 @@ export class ConnectionController extends BaseController {
       }
     }
 
-    postMessageToUI({ type: 'line-path-data', lineId, paths: line.paths, stationNames, stationRoadIds, stationSectionIds });
+    postMessageToUI({ type: 'line-path-data', lineId, paths: line.paths.map(p => this.pathToData(p)), stationNames, stationRoadIds, stationSectionIds });
   }
 
   public insertStationIntoLine(lineId: LineId, newStation: Station, relativeToStation: Station, insertAfter: boolean): boolean {
@@ -45,10 +45,10 @@ export class ConnectionController extends BaseController {
     if (refIndex === -1) return false;
 
     const insertAt = insertAfter ? refIndex + 1 : refIndex;
-    const newStop: LinePathInput = { kind: 'station-stop', stationId: newStation.id, direction: 'ascending' };
+    const newStop: LinePathData = { kind: 'station-stop', stationId: newStation.id, direction: 'ascending' };
 
-    const before = line.paths.slice(0, insertAt).map(p => this.pathToInput(p));
-    const after  = line.paths.slice(insertAt).map(p => this.pathToInput(p));
+    const before = line.paths.slice(0, insertAt).map(p => this.pathToData(p));
+    const after  = line.paths.slice(insertAt).map(p => this.pathToData(p));
     line.replacePaths([...before, newStop, ...after]);
 
     return true;
@@ -86,13 +86,17 @@ export class ConnectionController extends BaseController {
     }
   }
 
-  private pathToInput(p: LinePath): LinePathInput {
-    if (p.kind === 'station-stop') return { kind: 'station-stop', stationId: p.station.id, direction: p.direction };
+  private pathToData(p: LinePath): LinePathData {
+    if (p.kind === 'station-stop') {
+      return { kind: 'station-stop', index: p.index, stationId: p.station.id, direction: p.direction, stops: p.stops };
+    }
     return {
       kind: 'road-section-change',
+      index: p.index,
       nodeId: p.node.id,
       exiting: p.exiting ? { sectionId: p.exiting.section.getRoadSectionId(), side: p.exiting.side } : null,
       entering: p.entering ? { sectionId: p.entering.section.getRoadSectionId(), side: p.entering.side } : null,
     };
   }
+
 }

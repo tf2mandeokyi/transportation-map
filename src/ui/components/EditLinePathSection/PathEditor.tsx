@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { NodeId, RoadId, RoadSectionId, StationId } from '@/common/types';
-import { LinePathInput } from '@/common/messages';
-import { LinePath } from '@/plugin/models/structures/line-path';
+import { LinePathData } from '@/common/messages';
 import { postMessageToPlugin } from '../../figma';
 import { useLinesContext } from '../../contexts/LinesContext';
 import { useNetworkContext } from '../../contexts/NetworkContext';
@@ -19,7 +18,7 @@ const PathEditor: React.FC = () => {
   const { roads } = useNetworkContext();
   const manager = useMessageManager();
 
-  const [linePaths, setLinePaths]           = useState<LinePath[]>([]);
+  const [linePaths, setLinePaths]           = useState<LinePathData[]>([]);
   const [stationNames, setStationNames]     = useState<Record<string, string>>({});
   const [stationRoadIds, setStationRoadIds] = useState<Record<string, RoadId | null>>({});
   const [stationSectionIds, setStationSectionIds] = useState<Record<string, RoadSectionId | null>>({});
@@ -27,7 +26,7 @@ const PathEditor: React.FC = () => {
   const [addingRseAfterPathIndex, setAddingRseAfterPathIndex] = useState<number | null>(null);
 
   const currentLineIdRef    = useRef(currentEditingLineId);
-  const linePathsRef        = useRef(linePaths);
+  const linePathsRef        = useRef<LinePathData[]>(linePaths);
   const stationRoadIdsRef   = useRef(stationRoadIds);
   const stationSectionIdsRef = useRef(stationSectionIds);
   const stationsSession   = useUISession<AddingStationsUISession>();
@@ -60,22 +59,16 @@ const PathEditor: React.FC = () => {
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
 
-  const toLinePathInputs = (paths: LinePath[]): LinePathInput[] =>
-    paths.map(p => p.kind === 'station-stop'
-      ? { kind: 'station-stop' as const, stationId: p.station.id, direction: p.direction }
-      : { kind: 'road-section-change' as const, nodeId: p.node.id, exiting: p.exiting ? { sectionId: p.exiting.section.getRoadSectionId(), side: p.exiting.side } : null, entering: p.entering ? { sectionId: p.entering.section.getRoadSectionId(), side: p.entering.side } : null }
-    );
-
   const getSourceAt = (pathIndex: number): { roadId: RoadId | null; sectionId: RoadSectionId | null } => {
     if (pathIndex < 0) return { roadId: null, sectionId: null };
     const p = linePaths[pathIndex];
     if (!p) return { roadId: null, sectionId: null };
     if (p.kind === 'road-section-change') {
-      const sectionId = p.entering ? p.entering.section.getRoadSectionId() : null;
+      const sectionId = p.entering ? p.entering.sectionId : null;
       const roadId = sectionId ? (roads.find(r => r.id === sectionId[0])?.id ?? null) : null;
       return { roadId, sectionId };
     }
-    return { roadId: stationRoadIds[p.station.id] ?? null, sectionId: stationSectionIds[p.station.id] ?? null };
+    return { roadId: stationRoadIds[p.stationId] ?? null, sectionId: stationSectionIds[p.stationId] ?? null };
   };
 
   // ─── Station adding ────────────────────────────────────────────────────────
@@ -89,12 +82,11 @@ const PathEditor: React.FC = () => {
 
   const handleFinishAdding = (stations: Array<{ id: StationId; name: string }>) => {
     if (!currentEditingLineId || stations.length === 0) return;
-    const newStopInputs: LinePathInput[] = stations.map(s => ({ kind: 'station-stop' as const, stationId: s.id, direction: 'ascending' as const }));
-    const fullPathInputs = toLinePathInputs(linePaths);
-    const insertAt = stationInsertAfterIndex === null ? fullPathInputs.length
+    const newStops: LinePathData[] = stations.map(s => ({ kind: 'station-stop' as const, stationId: s.id, direction: 'ascending' as const }));
+    const insertAt = stationInsertAfterIndex === null ? linePaths.length
       : stationInsertAfterIndex === -1 ? 0
       : stationInsertAfterIndex + 1;
-    const newPaths = [...fullPathInputs.slice(0, insertAt), ...newStopInputs, ...fullPathInputs.slice(insertAt)];
+    const newPaths = [...linePaths.slice(0, insertAt), ...newStops, ...linePaths.slice(insertAt)];
     postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'update-path', paths: newPaths } });
     stationsSession.close(s => s.stop());
     postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
@@ -121,9 +113,9 @@ const PathEditor: React.FC = () => {
 
   const commitRse = (afterPathIndex: number, exitingSectionId: RoadSectionId | null, nodeId: NodeId, enteringSectionId: RoadSectionId | null) => {
     if (!currentEditingLineId) return;
-    const fullPaths = toLinePathInputs(linePathsRef.current);
-    const rsc: LinePathInput = { kind: 'road-section-change', nodeId, exiting: exitingSectionId ? { sectionId: exitingSectionId, side: 0 } : null, entering: enteringSectionId ? { sectionId: enteringSectionId, side: 0 } : null };
-    const newPaths = [...fullPaths.slice(0, afterPathIndex + 1), rsc, ...fullPaths.slice(afterPathIndex + 1)];
+    const rsc: LinePathData = { kind: 'road-section-change', nodeId, exiting: exitingSectionId ? { sectionId: exitingSectionId, side: 0 } : null, entering: enteringSectionId ? { sectionId: enteringSectionId, side: 0 } : null };
+    const paths = linePathsRef.current;
+    const newPaths = [...paths.slice(0, afterPathIndex + 1), rsc, ...paths.slice(afterPathIndex + 1)];
     postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'update-path', paths: newPaths } });
     postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
     stopRseMode();
@@ -144,7 +136,7 @@ const PathEditor: React.FC = () => {
 
   const handleRemoveRse = (pathIndex: number) => {
     if (!currentEditingLineId) return;
-    const newPaths = toLinePathInputs(linePaths.filter((_, i) => i !== pathIndex));
+    const newPaths = linePaths.filter((_, i) => i !== pathIndex);
     postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'update-path', paths: newPaths } });
     postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
   };

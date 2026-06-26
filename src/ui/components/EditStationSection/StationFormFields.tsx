@@ -26,7 +26,7 @@ const StationFormFields: React.FC<Props> = ({
   const [textRotation, setTextRotation] = useState(stationTextRotation);
   const [flipped, setFlipped]         = useState(stationFlipped);
 
-  const nameUpdateTimerRef = useRef<number | null>(null);
+  const nameUpdateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const onUpdateStation = (name: string, textAlign: HVAlign, textHAlign: TextHAlign, textRotation: number, flipped: boolean) => {
     postMessageToPlugin({ type: 'patch-station', stationId, patch: { op: 'update', station: { name, textAlign, textHAlign, textRotation, flipped } } });
