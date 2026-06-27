@@ -28,7 +28,6 @@ export type RoadPatch =
   | { op: 'remove-section'; sectionId: RoadSectionId };
 
 export type UIToPluginNetworkMessage =
-  | { type: 'add-node'; node: { name?: string; pos?: { x: number; y: number } } }
   | { type: 'remove-node'; nodeId: NodeId }
   | { type: 'patch-node'; nodeId: NodeId; patch: NodePatch }
   | { type: 'start-adding-road-mode' }

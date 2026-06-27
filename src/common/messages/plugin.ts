@@ -12,7 +12,7 @@ export type PluginToUIMessage =
   | { type: 'network-data'; nodes: NodeData[]; roads: RoadData[] }
   | { type: 'network-element-focused'; element: NetworkFocusedElement }
   | { type: 'network-selection-cleared' }
-  | { type: 'road-creation-first-node'; nodeId: NodeId; name?: string }
+  | { type: 'road-creation-snap-update'; startSnap: { nodeId: NodeId; name?: string } | null; endSnap: { nodeId: NodeId; name?: string } | null }
   | { type: 'road-creation-exited' }
   | { type: 'road-clicked'; roadId: RoadId }
   | { type: 'node-lines-data'; nodeId: NodeId; lines: LineAtNodeData[] };

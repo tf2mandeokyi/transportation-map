@@ -1,16 +1,17 @@
 import { NodeId, RoadId } from "@/common/types";
-import { LineAtNodeData, NetworkFocusedElement, NodeData, NodePatch, RoadData, RoadPatch, RoadSectionData, UIToPluginMessage } from "@/common/messages";
+import { LineAtNodeData, NetworkFocusedElement, NodeData, NodePatch, RoadData, RoadPatch, RoadSectionData } from "@/common/messages";
 import { PluginSessionManager } from "../../sessions/manager";
 import { postMessageToUI } from "../../figma";
-import { Node } from "../../models/structures";
+import { Node, RoadSectionChange } from "../../models/structures";
 import { Model } from "../../models";
 import { View } from "../../views";
+import { own } from "@/common/utils/ownership";
 import { BaseController } from "../base";
 import { NodeChangeListener } from "../listener";
 import { UIMessageRouter } from "../router";
 import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_NODE_ID, FIGMA_KEY_IS_NODE_MARKER, FIGMA_KEY_ROAD_ID, FIGMA_KEY_JUNCTION_OFFSET_X, FIGMA_KEY_JUNCTION_OFFSET_Y } from "../../views/road";
 import { RoadControlManager, FIGMA_KEY_BEZIER_HANDLE, FIGMA_KEY_ENDPOINT_HANDLE } from "./road-control";
-import { RoadCreationStateMachine } from "./road-creation";
+import { RoadPlacingState } from "./road-placing";
 import { AddingRsePluginSession } from "../../sessions/adding-rse";
 import { AddingRoadPluginSession } from "../../sessions/adding-road";
 import { getRscEntriesForNode } from "../../utils/line-queries";
@@ -18,36 +19,23 @@ import { getRscEntriesForNode } from "../../utils/line-queries";
 
 export class NetworkController extends BaseController {
   private readonly roadControl: RoadControlManager;
-  private readonly roadCreation: RoadCreationStateMachine;
+  private readonly roadPlacing = new RoadPlacingState();
   private isRendering = false;
   private renderDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private isAddingRseMode = false;
-  private readonly nodePositionCache = new Map<NodeId, { x: number; y: number }>();
 
   constructor(model: Model, view: View, listener: NodeChangeListener, sessionManager: PluginSessionManager) {
     super(model, view, listener, sessionManager);
-    this.roadControl  = new RoadControlManager(model);
-    this.roadCreation = new RoadCreationStateMachine();
+    this.roadControl = new RoadControlManager(model);
   }
 
   public registerMessages(router: UIMessageRouter): void {
-    router.register('add-node', msg => this.handleAddNode(msg));
     router.register('remove-node', msg => this.handleRemoveNode(msg.nodeId));
     router.register('patch-node', msg => this.handlePatchNode(msg.nodeId, msg.patch));
     router.register('start-adding-road-mode', () => this.startRoadCreationSession());
     router.register('remove-road', msg => this.handleRemoveRoad(msg.roadId));
     router.register('patch-road', msg => this.handlePatchRoad(msg.roadId, msg.patch));
     router.register('start-adding-rse-mode', async () => this.startAddingRseSession());
-  }
-
-  public async handleAddNode(msg: Extract<UIToPluginMessage, { type: 'add-node' }>): Promise<void> {
-    const pos = msg.node.pos ?? figma.viewport.center;
-    console.log(`[handleAddNode] pos =`, pos);
-    const node = this.model.addNode({ name: msg.node.name });
-    this.nodePositionCache.set(node.id, pos);
-    this.isRendering = true;
-    try { await this.render(); await this.save(); } finally { this.isRendering = false; }
-    this.syncNetworkToUI();
   }
 
   public async handlePatchNode(nodeId: NodeId, patch: NodePatch): Promise<void> {
@@ -60,15 +48,14 @@ export class NetworkController extends BaseController {
         break;
       case 'update-rsc-ranks':
         if (node) node.updateRscRanks(patch.changes);
+        if (node) await this.emitNodeLinesData(node);
         await this.render();
         await this.save();
-        if (node) this.emitNodeLinesData(node);
         break;
     }
   }
 
   public async handleRemoveNode(nodeId: NodeId): Promise<void> {
-    this.nodePositionCache.delete(nodeId);
     const node = this.model.state.getNode(nodeId);
     if (node) this.model.removeNode(node);
     await this.save();
@@ -100,10 +87,41 @@ export class NetworkController extends BaseController {
   }
 
   private async startRoadCreationSession(): Promise<void> {
-    this.roadCreation.start();
+    await this.roadPlacing.begin(this.model, this.listener);
     this.sessionManager.create(new AddingRoadPluginSession(
-      async () => this.roadCreation.cancel()
+      () => this.confirmRoadPlacing(),
+      () => this.cancelRoadPlacing(),
     ));
+  }
+
+  private async confirmRoadPlacing(): Promise<void> {
+    const result = this.roadPlacing.getResult();
+    await this.roadPlacing.cleanup();
+
+    if (result) {
+      const startNode = result.startNode ?? this.model.addNode({});
+      const endNode   = result.endNode   ?? this.model.addNode({});
+
+      this.model.addRoad({
+        name: undefined,
+        bezierMidPoint: result.bezierPos,
+        endpoints: [
+          own({ node: startNode, endpointPos: result.startPos, groupNumber: 0 }),
+          own({ node: endNode,   endpointPos: result.endPos,   groupNumber: 0 }),
+        ],
+      });
+
+      this.isRendering = true;
+      try { await this.render(); await this.save(); } finally { this.isRendering = false; }
+      this.syncNetworkToUI();
+    }
+
+    postMessageToUI({ type: 'road-creation-exited' });
+  }
+
+  private async cancelRoadPlacing(): Promise<void> {
+    await this.roadPlacing.cleanup();
+    postMessageToUI({ type: 'road-creation-exited' });
   }
 
   private async startAddingRseSession(): Promise<void> {
@@ -114,24 +132,10 @@ export class NetworkController extends BaseController {
   }
 
   public async handleSelectionChange(): Promise<void> {
+    if (this.roadPlacing.isActive) return;
+
     const selection = figma.currentPage.selection;
     const first = selection[0];
-
-    if (this.roadCreation.isActive) {
-      if (first) {
-        const nodeId = first.getPluginData(FIGMA_KEY_NODE_ID) as NodeId;
-        if (nodeId) {
-          await this.roadCreation.handleNodeClick(nodeId, this.model, (node) => this.computeNodeCenter(node), async () => {
-            this.isRendering = true;
-            try { await this.render(); await this.save(); } finally { this.isRendering = false; }
-            this.syncNetworkToUI();
-          });
-          return;
-        }
-      }
-      this.roadCreation.cancel();
-      return;
-    }
 
     if (selection.length === 0) {
       await this.clearNetworkFocus();
@@ -155,7 +159,7 @@ export class NetworkController extends BaseController {
       await this.roadControl.remove();
       postMessageToUI({ type: 'network-element-focused', element: this.buildNodeElement(nodeId) });
       const node = this.model.state.getNode(nodeId);
-      if (node) this.emitNodeLinesData(node);
+      if (node) await this.emitNodeLinesData(node);
       return;
     }
 
@@ -233,7 +237,7 @@ export class NetworkController extends BaseController {
   private buildNetworkPayload(): { nodes: NodeData[]; roads: RoadData[] } {
     const state = this.model.state;
     const nodes: NodeData[] = [...state.getNodes()].map(n => ({
-      id: n.id, name: n.name, pos: this.computeNodeCenter(n),
+      id: n.id, name: n.name, pos: n.getCenter(),
     }));
     const roads: RoadData[] = [...state.getRoads()].map(r => ({
       id: r.id,
@@ -248,14 +252,13 @@ export class NetworkController extends BaseController {
   }
 
   private async onNodePositionChanged(nodeId: NodeId, newPos: { x: number; y: number }): Promise<void> {
-    const currentCenter = this.getNodeCenter(nodeId);
+    const node = this.model.state.getNode(nodeId);
+    if (!node) return;
+    const currentCenter = node.getCenter();
     const delta = { x: newPos.x - currentCenter.x, y: newPos.y - currentCenter.y };
     if (Math.abs(delta.x) < 0.5 && Math.abs(delta.y) < 0.5) return;
-    const node = this.model.state.getNode(nodeId);
     if (node && node.roadConnections.length > 0) {
       this.model.moveNodeConnections(node, delta);
-    } else {
-      this.nodePositionCache.set(nodeId, newPos);
     }
     await this.roadControl.remove();
 
@@ -283,24 +286,51 @@ export class NetworkController extends BaseController {
     postMessageToUI({ type: 'network-selection-cleared' });
   }
 
-  private computeNodeCenter(node: Node): { x: number; y: number } {
-    return node.computeCenter(this.nodePositionCache.get(node.id) ?? { x: 0, y: 0 });
-  }
-
-  private getNodeCenter(nodeId: NodeId): { x: number; y: number } {
-    const node = this.model.state.getNode(nodeId);
-    if (node) return this.computeNodeCenter(node);
-    return this.nodePositionCache.get(nodeId) ?? { x: 0, y: 0 };
-  }
-
   private buildNodeElement(nodeId: NodeId): NetworkFocusedElement {
     const node = this.model.state.getNode(nodeId);
-    return { kind: 'node', nodeId, name: node?.name, pos: node ? this.computeNodeCenter(node) : (this.nodePositionCache.get(nodeId) ?? { x: 0, y: 0 }) };
+    return {
+      kind: 'node', nodeId, name: node?.name,
+      pos: node?.getCenter() ?? { x: 0, y: 0 }
+    };
   }
 
-  public emitNodeLinesData(node: Node): void {
+  public async emitNodeLinesData(node: Node): Promise<void> {
     const state = this.model.state;
-    const lines: LineAtNodeData[] = getRscEntriesForNode(node, state).map(({ line, path: p }) => ({
+    const entries = getRscEntriesForNode(node, state);
+
+    type ArmEntry = { rsc: RoadSectionChange; role: 'exit' | 'enter'; rank: number; lineId: string; pathIndex: number };
+    const sectionGroups = new Map<string, ArmEntry[]>();
+    for (const { line, path: rsc } of entries) {
+      if (rsc.exiting) {
+        const key = rsc.exiting.section.id;
+        const g = sectionGroups.get(key) ?? [];
+        g.push({ rsc, role: 'exit', rank: rsc.exitRank, lineId: line.id, pathIndex: rsc.index });
+        sectionGroups.set(key, g);
+      }
+      if (rsc.entering) {
+        const key = rsc.entering.section.id;
+        const g = sectionGroups.get(key) ?? [];
+        g.push({ rsc, role: 'enter', rank: rsc.enterRank, lineId: line.id, pathIndex: rsc.index });
+        sectionGroups.set(key, g);
+      }
+    }
+
+    let changed = false;
+    for (const group of sectionGroups.values()) {
+      group.sort((a, b) => {
+        if (a.rank !== b.rank) return a.rank - b.rank;
+        if (a.lineId !== b.lineId) return a.lineId < b.lineId ? -1 : 1;
+        return a.pathIndex - b.pathIndex;
+      });
+      group.forEach((item, i) => {
+        if (item.role === 'exit' && item.rsc.exitRank !== i) { item.rsc.exitRank = i; changed = true; }
+        if (item.role === 'enter' && item.rsc.enterRank !== i) { item.rsc.enterRank = i; changed = true; }
+      });
+    }
+
+    if (changed) await this.save();
+
+    const lines: LineAtNodeData[] = entries.map(({ line, path: p }) => ({
       lineId: line.id, lineName: line.name, lineColor: line.color, pathIndex: p.index,
       exitingSectionId: p.exiting?.section.getRoadSectionId() ?? null,
       enteringSectionId: p.entering?.section.getRoadSectionId() ?? null,

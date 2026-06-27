@@ -32,15 +32,22 @@ export class Node extends TransportationMapObject<NodeId> {
     };
   }
   
-  computeCenter(defaultPosition: { x: number; y: number }): { x: number; y: number } {
+  getCenter(): { x: number; y: number } {
     let sumX = 0, sumY = 0, count = 0;
     for (const { road, endpointIndex } of this.roadConnections) {
       sumX += road.endpoints[endpointIndex].endpointPos.x;
       sumY += road.endpoints[endpointIndex].endpointPos.y;
       count++;
     }
-    if (count > 0) return { x: sumX / count, y: sumY / count };
-    return defaultPosition;
+    if (count == 0) throw new Error(`Node ${this.id} has no road connections, cannot compute center`);
+    return { x: sumX / count, y: sumY / count };
+  }
+
+  moveByDelta(delta: { x: number; y: number }): void {
+    for (const { road, endpointIndex } of this.roadConnections) {
+      const oldPos = road.endpoints[endpointIndex].endpointPos
+      road.endpoints[endpointIndex].endpointPos = { x: oldPos.x + delta.x, y: oldPos.y + delta.y };
+    }
   }
 
   addRoadConnection(road: Road, endpointIndex: 0 | 1): void {

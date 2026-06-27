@@ -6,6 +6,9 @@ export class AddingRoadUISession extends UISession<AddingRoadMessage> {
   start(manager: FigmaPluginMessageManager): void {
     this.open({ type: 'start-adding-road-mode' }, manager);
   }
+  confirm(): void {
+    this.send({ type: 'confirm-adding-road' });
+  }
   cancel(): void {
     this.send({ type: 'cancel-adding-road-mode' });
   }
