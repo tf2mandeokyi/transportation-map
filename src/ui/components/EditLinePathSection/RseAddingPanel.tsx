@@ -20,6 +20,8 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({ afterPathIndex, sourceR
   const [rsePendingRoadId, setRsePendingRoadId] = useState<RoadId | null>(null);
   const [rseSelectedNodeId, setRseSelectedNodeId] = useState<NodeId | ''>('');
 
+  const [isUturn, setIsUturn] = useState(false);
+
   // Ref-based handler so the stable subscription always sees latest props/state.
   const handleRef = useRef<(destRoadId: RoadId) => void>(() => {});
   handleRef.current = (destRoadId: RoadId) => {
@@ -27,14 +29,27 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({ afterPathIndex, sourceR
       setRseError('No road context at this position.');
       return;
     }
+
+    const destRoad = roads.find(r => r.id === destRoadId);
+    if (!destRoad) return;
+
+    setRseError(null);
+
     if (sourceRoadId === destRoadId) {
-      setRseError('That is the same road the line is already on.');
+      // U-turn: line returns on the same road. Let the user pick which endpoint to wrap around.
+      const endpointNodes = ([destRoad.startNodeId, destRoad.endNodeId] as NodeId[]).map(nodeId => {
+        const node = nodes.find(n => n.id === nodeId);
+        return { nodeId, nodeName: node?.name ?? nodeId };
+      });
+      setIsUturn(true);
+      setRseNodeOptions(endpointNodes);
+      setRsePendingRoadId(destRoadId);
+      setRseSelectedNodeId('');
       return;
     }
 
     const sourceRoad = roads.find(r => r.id === sourceRoadId);
-    const destRoad   = roads.find(r => r.id === destRoadId);
-    if (!sourceRoad || !destRoad) return;
+    if (!sourceRoad) return;
 
     const sourceNodeIds = new Set([sourceRoad.startNodeId, sourceRoad.endNodeId]);
     const sharedNodes = ([destRoad.startNodeId, destRoad.endNodeId] as NodeId[])
@@ -49,7 +64,7 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({ afterPathIndex, sourceR
       return;
     }
 
-    setRseError(null);
+    setIsUturn(false);
 
     if (sharedNodes.length === 1) {
       const enteringSectionId = (destRoad.sections[0]?.id ?? null) as RoadSectionId | null;
@@ -70,21 +85,23 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({ afterPathIndex, sourceR
     <div style={{ padding: '12px', background: '#f5f5f5', borderRadius: '4px', border: '2px solid #18a0fb', marginTop: '8px' }}>
       <p style={{ fontSize: '11px', color: '#666', margin: '0 0 8px 0' }}>
         <strong>Adding road enter</strong><br />
-        Click a road section on the canvas to enter from that road.
+        Click a road section on the canvas to enter from that road. Click the same road to create a U-turn.
       </p>
       {rseError && (
         <p style={{ fontSize: '11px', color: '#c00', margin: '0 0 8px 0' }}>{rseError}</p>
       )}
       {rseNodeOptions && rsePendingRoadId && (
         <div style={{ marginBottom: '8px' }}>
-          <p style={{ fontSize: '11px', color: '#333', margin: '0 0 4px 0' }}>Multiple junctions — pick one:</p>
+          <p style={{ fontSize: '11px', color: '#333', margin: '0 0 4px 0' }}>
+            {isUturn ? 'U-turn — pick endpoint:' : 'Multiple junctions — pick one:'}
+          </p>
           <select
             className="input"
             value={rseSelectedNodeId}
             onChange={e => setRseSelectedNodeId(e.target.value as NodeId)}
             style={{ fontSize: '11px', width: '100%', marginBottom: '6px' }}
           >
-            <option value="">-- select junction --</option>
+            <option value="">{isUturn ? '-- select endpoint --' : '-- select junction --'}</option>
             {rseNodeOptions.map(opt => (
               <option key={opt.nodeId} value={opt.nodeId}>{opt.nodeName}</option>
             ))}
@@ -94,14 +111,16 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({ afterPathIndex, sourceR
             disabled={!rseSelectedNodeId}
             style={{ width: '100%', marginBottom: '4px' }}
             onClick={() => {
-              if (exitingSectionId && rseSelectedNodeId && rsePendingRoadId) {
+              if (rseSelectedNodeId && rsePendingRoadId) {
                 const pendingDest = roads.find(r => r.id === rsePendingRoadId);
-                const enteringSectionId = (pendingDest?.sections[0]?.id ?? null) as RoadSectionId | null;
+                const enteringSectionId = isUturn
+                  ? exitingSectionId
+                  : (pendingDest?.sections[0]?.id ?? null) as RoadSectionId | null;
                 onCommitRse(afterPathIndex, exitingSectionId, rseSelectedNodeId as NodeId, enteringSectionId);
               }
             }}
           >
-            Add Road Junction
+            {isUturn ? 'Add U-turn' : 'Add Road Junction'}
           </button>
         </div>
       )}
