@@ -1,4 +1,4 @@
-import { ErrorChain } from "../error";
+import { ErrorChain } from "../plugin/error";
 
 export class RenderResult {
   public readonly node: SceneNode;

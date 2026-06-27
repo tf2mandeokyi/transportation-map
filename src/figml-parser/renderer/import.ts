@@ -3,7 +3,7 @@ import { BaseRenderer } from './base';
 import { RenderResult } from '../result';
 import { FigmlParser } from '../parser';
 import { StringTemplate } from '../template';
-import { resolveImport } from '../../figmls';
+import { resolveImport } from '../../plugin/figmls';
 
 export class ImportRenderer extends BaseRenderer {
   render(node: FigmlNode, props: FigmlProps): RenderResult {

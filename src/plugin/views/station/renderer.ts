@@ -6,7 +6,7 @@ import { computeStationPosition, computeStationTangentAngle } from "./position";
 import { getLinesForStation } from "./layout";
 import { getLinesForSection } from "../../utils/section";
 import { LINE_SPACING } from "../../utils/constants";
-import { RenderResult } from "../../figml-parser/result";
+import { RenderResult } from "@/figml-parser/result";
 
 function applyTransform(transform: Transform, point: Vector): Vector {
   return {

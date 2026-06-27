@@ -71,6 +71,7 @@ export class LineController extends BaseController {
     const line = this.model.state.getLine(lineId);
     if (!line) return;
     line.setStopFlag(pathIndex, stops);
+    await this.render();
     await this.save();
     postMessageToUI({ type: 'station-removed-from-line' });
   }
