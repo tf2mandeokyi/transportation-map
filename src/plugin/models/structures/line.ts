@@ -75,7 +75,7 @@ export class Line extends TransportationMapObject<LineId> {
   }
 
   addPath(path: LinePathData): void {
-    this.paths.push(LinePath.fromLinePathData(this.mapState, path));
+    this.paths.push(LinePath.fromData(this.mapState, path));
     this.paths = validateLinePaths(this);
   }
 
@@ -83,7 +83,7 @@ export class Line extends TransportationMapObject<LineId> {
     const newPaths: Owned<LinePath>[] = [];
     for (let i = 0; i < paths.length; i++) {
       const p = paths[i];
-      const linePath = LinePath.fromLinePathData(this.mapState, p);
+      const linePath = LinePath.fromData(this.mapState, p);
       linePath.index = i;
       newPaths.push(linePath);
     }

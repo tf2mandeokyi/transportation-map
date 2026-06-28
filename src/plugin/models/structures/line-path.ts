@@ -29,11 +29,11 @@ export type LinePath = StationStop | RoadSectionChange;
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace LinePath {
-  export function fromLinePathData(mapState: Readonly<MapState>, input: LinePathData): Owned<LinePath> {
+  export function fromData(mapState: Readonly<MapState>, input: LinePathData): Owned<LinePath> {
     if (input.kind === 'station-stop') {
       const ss = new StationStop(mapState);
       ss.station = mapState.getStationHarsh(input.stationId);
-      ss.rank = 0;
+      ss.rank = input.rank ?? 0;
       ss.stops = input.stops ?? true;
       ss.direction = input.direction;
       return own(ss);
@@ -51,6 +51,19 @@ export namespace LinePath {
       rsc.enterRank = 0;
       return own(rsc);
     }
+  }
+
+  export function toData(p: LinePath): LinePathData {
+    if (p.kind === 'station-stop') {
+      return { kind: 'station-stop', index: p.index, stationId: p.station.id, direction: p.direction, stops: p.stops, rank: p.rank };
+    }
+    return {
+      kind: 'road-section-change',
+      index: p.index,
+      nodeId: p.node.id,
+      exiting: p.exiting ? { sectionId: p.exiting.section.getRoadSectionId(), side: p.exiting.side } : null,
+      entering: p.entering ? { sectionId: p.entering.section.getRoadSectionId(), side: p.entering.side } : null,
+    };
   }
 
   export function deserialize(mapState: Readonly<MapState>, ser: SerializedLinePath): Owned<LinePath> {

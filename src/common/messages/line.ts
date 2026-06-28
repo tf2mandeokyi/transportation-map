@@ -7,6 +7,7 @@ export type LinePathData =
       direction: 'ascending' | 'descending';
       stops?: boolean;
       index?: number;
+      rank?: number;
     }
   | {
       kind: 'road-section-change';

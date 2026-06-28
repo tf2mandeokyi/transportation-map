@@ -33,7 +33,7 @@ export class ConnectionController extends BaseController {
       }
     }
 
-    postMessageToUI({ type: 'line-path-data', lineId, paths: line.paths.map(p => this.pathToData(p)), stationNames, stationRoadIds, stationSectionIds });
+    postMessageToUI({ type: 'line-path-data', lineId, paths: line.paths.map(p => LinePath.toData(p)), stationNames, stationRoadIds, stationSectionIds });
   }
 
   public insertStationIntoLine(lineId: LineId, newStation: Station, relativeToStation: Station, insertAfter: boolean): boolean {
@@ -46,8 +46,8 @@ export class ConnectionController extends BaseController {
     const insertAt = insertAfter ? refIndex + 1 : refIndex;
     const newStop: LinePathData = { kind: 'station-stop', stationId: newStation.id, direction: 'ascending' };
 
-    const before = line.paths.slice(0, insertAt).map(p => this.pathToData(p));
-    const after  = line.paths.slice(insertAt).map(p => this.pathToData(p));
+    const before = line.paths.slice(0, insertAt).map(p => LinePath.toData(p));
+    const after  = line.paths.slice(insertAt).map(p => LinePath.toData(p));
     line.replacePaths([...before, newStop, ...after]);
 
     return true;
@@ -82,19 +82,6 @@ export class ConnectionController extends BaseController {
         lines,
       });
     }
-  }
-
-  private pathToData(p: LinePath): LinePathData {
-    if (p.kind === 'station-stop') {
-      return { kind: 'station-stop', index: p.index, stationId: p.station.id, direction: p.direction, stops: p.stops };
-    }
-    return {
-      kind: 'road-section-change',
-      index: p.index,
-      nodeId: p.node.id,
-      exiting: p.exiting ? { sectionId: p.exiting.section.getRoadSectionId(), side: p.exiting.side } : null,
-      entering: p.entering ? { sectionId: p.entering.section.getRoadSectionId(), side: p.entering.side } : null,
-    };
   }
 
 }

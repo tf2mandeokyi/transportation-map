@@ -93,7 +93,7 @@ export function computeSectionSegs(
     return directedDep === 0 ? [sub] : sub.offsetAdaptive(directedDep);
   }
 
-  return [computeCrossingSeg(centerline, t1, t2, directedDep, directedArr)];
+  return [computeCrossingSeg(centerline, t1, t2, offsetDep, offsetArr)];
 }
 
 export function appendJunctionCurve(pb: PathBuilder, prev: CubicBezierPoints, next: CubicBezierPoints): void {

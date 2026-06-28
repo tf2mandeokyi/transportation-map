@@ -1,6 +1,6 @@
 import { LineId } from "@/common/types";
 import { LinePatch, LinePathData } from "@/common/messages";
-import { LinePath } from "../models/structures";
+import { LinePath } from "../models/structures/line-path";
 import { postMessageToUI } from "../figma";
 import { BaseController } from "./base";
 import { UIMessageRouter } from "./router";
@@ -88,7 +88,7 @@ export class LineController extends BaseController {
     const rotated = [
       ...line.paths.slice(normalized),
       ...line.paths.slice(0, normalized),
-    ].map(p => this.pathToData(p));
+    ].map(p => LinePath.toData(p));
 
     line.replacePaths(rotated);
     await this.save();
@@ -103,16 +103,5 @@ export class LineController extends BaseController {
     for (const line of this.model.state.getLines()) {
       postMessageToUI({ type: 'line-added', id: line.id, name: line.name, color: line.color });
     }
-  }
-
-  private pathToData(p: LinePath): LinePathData {
-    if (p.kind === 'station-stop') return { kind: 'station-stop', index: p.index, stationId: p.station.id, direction: p.direction, stops: p.stops };
-    return {
-      kind: 'road-section-change',
-      index: p.index,
-      nodeId: p.node.id,
-      exiting: p.exiting ? { sectionId: p.exiting.section.getRoadSectionId(), side: p.exiting.side } : null,
-      entering: p.entering ? { sectionId: p.entering.section.getRoadSectionId(), side: p.entering.side } : null,
-    };
   }
 }

@@ -128,10 +128,9 @@ export function buildSegmentPath(
     // Different sections on the same road — single crossing segment.
     const centerline = startRoad.computeBezier();
     if (!centerline) return fallback;
-    const sign      = t1 > t2 ? -1 : 1;
     const offsetDep = computeTotalOffset(line, startSection, startStation, startPathIdx);
     const offsetArr = computeTotalOffset(line, endSection,   endStation,   endPathIdx);
-    const seg = computeCrossingSeg(centerline, t1, t2, sign * offsetDep, sign * offsetArr);
+    const seg = computeCrossingSeg(centerline, t1, t2, offsetDep, offsetArr);
     return new PathBuilder().beziers([seg]).build();
   }
 
