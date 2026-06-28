@@ -62,9 +62,10 @@ export class Controller {
     this.connectionController.registerMessages(router);
     this.renderController.registerMessages(router);
     this.networkController.registerMessages(router);
-    router.register('validate-line-paths', () => this.handleValidateLinePaths());
-    router.register('clear-plugin-data',   () => this.handleClearPluginData());
+    router.register('validate-line-paths',  () => this.handleValidateLinePaths());
+    router.register('clear-plugin-data',    () => this.handleClearPluginData());
     router.register('request-initial-data', () => this.handleRequestInitialData());
+    router.register('get-map-data',         () => this.handleGetMapData());
 
     setUIMessageHandler(async (payload) => {
       try {
@@ -110,6 +111,11 @@ export class Controller {
   private async handleRequestInitialData(): Promise<void> {
     this.lineController.syncLinesToUI();
     this.networkController.syncNetworkToUI();
+  }
+
+  private async handleGetMapData(): Promise<void> {
+    const data = figma.root.getPluginData('mapState') || '';
+    figma.ui.postMessage({ type: 'map-data', data });
   }
 
   public connectStationsWithLine(lineId: LineId, startStation: Station, endStation: Station): void {

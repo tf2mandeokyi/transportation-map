@@ -5,6 +5,8 @@ import { Station } from "./station";
 import { Line } from "./line";
 import { RoadSection } from "./road-section";
 import { Owned } from "@/common/utils/ownership";
+import { LinePath } from "./line-path";
+import { PathEntry } from "@/plugin/utils/path-entry";
 
 export class MapState {
   private readonly nodes: Map<NodeId, Owned<Node>> = new Map();
@@ -69,4 +71,38 @@ export class MapState {
   hasRoad(id: RoadId): boolean { return this.roads.has(id); }
   hasStation(id: StationId): boolean { return this.stations.has(id); }
   hasLine(id: LineId): boolean { return this.lines.has(id); }
+
+  normalize(): void {
+    for (const road of this.roads.values()) {
+      for (const section of road.getSections()) {
+        section.getLineStackingRanks(0);
+        section.getLineStackingRanks(1);
+      }
+    }
+    for (const station of this.stations.values()) {
+      station.getLineStackingRanks();
+    }
+  }
+
+  getLinePaths<T extends LinePath>(
+    match: (p: LinePath) => p is T,
+  ): Array<{ line: Line; path: T; position: Vector }> {
+    const groups = new Map<string | null, PathEntry<T>[]>();
+    for (const line of this.getLines()) {
+      for (const p of line.paths) {
+        if (!match(p)) continue;
+        const e = line.computeEntry(p) as PathEntry<T>;
+        const key = e.section?.id ?? null;
+        const group = groups.get(key);
+        if (group) group.push(e);
+        else groups.set(key, [e]);
+      }
+    }
+    const entries: PathEntry<T>[] = [];
+    for (const group of groups.values()) {
+      group.sort((a, b) => a.rank - b.rank);
+      entries.push(...group);
+    }
+    return entries.map(e => ({ line: e.line, path: e.path, position: e.computePosition() }));
+  }
 }

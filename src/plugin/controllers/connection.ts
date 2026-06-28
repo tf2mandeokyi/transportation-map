@@ -2,7 +2,6 @@ import { LineId, RoadId, RoadSectionId, StationId } from "@/common/types";
 import { LinePathData } from "@/common/messages";
 import { AddingStationsPluginSession } from "../sessions/adding-stations";
 import { LinePath, Station } from "../models/structures";
-import { getStationStopsAcrossLines } from "../utils/line-queries";
 import { postMessageToUI } from "../figma";
 import { BaseController } from "./base";
 import { UIMessageRouter } from "./router";
@@ -71,9 +70,8 @@ export class ConnectionController extends BaseController {
 
     const station = this.model.findStationFromNode(selection[0]);
     if (station) {
-      const state = this.model.state;
       const lines = [];
-      for (const { line, path } of getStationStopsAcrossLines(station, state)) {
+      for (const { line, path } of station.getStopsAcrossLines()) {
         const facing: 'left' | 'right' = path.direction === 'ascending' ? 'right' : 'left';
         lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing, stops: path.stops });
       }

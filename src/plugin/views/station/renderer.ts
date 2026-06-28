@@ -1,10 +1,9 @@
 import { Line } from "../../models/structures/line";
 import { Station } from "../../models/structures/station";
-import { MapState, RoadSection } from "../../models/structures";
+import { RoadSection } from "../../models/structures";
 import { renderStation, renderStationLine } from "../../figmls";
-import { computeStationPosition, computeStationTangentAngle } from "./position";
+import { computeStationTangentAngle } from "./position";
 import { getLinesForStation } from "./layout";
-import { getLinesForSection } from "../../utils/section";
 import { LINE_SPACING } from "../../utils/constants";
 import { RenderResult } from "@/figml-parser/result";
 
@@ -18,15 +17,14 @@ function applyTransform(transform: Transform, point: Vector): Vector {
 async function renderStationWithTemplate(
   parentFrame: FrameNode,
   station: Station,
-  state: Readonly<MapState>,
   tangentAngle: number,
 ): Promise<{ line: Line; segmentIndex: number; node: SceneNode; passThrough: boolean }[]> {
   const flipLR = (f: 'left' | 'right'): 'left' | 'right' => f === 'left' ? 'right' : 'left';
 
   const section = station.parentRoadSection as RoadSection | undefined;
-  const noRefCount = section ? getLinesForSection(section, state).length : 0;
+  const noRefCount = section ? section.getLines().length : 0;
 
-  const lines = getLinesForStation(station, state);
+  const lines = getLinesForStation(station);
   const effectiveNoRef = Math.max(noRefCount, lines.length);
 
   const indicators = lines.map(({ line, segmentIndex, facing, passThrough }) => ({
@@ -84,7 +82,7 @@ async function renderStationWithTemplate(
 export class StationRenderer {
   private readonly lineConnectionPoints: Map<string, Vector> = new Map();
 
-  public async renderStation(station: Station, state: Readonly<MapState>): Promise<void> {
+  public async renderStation(station: Station): Promise<void> {
     let frame: FrameNode | null = null;
     if (station.figmaNodeId) {
       try { frame = await figma.getNodeByIdAsync(station.figmaNodeId) as FrameNode; }
@@ -104,9 +102,9 @@ export class StationRenderer {
     frame.clipsContent = false;
     frame.children.forEach(child => child.remove());
 
-    const position    = computeStationPosition(station, state);
+    const position    = station.computePosition();
     const tangentAngle = computeStationTangentAngle(station);
-    const children = await renderStationWithTemplate(frame, station, state, tangentAngle);
+    const children = await renderStationWithTemplate(frame, station, tangentAngle);
 
     const w = frame.width;
     const h = frame.height;

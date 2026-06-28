@@ -14,7 +14,6 @@ import { RoadControlManager, FIGMA_KEY_BEZIER_HANDLE, FIGMA_KEY_ENDPOINT_HANDLE 
 import { RoadPlacingState } from "./road-placing";
 import { AddingRsePluginSession } from "../../sessions/adding-rse";
 import { AddingRoadPluginSession } from "../../sessions/adding-road";
-import { getRscEntriesForNode } from "../../utils/line-queries";
 
 
 export class NetworkController extends BaseController {
@@ -295,8 +294,7 @@ export class NetworkController extends BaseController {
   }
 
   public async emitNodeLinesData(node: Node): Promise<void> {
-    const state = this.model.state;
-    const entries = getRscEntriesForNode(node, state);
+    const entries = node.getRscEntries();
 
     type ArmEntry = { rsc: RoadSectionChange; role: 'exit' | 'enter'; rank: number; lineId: string; pathIndex: number };
     const sectionGroups = new Map<string, ArmEntry[]>();

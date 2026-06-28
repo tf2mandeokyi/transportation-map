@@ -98,6 +98,29 @@ export class Station extends TransportationMapObject<StationId> {
     return stops.map(({ line, pathIndex, rank }) => ({ line, pathIndex, rank }));
   }
 
+  getStopsAcrossLines(): Array<{ line: Line; path: StationStop; position: Vector }> {
+    return this.mapState.getLinePaths((p): p is StationStop => p.kind === 'station-stop' && p.station === this);
+  }
+
+  computePosition(): Vector {
+    const section = this.parentRoadSection;
+    if (!section) return { x: 0, y: 0 };
+    const road = section.parentRoad;
+
+    const base = road.computeBezier();
+    if (!base) return { x: 0, y: 0 };
+
+    const offset = section.computeOffset();
+
+    const pos = base.eval(this.interpT);
+    if (offset === 0) return pos;
+
+    const tangent = base.evalTangent(this.interpT);
+    const len = Math.hypot(tangent.x, tangent.y);
+    if (len < 0.001) return pos;
+    return { x: pos.x + (-tangent.y / len) * offset, y: pos.y + (tangent.x / len) * offset };
+  }
+
   updateStopRanks(stops: Array<{ line: Line; pathIndex: number; rank: number }>): void {
     for (const { line, pathIndex, rank } of stops) {
       const path = line.paths[pathIndex];

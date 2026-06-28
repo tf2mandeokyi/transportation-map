@@ -1,5 +1,4 @@
-import { Line, MapState, Station } from "../../models/structures";
-import { getStationStopsAcrossLines } from "../../utils/line-queries";
+import { Line, Station } from "../../models/structures";
 
 type CollectedEntry = {
   line: Line;
@@ -18,11 +17,11 @@ export type LineAtStation = {
 };
 
 export function getLinesForStation(
-  station: Station, state: Readonly<MapState>
+  station: Station
 ): LineAtStation[] {
   const entries: CollectedEntry[] = [];
 
-  for (const { line, path } of getStationStopsAcrossLines(station, state)) {
+  for (const { line, path } of station.getStopsAcrossLines()) {
     const facing: 'left' | 'right' = path.direction === 'ascending' ? 'right' : 'left';
     entries.push({ line, segmentIndex: path.index, rank: path.rank, facing, passThrough: !path.stops, stackingOrder: 0 });
   }

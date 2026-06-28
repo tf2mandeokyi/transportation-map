@@ -4,6 +4,13 @@ import type { Station } from './station';
 import { TransportationMapObject } from "./types";
 import { Line } from "./line";
 import { RoadSectionChange } from "./line-path";
+import { SECTION_GAP, sectionBandWidth } from "@/plugin/utils/constants";
+
+// A single directed pass of a line through a section.
+export type LinePass = {
+  line: Line;
+  segmentIndex: number;    // path index of the station-stop entry at the reference station
+};
 
 export interface SerializedRoadSection {
   n?: string;   // name
@@ -52,6 +59,54 @@ export class RoadSection extends TransportationMapObject<SectionId> {
       s: this.stations.map(station => station.id),
     };
   }
+  
+  computeOffset(): number {
+    const sections = this.parentRoad.getSectionsByIndex();
+    const widths = sections.map(s => sectionBandWidth(s.getLines().length));
+    const gapTotal = Math.max(0, sections.length - 1) * SECTION_GAP;
+    const totalWidth = widths.reduce((a, b) => a + b, 0) + gapTotal;
+    let cumulative = -totalWidth / 2;
+    for (let i = 0; i < sections.length; i++) {
+      const center = cumulative + widths[i] / 2;
+      if (sections[i] === this) return center;
+      cumulative += widths[i] + SECTION_GAP;
+    }
+    return 0;
+  }
+
+  // Returns one LinePass per directed run (lane slot) on the section.
+  // With referenceStationId: one entry per occurrence of that station in any line's path,
+  //   sorted by rank so lane ordering is consistent with station stop ordering.
+  // Without referenceStationId: one entry per directed run across all lines; only
+  //   .length is meaningful (used for road-width computations).
+  getLines(referenceStation?: Station): LinePass[] {
+    if (referenceStation) {
+      const passes: Array<LinePass & { rank: number }> = [];
+      for (const line of this.mapState.getLines()) {
+        for (const p of line.paths) {
+          if (p.kind === 'station-stop' && p.station === referenceStation) {
+            passes.push({ line, segmentIndex: p.index, rank: p.rank });
+          }
+        }
+      }
+      passes.sort((a, b) => {
+        if (a.rank !== b.rank) return a.rank - b.rank;
+        return a.line.id < b.line.id ? -1 : 1;
+      });
+      return passes;
+    }
+
+    // No reference station: count directed runs per line for road-width sizing.
+    const allPasses: LinePass[] = [];
+    for (const line of this.mapState.getLines()) {
+      const count = line.countPassesOnSection(this);
+      for (let i = 0; i < count; i++) {
+        allPasses.push({ line, segmentIndex: -1 });
+      }
+    }
+    return allPasses;
+  }
+
 
   getLineStackingRanks(side: 0 | 1): Array<{ line: Line; pathIndex: number; rank: number }> {
     const rscs: Array<{ rsc: RoadSectionChange; line: Line; pathIndex: number; rank: number }> = [];

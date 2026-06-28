@@ -114,10 +114,10 @@ export class Road extends TransportationMapObject<RoadId> {
 
   computeBezier(): QuadBezierPoints | null {
     if (!this.endpoints[0].node || !this.endpoints[1].node) return null;
-    return {
-      p0: this.endpoints[0].endpointPos,
-      p1: this.bezierMidPoint,
-      p2: this.endpoints[1].endpointPos,
-    };
+    return new QuadBezierPoints(
+      this.endpoints[0].endpointPos,
+      this.bezierMidPoint,
+      this.endpoints[1].endpointPos,
+    );
   }
 }

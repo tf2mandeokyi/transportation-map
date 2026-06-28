@@ -5,6 +5,8 @@ import { LinePath, SerializedLinePath, StationStop } from './line-path';
 import { validateLinePaths } from '../../utils/line-validator';
 import { TransportationMapObject } from "./types";
 import { Owned } from "@/common/utils/ownership";
+import { RoadSection } from "./road-section";
+import { PathEntry } from "@/plugin/utils/path-entry";
 
 export type { SerializedLinePath } from './line-path';
 
@@ -58,6 +60,19 @@ export class Line extends TransportationMapObject<LineId> {
       g: this.figmaGroupId,
     };
   }
+  
+  computeEntry(path: LinePath): PathEntry<LinePath> {
+    if (path.kind === 'station-stop') {
+      const section = (path.station.parentRoadSection as RoadSection | undefined) ?? null;
+      const road = section?.parentRoad ?? null;
+      return new PathEntry(this, path, path.rank, road, section);
+    }
+    const entry = path.exiting ?? path.entering;
+    const section = entry?.section ?? null;
+    const road = section?.parentRoad ?? null;
+    const rank = path.exiting === null ? path.enterRank : path.exitRank;
+    return new PathEntry(this, path, rank, road, section);
+  }
 
   addPath(path: LinePathData): void {
     this.paths.push(LinePath.fromLinePathData(this.mapState, path));
@@ -87,6 +102,46 @@ export class Line extends TransportationMapObject<LineId> {
     if (!path || !(path instanceof StationStop)) return;
     path.stops = stops;
     this.paths = validateLinePaths(this);
+  }
+  
+  // Counts the number of directed runs a line makes on a section.
+  // Also counts runs that enter the section via RSE but have no station-stops on it
+  // (pure through-passes between two junctions).
+  countPassesOnSection(section: RoadSection): number {
+    const sectionStationSet = new Set(section.stations);
+    let passes = 0;
+    let onSection = false;
+    let enteredViaRse = false;
+
+    for (const p of this.paths) {
+      if (p.kind === 'road-section-change') {
+        if (enteredViaRse) {
+          passes++;
+          enteredViaRse = false;
+        }
+        onSection = false;
+        if (p.entering?.section === section) enteredViaRse = true;
+        continue;
+      }
+      if (!sectionStationSet.has(p.station)) {
+        if (enteredViaRse) {
+          passes++;
+          enteredViaRse = false;
+        }
+        onSection = false;
+        continue;
+      }
+
+      enteredViaRse = false;
+      if (!onSection) {
+        passes++;
+        onSection = true;
+      }
+    }
+
+    if (enteredViaRse) passes++;
+
+    return passes;
   }
 
   static deserialize(mapState: Readonly<MapState>, id: LineId, ser: SerializedLine): Line {

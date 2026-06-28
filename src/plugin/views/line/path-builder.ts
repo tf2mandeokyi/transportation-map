@@ -1,4 +1,4 @@
-import { Line, MapState, Road, RoadSection, RoadSectionChange, Station } from "../../models/structures";
+import { Line, Road, RoadSection, RoadSectionChange, Station } from "../../models/structures";
 import { CubicBezierPoints } from "../../utils/bezier";
 import { PathBuilder } from "../../utils/path";
 import { appendJunctionCurve, computeCrossingSeg, computeSectionSegs, computeTotalOffset } from "./segment-path";
@@ -108,7 +108,6 @@ export function buildSegmentPath(
   rseBetween: RoadSectionChange[],
   headCanvas: Vector,
   tailCanvas: Vector,
-  state: Readonly<MapState>,
   startPathIdx: number,
   endPathIdx: number,
 ): string {
@@ -123,15 +122,15 @@ export function buildSegmentPath(
 
   if (rseBetween.length === 0) {
     if (startSection === endSection) {
-      const segs = computeSectionSegs(line, startRoad, startSection, t1, t2, state, startStation, endStation, startPathIdx, endPathIdx);
+      const segs = computeSectionSegs(line, startRoad, startSection, t1, t2, startStation, endStation, startPathIdx, endPathIdx);
       return segs.length === 0 ? fallback : new PathBuilder().beziers(segs).build();
     }
     // Different sections on the same road — single crossing segment.
     const centerline = startRoad.computeBezier();
     if (!centerline) return fallback;
     const sign      = t1 > t2 ? -1 : 1;
-    const offsetDep = computeTotalOffset(line, startRoad, startSection, state, startStation, startPathIdx);
-    const offsetArr = computeTotalOffset(line, startRoad, endSection,   state, endStation,   endPathIdx);
+    const offsetDep = computeTotalOffset(line, startSection, startStation, startPathIdx);
+    const offsetArr = computeTotalOffset(line, endSection,   endStation,   endPathIdx);
     const seg = computeCrossingSeg(centerline, t1, t2, sign * offsetDep, sign * offsetArr);
     return new PathBuilder().beziers([seg]).build();
   }
@@ -146,7 +145,7 @@ export function buildSegmentPath(
   const entries: CubicBezierPoints[][] = [];
   for (const tr of traversals) {
     if (tr.section === null) continue;
-    const segs = computeSectionSegs(line, tr.road, tr.section, tr.entryT, tr.exitT, state, tr.depStation, tr.arrStation, tr.depPathSegIdx, tr.arrPathSegIdx, tr.depRank, tr.arrRank);
+    const segs = computeSectionSegs(line, tr.road, tr.section, tr.entryT, tr.exitT, tr.depStation, tr.arrStation, tr.depPathSegIdx, tr.arrPathSegIdx, tr.depRank, tr.arrRank);
     if (segs.length > 0) entries.push(segs);
   }
 

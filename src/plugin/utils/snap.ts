@@ -1,6 +1,5 @@
 import { MapState, RoadSection } from '../models/structures';
-import { QuadBezierPoints, evalQuadraticBezier, evalQuadraticBezierTangent } from './bezier';
-import { computeSectionOffset } from './line-queries';
+import { QuadBezierPoints } from './bezier';
 
 const SAMPLES = 20;
 
@@ -13,7 +12,7 @@ function nearestTOnQuadBezier(bezier: QuadBezierPoints, point: Vector): number {
   let bestDist = Infinity;
   for (let i = 0; i <= SAMPLES; i++) {
     const t = i / SAMPLES;
-    const d = distSq(evalQuadraticBezier(bezier, t), point);
+    const d = distSq(bezier.eval(t), point);
     if (d < bestDist) { bestDist = d; bestT = t; }
   }
   let lo = Math.max(0, bestT - 1 / SAMPLES);
@@ -21,7 +20,7 @@ function nearestTOnQuadBezier(bezier: QuadBezierPoints, point: Vector): number {
   for (let i = 0; i < 8; i++) {
     const m1 = lo + (hi - lo) / 3;
     const m2 = hi - (hi - lo) / 3;
-    if (distSq(evalQuadraticBezier(bezier, m1), point) < distSq(evalQuadraticBezier(bezier, m2), point)) {
+    if (distSq(bezier.eval(m1), point) < distSq(bezier.eval(m2), point)) {
       hi = m2;
     } else {
       lo = m1;
@@ -31,9 +30,9 @@ function nearestTOnQuadBezier(bezier: QuadBezierPoints, point: Vector): number {
 }
 
 function sectionPosAt(bezier: QuadBezierPoints, t: number, offset: number): Vector {
-  const pos = evalQuadraticBezier(bezier, t);
+  const pos = bezier.eval(t);
   if (offset === 0) return pos;
-  const tangent = evalQuadraticBezierTangent(bezier, t);
+  const tangent = bezier.evalTangent(t);
   const len = Math.hypot(tangent.x, tangent.y);
   if (len < 0.001) return pos;
   return { x: pos.x + (-tangent.y / len) * offset, y: pos.y + (tangent.x / len) * offset };
@@ -58,7 +57,7 @@ export function findNearestRoadSection(point: Vector, state: Readonly<MapState>)
     const t = nearestTOnQuadBezier(bezier, point);
 
     for (const section of sections) {
-      const pos = sectionPosAt(bezier, t, computeSectionOffset(section, road, state));
+      const pos = sectionPosAt(bezier, t, section.computeOffset());
       const d = distSq(pos, point);
       if (d < bestDist) {
         bestDist = d;

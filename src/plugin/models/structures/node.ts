@@ -2,6 +2,7 @@ import { LineId, NodeId } from "@/common/types";
 import { TransportationMapObject } from './types';
 import type { Road } from './road';
 import { RoadSectionChange } from "./line-path";
+import { Line } from "./line";
 
 export interface SerializedNode {
   n?: string;                         // name
@@ -56,6 +57,10 @@ export class Node extends TransportationMapObject<NodeId> {
 
   updateName(name: string | undefined): void {
     this.name = name;
+  }
+
+  getRscEntries(): Array<{ line: Line; path: RoadSectionChange; position: Vector }> {
+    return this.mapState.getLinePaths((p): p is RoadSectionChange => p.kind === 'road-section-change' && p.node === this);
   }
 
   updateRscRanks(changes: Array<{ lineId: LineId; pathIndex: number; exitRank: number; enterRank: number }>): void {

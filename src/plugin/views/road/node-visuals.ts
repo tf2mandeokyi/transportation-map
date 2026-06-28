@@ -1,4 +1,4 @@
-import { MapState, Node } from "../../models/structures";
+import { Node } from "../../models/structures";
 import { JunctionShape } from "../../utils/junction-shape";
 import { PathBuilder } from "../../utils/path";
 import { NODE_RADIUS, FIGMA_KEY_NODE_ID, FIGMA_KEY_IS_NODE_MARKER, FIGMA_KEY_JUNCTION_OFFSET_X, FIGMA_KEY_JUNCTION_OFFSET_Y } from "./constants";
@@ -6,8 +6,8 @@ import { renderEditHandle } from "../../figmls";
 
 const JUNCTION_FILL: RGB = { r: 0.82, g: 0.82, b: 0.82 };
 
-export function buildNodePolygon(node: Node, state: Readonly<MapState>): VectorNode | null {
-  const shape = new JunctionShape(node, state);
+export function buildNodePolygon(node: Node): VectorNode | null {
+  const shape = new JunctionShape(node);
   if (!shape.isValid) return null;
 
   const pb = new PathBuilder();
@@ -33,8 +33,8 @@ function computeJunctionCenter(node: Node, bounds: Rect): Vector {
 }
 
 // Returns true if a junction frame was appended (so the caller can skip the node marker).
-export async function buildAndAppendJunction(node: Node, state: Readonly<MapState>): Promise<boolean> {
-  const polygon = buildNodePolygon(node, state);
+export async function buildAndAppendJunction(node: Node): Promise<boolean> {
+  const polygon = buildNodePolygon(node);
   if (!polygon) return false;
 
   // Temporarily place on page to read absolute bounds, then reparent into a frame.

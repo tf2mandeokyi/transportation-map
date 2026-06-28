@@ -24,13 +24,13 @@ export class View {
       // 2. Clear connection points, then render stations on top of the road sections
       this.stationRenderer.clearConnectionPoints();
       await Promise.all([...state.getStations()].map(station =>
-        this.stationRenderer.renderStation(station, state)
+        this.stationRenderer.renderStation(station)
           .catch(ErrorChain.thrower(`Error rendering station ${station.name}`))
       ));
 
       // 3. Render line segments using stored connection points
       await Promise.all([...state.getLines()].map(line =>
-        this.lineSegmentRenderer.renderLine(line, state)
+        this.lineSegmentRenderer.renderLine(line)
           .catch(ErrorChain.thrower(`Error rendering line ${line.name}`))
       ));
 

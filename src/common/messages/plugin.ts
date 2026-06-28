@@ -15,4 +15,5 @@ export type PluginToUIMessage =
   | { type: 'road-creation-snap-update'; startSnap: { nodeId: NodeId; name?: string } | null; endSnap: { nodeId: NodeId; name?: string } | null }
   | { type: 'road-creation-exited' }
   | { type: 'road-clicked'; roadId: RoadId }
-  | { type: 'node-lines-data'; nodeId: NodeId; lines: LineAtNodeData[] };
+  | { type: 'node-lines-data'; nodeId: NodeId; lines: LineAtNodeData[] }
+  | { type: 'map-data'; data: string };

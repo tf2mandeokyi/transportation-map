@@ -1,9 +1,8 @@
-import type { NodeId } from "@/common/types";
 import type { NodeChangeListener, ListenerHandle } from "../listener";
 import type { Node } from "../../models/structures";
 import type { Model } from "../../models";
 import { postMessageToUI } from "../../figma";
-import { elevateToCubic, bezierPathData } from "../../utils/bezier";
+import { bezierPathData, CubicBezierPoints, QuadBezierPoints } from "../../utils/bezier";
 
 const START_SIZE   = 16;
 const END_SIZE     = 16;
@@ -51,7 +50,7 @@ export class RoadPlacingState {
     const startHandle  = this.makeHandle(startPos,  START_SIZE,  START_FILL,  '_road-placing-start');
     const endHandle    = this.makeHandle(endPos,    END_SIZE,    END_FILL,    '_road-placing-end');
     const bezierHandle = this.makeHandle(bezierPos, BEZIER_SIZE, BEZIER_FILL, '_road-placing-bezier');
-    const preview      = this.makePreview(startPos, bezierPos, endPos);
+    const preview      = this.makePreview(new QuadBezierPoints(startPos, bezierPos, endPos));
 
     figma.currentPage.appendChild(startHandle);
     figma.currentPage.appendChild(endHandle);
@@ -152,7 +151,7 @@ export class RoadPlacingState {
 
     const p0    = this.effectivePos(this.startState);
     const p2    = this.effectivePos(this.endState);
-    const cubic = elevateToCubic({ p0, p1: this.bezierPos, p2 });
+    const cubic = new QuadBezierPoints(p0, this.bezierPos, p2).elevateToCubic();
 
     const tx = v.absoluteTransform[0][2];
     const ty = v.absoluteTransform[1][2];
@@ -160,7 +159,12 @@ export class RoadPlacingState {
 
     v.vectorPaths = [{
       windingRule: 'NONZERO',
-      data: bezierPathData({ p0: local(cubic.p0), p1: local(cubic.p1), p2: local(cubic.p2), p3: local(cubic.p3) }),
+      data: bezierPathData(new CubicBezierPoints(
+        local(cubic.p0),
+        local(cubic.p1),
+        local(cubic.p2),
+        local(cubic.p3)
+      )),
     }];
   }
 
@@ -169,8 +173,8 @@ export class RoadPlacingState {
     const e = this.endState?.snap;
     postMessageToUI({
       type: 'road-creation-snap-update',
-      startSnap: s ? { nodeId: s.id as NodeId, name: s.name } : null,
-      endSnap:   e ? { nodeId: e.id as NodeId, name: e.name } : null,
+      startSnap: s ? { nodeId: s.id, name: s.name } : null,
+      endSnap:   e ? { nodeId: e.id, name: e.name } : null,
     });
   }
 
@@ -219,14 +223,14 @@ export class RoadPlacingState {
     return e;
   }
 
-  private makePreview(p0: Vector, p1: Vector, p2: Vector): VectorNode {
+  private makePreview(quad: QuadBezierPoints): VectorNode {
     const v = figma.createVector();
     v.name   = '_road-placing-preview';
     v.locked = true;
     v.fills  = [];
     v.strokes = [{ type: 'SOLID', color: PREVIEW_STROKE }];
     v.strokeWeight = 2;
-    const cubic = elevateToCubic({ p0, p1, p2 });
+    const cubic = quad.elevateToCubic();
     v.vectorPaths = [{ windingRule: 'NONZERO', data: bezierPathData(cubic) }];
     return v;
   }

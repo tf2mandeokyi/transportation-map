@@ -1,7 +1,5 @@
-import { Node, Road, MapState } from '../models/structures';
-import { ROAD_MIN_WIDTH } from './constants';
-import { getLinesForSection } from './section';
-import { sectionBandWidth, computeSectionOffset } from './line-queries';
+import { Node, Road } from '../models/structures';
+import { ROAD_MIN_WIDTH, sectionBandWidth } from './constants';
 import { PathBuilder } from './path';
 import { appendGapCurve } from './curves';
 
@@ -12,7 +10,7 @@ interface Arm {
   negEdge: Vector;   // endpoint displaced to the -n (CCW) side
 }
 
-function buildArm(road: Road, endpointIndex: 0 | 1, state: Readonly<MapState>): Arm | null {
+function buildArm(road: Road, endpointIndex: 0 | 1): Arm | null {
   const conn = road.endpoints[endpointIndex];
   const ep: Vector = conn.endpointPos;
 
@@ -37,8 +35,8 @@ function buildArm(road: Road, endpointIndex: 0 | 1, state: Readonly<MapState>): 
     posOff = -Infinity;
     negOff =  Infinity;
     for (const sec of sections) {
-      const sc = computeSectionOffset(sec, road, state);
-      const numLines = getLinesForSection(sec, state).length;
+      const sc = sec.computeOffset();
+      const numLines = sec.getLines().length;
       const hb = sectionBandWidth(numLines) / 2;
       if (sc + hb > posOff) posOff = sc + hb;
       if (sc - hb < negOff) negOff = sc - hb;
@@ -56,11 +54,11 @@ function buildArm(road: Road, endpointIndex: 0 | 1, state: Readonly<MapState>): 
 export class JunctionShape {
   private readonly arms: Arm[];
 
-  constructor(node: Node, state: Readonly<MapState>) {
+  constructor(node: Node) {
     const arms: Arm[] = [];
 
     for (const { road, endpointIndex } of node.roadConnections) {
-      const arm = buildArm(road, endpointIndex, state);
+      const arm = buildArm(road, endpointIndex);
       if (arm) arms.push(arm);
     }
 

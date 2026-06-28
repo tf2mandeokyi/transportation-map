@@ -41,7 +41,7 @@ export class LineRenderer {
     this.stationRenderer = stationRenderer;
   }
 
-  public async renderLine(line: Line, state: Readonly<MapState>): Promise<void> {
+  public async renderLine(line: Line): Promise<void> {
     await cleanupOldLineGroup(line);
 
     const segmentNodes: SceneNode[] = [];
@@ -54,7 +54,7 @@ export class LineRenderer {
 
       const result = this.renderLineSegment(
         line, startPathIdx, endPathIdx,
-        startStation, endStation, rsesBefore[si + 1], color, state
+        startStation, endStation, rsesBefore[si + 1], color
       );
       if (!result) continue;
       if (result.kind === 'normal') {
@@ -82,8 +82,7 @@ export class LineRenderer {
     startStation: Station,
     endStation: Station,
     rseBetween: RoadSectionChange[],
-    color: RGB,
-    state: Readonly<MapState>
+    color: RGB
   ): SegmentResult | null {
     const startPoint = this.stationRenderer.getConnectionPoint(startStation, line, startPathIdx);
     const endPoint   = this.stationRenderer.getConnectionPoint(endStation,   line, endPathIdx);
@@ -97,7 +96,7 @@ export class LineRenderer {
     }
 
     const pathData = buildSegmentPath(
-      line, startStation, endStation, rseBetween, startPoint, endPoint, state,
+      line, startStation, endStation, rseBetween, startPoint, endPoint,
       startPathIdx, endPathIdx,
     );
     return { ...bezierPathToSegments(pathData, color), kind: 'normal' };

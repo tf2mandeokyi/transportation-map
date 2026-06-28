@@ -4,7 +4,6 @@ import { PlacingStationPluginSession } from "../sessions/placing-station";
 import { postMessageToUI } from "../figma";
 import { RoadSection } from "../models/structures";
 import { findNearestRoadSection } from "../utils/snap";
-import { getStationStopsAcrossLines } from "../utils/line-queries";
 import { BaseController } from "./base";
 import { ListenerHandle } from "./listener";
 import { UIMessageRouter } from "./router";
@@ -117,7 +116,7 @@ export class StationController extends BaseController {
     await this.cancelPlacingMode();
 
     const station = this.model.addStation({ name, textAlign, textHAlign, textRotation, flipped, interpT: snap?.interpT ?? 0.5, roadSection: snap?.section ?? null });
-    await this.view.stationRenderer.renderStation(station, this.model.state);
+    await this.view.stationRenderer.renderStation(station);
     await this.save();
   }
 
@@ -138,7 +137,7 @@ export class StationController extends BaseController {
   public async handleAddStation({ name, textAlign, textHAlign, textRotation, flipped, roadSectionId, interpT }: StationParams & { roadSectionId: RoadSectionId | null; interpT: number }): Promise<void> {
     const roadSection = roadSectionId ? this.model.findSection(roadSectionId) : null;
     const station = this.model.addStation({ name, textAlign, textHAlign, textRotation, flipped, interpT, roadSection });
-    await this.view.stationRenderer.renderStation(station, this.model.state);
+    await this.view.stationRenderer.renderStation(station);
     await this.save();
   }
 
@@ -163,7 +162,7 @@ export class StationController extends BaseController {
     }
 
     const lines: Array<LineAtStationData> = [];
-    for (const { line, path } of getStationStopsAcrossLines(station, state)) {
+    for (const { line, path } of station.getStopsAcrossLines()) {
       const facing: 'left' | 'right' = path.direction === 'ascending' ? 'right' : 'left';
       lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing, stops: path.stops });
     }
@@ -243,7 +242,7 @@ export class StationController extends BaseController {
       }
     }
 
-    await this.view.stationRenderer.renderStation(newStation, this.model.state);
+    await this.view.stationRenderer.renderStation(newStation);
     await this.save();
     await this.handleSelectStation(newStation.id);
   }

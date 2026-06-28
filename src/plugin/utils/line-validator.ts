@@ -118,7 +118,7 @@ function insertPassThroughStops(paths: Owned<LinePath>[]): Owned<LinePath>[] {
     pushPassThroughs(spans[0], p.rank, segmentExclude);
     for (let k = 0; k < rsesBetween.length; k++) {
       result.push(own(rsesBetween[k]));
-      pushPassThroughs(spans[k + 1], p.rank, segmentExclude);
+      pushPassThroughs(spans[k + 1], rsesBetween[k].enterRank, segmentExclude);
     }
     i = j;
   }

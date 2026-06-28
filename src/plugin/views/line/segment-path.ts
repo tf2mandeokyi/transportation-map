@@ -1,17 +1,8 @@
-import { Line, MapState, Road, RoadSection, Station } from "../../models/structures";
-import {
-  elevateToCubic,
-  evalQuadraticBezier,
-  evalQuadraticBezierTangent,
-  offsetBezierAdaptive,
-  subQuadBezier,
-  QuadBezierPoints,
-  CubicBezierPoints,
-} from "../../utils/bezier";
+import { lineOffsetInSection } from "@/plugin/utils/constants";
+import { Line, Road, RoadSection, Station } from "../../models/structures";
+import { QuadBezierPoints, CubicBezierPoints } from "../../utils/bezier";
 import { appendGapCurve } from "../../utils/curves";
 import { PathBuilder } from "../../utils/path";
-import { getLinesForSection } from "../../utils/section";
-import { computeSectionOffset, lineOffsetInSection } from "../../utils/line-queries";
 
 export type SegmentResult =
   | { kind: 'normal'; outline: VectorNode; main: VectorNode }
@@ -19,24 +10,23 @@ export type SegmentResult =
 
 // Total lateral offset from the road centerline for this line on this section.
 export function computeTotalOffset(
-  line: Line, road: Road, section: RoadSection,
-  state: Readonly<MapState>,
+  line: Line, section: RoadSection,
   referenceStation?: Station,
   pathSegmentIndex?: number,
   forceRank?: number,
 ): number {
-  const sectionOffset = computeSectionOffset(section, road, state);
+  const sectionOffset = section.computeOffset();
 
-  const totalPasses = getLinesForSection(section, state);
+  const totalPasses = section.getLines();
   let effectiveIdx: number;
-  if (forceRank !== undefined) {
-    effectiveIdx = forceRank;
-  } else {
-    const passes = getLinesForSection(section, state, referenceStation);
-    const passIndex = pathSegmentIndex !== undefined
-      ? passes.findIndex(lp => lp.line === line && lp.segmentIndex === pathSegmentIndex)
-      : passes.findIndex(lp => lp.line === line);
+  if (forceRank === undefined) {
+    const passes = section.getLines(referenceStation);
+    const passIndex = pathSegmentIndex === undefined
+      ? passes.findIndex(lp => lp.line === line)
+      : passes.findIndex(lp => lp.line === line && lp.segmentIndex === pathSegmentIndex);
     effectiveIdx = passIndex >= 0 ? passIndex : totalPasses.length;
+  } else {
+    effectiveIdx = forceRank;
   }
   const effectiveCount = Math.max(totalPasses.length, effectiveIdx + 1);
   const lineOffset = lineOffsetInSection(effectiveIdx, effectiveCount);
@@ -53,10 +43,10 @@ export function computeCrossingSeg(
 ): CubicBezierPoints {
   const sign = t1 > t2 ? -1 : 1;
 
-  const pos1 = evalQuadraticBezier(centerline, t1);
-  const pos2 = evalQuadraticBezier(centerline, t2);
-  const tan1 = evalQuadraticBezierTangent(centerline, t1);
-  const tan2 = evalQuadraticBezierTangent(centerline, t2);
+  const pos1 = centerline.eval(t1);
+  const pos2 = centerline.eval(t2);
+  const tan1 = centerline.evalTangent(t1);
+  const tan2 = centerline.evalTangent(t2);
 
   const len1 = Math.hypot(tan1.x, tan1.y) || 1;
   const len2 = Math.hypot(tan2.x, tan2.y) || 1;
@@ -74,13 +64,12 @@ export function computeCrossingSeg(
   const p1 = { x: p0.x + tan1.x / len1 * sign * ctrlLen, y: p0.y + tan1.y / len1 * sign * ctrlLen };
   const p2 = { x: p3.x - tan2.x / len2 * sign * ctrlLen, y: p3.y - tan2.y / len2 * sign * ctrlLen };
 
-  return { p0, p1, p2, p3 };
+  return new CubicBezierPoints(p0, p1, p2, p3);
 }
 
 export function computeSectionSegs(
   line: Line, road: Road, section: RoadSection,
   t1: number, t2: number,
-  state: Readonly<MapState>,
   departureStation?: Station,
   arrivalStation?: Station,
   depPathSegIdx?: number,
@@ -91,17 +80,17 @@ export function computeSectionSegs(
   const centerline = road.computeBezier();
   if (!centerline) return [];
 
-  const offsetDep = computeTotalOffset(line, road, section, state, departureStation, depPathSegIdx, departureStation === undefined ? depRank : undefined);
+  const offsetDep = computeTotalOffset(line, section, departureStation, depPathSegIdx, departureStation === undefined ? depRank : undefined);
   const offsetArr = arrivalStation === undefined
-    ? (arrRank !== undefined ? computeTotalOffset(line, road, section, state, undefined, undefined, arrRank) : offsetDep)
-    : computeTotalOffset(line, road, section, state, arrivalStation, arrPathSegIdx);
+    ? (arrRank !== undefined ? computeTotalOffset(line, section, undefined, undefined, arrRank) : offsetDep)
+    : computeTotalOffset(line, section, arrivalStation, arrPathSegIdx);
 
   const directedDep = t1 > t2 ? -offsetDep : offsetDep;
   const directedArr = t1 > t2 ? -offsetArr : offsetArr;
 
   if (directedDep === directedArr) {
-    const sub = elevateToCubic(subQuadBezier(centerline, t1, t2));
-    return directedDep === 0 ? [sub] : offsetBezierAdaptive(sub, directedDep);
+    const sub = centerline.sub(t1, t2).elevateToCubic();
+    return directedDep === 0 ? [sub] : sub.offsetAdaptive(directedDep);
   }
 
   return [computeCrossingSeg(centerline, t1, t2, directedDep, directedArr)];

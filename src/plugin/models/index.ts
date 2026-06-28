@@ -190,6 +190,7 @@ export class Model {
   // ─── Persistence ───
 
   public async save(): Promise<void> {
+    this.state.normalize();
     const serialized = serializeMapState(this.state);
     figma.root.setPluginData('mapState', serialized);
   }
@@ -202,6 +203,8 @@ export class Model {
     const success = deserializeMapState(data, model.state);
     if (!success) return null;
 
+    model.validateAllLinePaths();
+    model.state.normalize();
     model.validateAllLinePaths();
     return model;
   }

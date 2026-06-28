@@ -15,7 +15,7 @@ function pushToBack(children: readonly SceneNode[], predicate: (c: SceneNode) =>
 export class RoadRenderer {
   public static async renderAll(state: Readonly<MapState>): Promise<void> {
     await RoadRenderer.clearPrevious();
-    for (const road of state.getRoads()) renderRoad(road, state);
+    for (const road of state.getRoads()) renderRoad(road);
     const nodesWithJunction = await RoadRenderer.renderJunctions(state);
     await RoadRenderer.renderNodeMarkers(state, nodesWithJunction);
   }
@@ -23,7 +23,7 @@ export class RoadRenderer {
   private static async renderJunctions(state: Readonly<MapState>): Promise<Set<string>> {
     const nodesWithJunction = new Set<string>();
     for (const node of state.getNodes()) {
-      if (await buildAndAppendJunction(node, state)) nodesWithJunction.add(node.id);
+      if (await buildAndAppendJunction(node)) nodesWithJunction.add(node.id);
     }
     return nodesWithJunction;
   }

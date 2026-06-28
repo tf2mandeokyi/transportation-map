@@ -4,8 +4,7 @@ import { Model } from "../../models";
 import { own } from "@/common/utils/ownership";
 import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_ROAD_ID } from "../../views/road";
 import { renderEditHandle } from "../../figmls";
-import { elevateToCubic, bezierPathData, offsetBezier } from "../../utils/bezier";
-import { computeSectionOffset } from "../../utils/line-queries";
+import { bezierPathData, CubicBezierPoints, QuadBezierPoints } from "../../utils/bezier";
 
 const ROAD_CONTROL_NODE_NAME = '_road-bezier-control';
 export const FIGMA_KEY_BEZIER_HANDLE   = 'mapBezierHandle';
@@ -153,7 +152,7 @@ export class RoadControlManager {
     const p0  = road.endpoints[0].endpointPos;
     const mid = road.bezierMidPoint;
     const p2  = road.endpoints[1].endpointPos;
-    const cubic = elevateToCubic({ p0, p1: mid, p2 });
+    const cubic = new QuadBezierPoints(p0, mid, p2).elevateToCubic();
 
     if (this.stemLineIds) {
       const ids = this.stemLineIds;
@@ -188,7 +187,7 @@ export class RoadControlManager {
       const tx = child.absoluteTransform[0][2];
       const ty = child.absoluteTransform[1][2];
       const l = (v: Vector): Vector => ({ x: v.x - tx, y: v.y - ty });
-      return { p0: l(pts.p0), p1: l(pts.p1), p2: l(pts.p2), p3: l(pts.p3) };
+      return new CubicBezierPoints(l(pts.p0), l(pts.p1), l(pts.p2), l(pts.p3));
     };
 
     if (sections.length === 0) {
@@ -201,8 +200,8 @@ export class RoadControlManager {
       }
     } else {
       sections.forEach((section, i) => {
-        const offset = computeSectionOffset(section, road, state);
-        const o = offsetBezier(cubic, offset);
+        const offset = section.computeOffset();
+        const o = cubic.offset(offset);
         const child = children[i] as VectorNode | undefined;
         if (child) {
           child.vectorPaths = [{
