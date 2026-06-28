@@ -63,6 +63,7 @@ export class Model {
     this.state.addRoad(obj);
     road.endpoints[0].node.addRoadConnection(obj, 0);
     road.endpoints[1].node.addRoadConnection(obj, 1);
+    this.addRoadSection(obj, { index: 0 });
     return obj;
   }
 
@@ -183,6 +184,14 @@ export class Model {
     }
   }
 
+  public validateRoadSections(): void {
+    for (const road of this.state.getRoads()) {
+      if ([...road.getSections()].length === 0) {
+        this.addRoadSection(road, { index: 0 });
+      }
+    }
+  }
+
   private _reindexLinePaths(line: Line): void {
     line.paths.forEach((p, i) => { p.index = i; });
   }
@@ -203,6 +212,7 @@ export class Model {
     const success = deserializeMapState(data, model.state);
     if (!success) return null;
 
+    model.validateRoadSections();
     model.validateAllLinePaths();
     model.state.normalize();
     model.validateAllLinePaths();
