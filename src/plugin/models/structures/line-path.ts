@@ -55,7 +55,14 @@ export namespace LinePath {
 
   export function toData(p: LinePath): LinePathData {
     if (p.kind === 'station-stop') {
-      return { kind: 'station-stop', index: p.index, stationId: p.station.id, direction: p.direction, stops: p.stops, rank: p.rank };
+      return {
+        kind: 'station-stop',
+        index: p.index,
+        stationId: p.station.id,
+        direction: p.direction,
+        stops: p.stops,
+        rank: p.rank
+      };
     }
     return {
       kind: 'road-section-change',

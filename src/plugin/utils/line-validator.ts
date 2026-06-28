@@ -77,6 +77,37 @@ function findIntermediateStations(
     .sort((a, b) => tEntry <= tExit ? a.interpT - b.interpT : b.interpT - a.interpT);
 }
 
+// Updates the `direction` field on each stopping (stops=true) StationStop based on
+// the actual order of traversal, so that ascending/descending reflects which way
+// the line travels along the road when it reaches that station.
+function updateStoppingStopDirections(paths: Owned<LinePath>[]): void {
+  let prevStopIdx = -1;
+
+  for (let i = 0; i < paths.length; i++) {
+    const p = paths[i];
+    if (p.kind !== 'station-stop' || !p.stops) continue;
+
+    if (prevStopIdx >= 0) {
+      const dep = paths[prevStopIdx] as StationStop;
+      const arr = p as StationStop;
+
+      const rsesBetween: RoadSectionChange[] = [];
+      for (let k = prevStopIdx + 1; k < i; k++) {
+        if (paths[k].kind === 'road-section-change') rsesBetween.push(paths[k] as RoadSectionChange);
+      }
+
+      const spans = getRoadSpans(dep.station, arr.station, rsesBetween);
+      if (spans.length > 0) {
+        dep.direction = spans[0].tEntry <= spans[0].tExit ? 'ascending' : 'descending';
+        const lastSpan = spans[spans.length - 1];
+        arr.direction = lastSpan.tEntry <= lastSpan.tExit ? 'ascending' : 'descending';
+      }
+    }
+
+    prevStopIdx = i;
+  }
+}
+
 // Inserts stops:false entries for every station a line passes through without stopping.
 function insertPassThroughStops(paths: Owned<LinePath>[]): Owned<LinePath>[] {
   const result: Owned<LinePath>[] = [];
@@ -151,5 +182,6 @@ export function validateLinePaths(line: Line): Owned<LinePath>[] {
   while (result.length > 0 && result[result.length - 1].kind !== 'station-stop') result.pop();
 
   result.forEach((p, i) => { p.index = i; });
+  updateStoppingStopDirections(result);
   return insertPassThroughStops(result);
 }
