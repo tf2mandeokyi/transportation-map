@@ -96,11 +96,16 @@ function updateStoppingStopDirections(paths: Owned<LinePath>[]): void {
         if (paths[k].kind === 'road-section-change') rsesBetween.push(paths[k] as RoadSectionChange);
       }
 
-      const spans = getRoadSpans(dep.station, arr.station, rsesBetween);
-      if (spans.length > 0) {
-        dep.direction = spans[0].tEntry <= spans[0].tExit ? 'ascending' : 'descending';
-        const lastSpan = spans[spans.length - 1];
-        arr.direction = lastSpan.tEntry <= lastSpan.tExit ? 'ascending' : 'descending';
+      if (dep.station === arr.station) {
+        // U-turn: dep.direction was already set correctly by the previous segment; arr reverses it.
+        arr.direction = dep.direction === 'ascending' ? 'descending' : 'ascending';
+      } else {
+        const spans = getRoadSpans(dep.station, arr.station, rsesBetween);
+        if (spans.length > 0) {
+          dep.direction = spans[0].tEntry <= spans[0].tExit ? 'ascending' : 'descending';
+          const lastSpan = spans[spans.length - 1];
+          arr.direction = lastSpan.tEntry <= lastSpan.tExit ? 'ascending' : 'descending';
+        }
       }
     }
 
