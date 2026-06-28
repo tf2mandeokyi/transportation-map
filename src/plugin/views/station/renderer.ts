@@ -22,7 +22,7 @@ async function renderStationWithTemplate(
   const flipLR = (f: 'left' | 'right'): 'left' | 'right' => f === 'left' ? 'right' : 'left';
 
   const section = station.parentRoadSection as RoadSection | undefined;
-  const noRefCount = section ? section.getLines().length : 0;
+  const noRefCount = section?.getMaxStationStopCount() ?? 0;
 
   const lines = getLinesForStation(station);
   const effectiveNoRef = Math.max(noRefCount, lines.length);

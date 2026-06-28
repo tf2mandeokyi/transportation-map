@@ -1,5 +1,5 @@
 import { Node, Road } from '../models/structures';
-import { ROAD_MIN_WIDTH, sectionBandWidth } from './constants';
+import { ROAD_MIN_WIDTH } from './constants';
 import { PathBuilder } from './path';
 import { appendGapCurve } from './curves';
 
@@ -36,8 +36,7 @@ function buildArm(road: Road, endpointIndex: 0 | 1): Arm | null {
     negOff =  Infinity;
     for (const sec of sections) {
       const sc = sec.computeOffset();
-      const numLines = sec.getLines().length;
-      const hb = sectionBandWidth(numLines) / 2;
+      const hb = sec.getWidth() / 2;
       if (sc + hb > posOff) posOff = sc + hb;
       if (sc - hb < negOff) negOff = sc - hb;
     }

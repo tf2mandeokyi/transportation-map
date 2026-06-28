@@ -33,8 +33,8 @@ describe('line end positions match station/RSC positions', () => {
         const pos = bezier.eval(p.station.interpT);
         const tan = bezier.evalTangent(p.station.interpT);
 
-        const numLines = section.getLines().length;
-        const effectiveCount = Math.max(numLines, p.rank + 1);
+        const totalSlots = section.getMaxStationStopCount();
+        const effectiveCount = Math.max(totalSlots, p.rank + 1);
         const offsetA = section.computeOffset() + lineOffsetInSection(p.rank, effectiveCount);
         const posA = applyOffset(pos, tan, offsetA);
 
@@ -68,8 +68,8 @@ describe('line end positions match station/RSC positions', () => {
           const tan = bezier.evalTangent(isStart ? 0 : 1);
           const sign = isStart ? 1 : -1;
 
-          const numLines = section.getLines().length;
-          const effectiveCount = Math.max(numLines, rank + 1);
+          const totalSlots = section.getMaxStationStopCount();
+          const effectiveCount = Math.max(totalSlots, rank + 1);
           const offsetA = section.computeOffset() + lineOffsetInSection(rank, effectiveCount);
           const posA = applyOffset(ep, tan, offsetA * sign);
 

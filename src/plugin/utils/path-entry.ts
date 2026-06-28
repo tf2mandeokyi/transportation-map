@@ -27,7 +27,7 @@ export class PathEntry<T extends LinePath> {
     const bezier = this.road.computeBezier();
     if (!bezier) return { x: 0, y: 0 };
 
-    const numLines = this.section.getLines().length;
+    const numLines = this.section.getMaxStationStopCount();
 
     if (this.path.kind === 'station-stop') {
         const station = this.path.station;

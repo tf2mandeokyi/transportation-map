@@ -1,6 +1,6 @@
 import { Road } from "../../models/structures";
 import { bezierListPathData, QuadBezierPoints } from "../../utils/bezier";
-import { ROAD_MIN_WIDTH, sectionBandWidth } from "../../utils/constants";
+import { ROAD_MIN_WIDTH } from "../../utils/constants";
 import { FIGMA_KEY_ROAD_ID } from "./constants";
 
 const SECTION_COLOR: RGB = { r: 0.82, g: 0.82, b: 0.82 };
@@ -35,7 +35,7 @@ export function buildRoadVisuals(road: Road): SceneNode[] {
   return sections.map(section => {
     const offset = section.computeOffset();
     const curve = offset === 0 ? [baseCurve] : baseCurve.offsetAdaptive(offset);
-    const width = sectionBandWidth(section.getLines().length);
+    const width = section.getWidth();
     const node = makeVectorCurve(bezierListPathData(curve), SECTION_COLOR, width);
     node.name = section.name ?? `section-${section.index}`;
     node.setPluginData(FIGMA_KEY_ROAD_ID, road.id);

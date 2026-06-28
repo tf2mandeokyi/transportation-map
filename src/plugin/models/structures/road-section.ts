@@ -60,9 +60,18 @@ export class RoadSection extends TransportationMapObject<SectionId> {
     };
   }
   
+  getMaxStationStopCount(): number {
+    if (this.stations.length === 0) return 0;
+    return Math.max(...this.stations.map(s => this.getLines(s).length));
+  }
+
+  getWidth(): number {
+    return sectionBandWidth(this.getMaxStationStopCount());
+  }
+
   computeOffset(): number {
     const sections = this.parentRoad.getSectionsByIndex();
-    const widths = sections.map(s => sectionBandWidth(s.getLines().length));
+    const widths = sections.map(s => s.getWidth());
     const gapTotal = Math.max(0, sections.length - 1) * SECTION_GAP;
     const totalWidth = widths.reduce((a, b) => a + b, 0) + gapTotal;
     let cumulative = -totalWidth / 2;

@@ -17,18 +17,18 @@ export function computeTotalOffset(
 ): number {
   const sectionOffset = section.computeOffset();
 
-  const totalPasses = section.getLines();
+  const totalSlots = section.getMaxStationStopCount();
   let effectiveIdx: number;
   if (forceRank === undefined) {
     const passes = section.getLines(referenceStation);
     const passIndex = pathSegmentIndex === undefined
       ? passes.findIndex(lp => lp.line === line)
       : passes.findIndex(lp => lp.line === line && lp.segmentIndex === pathSegmentIndex);
-    effectiveIdx = passIndex >= 0 ? passIndex : totalPasses.length;
+    effectiveIdx = passIndex >= 0 ? passIndex : totalSlots;
   } else {
     effectiveIdx = forceRank;
   }
-  const effectiveCount = Math.max(totalPasses.length, effectiveIdx + 1);
+  const effectiveCount = Math.max(totalSlots, effectiveIdx + 1);
   const lineOffset = lineOffsetInSection(effectiveIdx, effectiveCount);
 
   return sectionOffset + lineOffset;
