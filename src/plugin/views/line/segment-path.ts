@@ -3,6 +3,7 @@ import { Line, Road, RoadSection, Station } from "../../models/structures";
 import { QuadBezierPoints, CubicBezierPoints } from "../../utils/bezier";
 import { appendGapCurve } from "../../utils/curves";
 import { PathBuilder } from "../../utils/path";
+import { OffsetT } from "../../utils/offset-t";
 
 export type SegmentResult =
   | { kind: 'normal'; outline: VectorNode; main: VectorNode }
@@ -69,7 +70,7 @@ export function computeCrossingSeg(
 
 export function computeSectionSegs(
   line: Line, road: Road, section: RoadSection,
-  t1: number, t2: number,
+  t1: OffsetT, t2: OffsetT,
   departureStation?: Station,
   arrivalStation?: Station,
   depPathSegIdx?: number,
@@ -85,15 +86,16 @@ export function computeSectionSegs(
     ? (arrRank !== undefined ? computeTotalOffset(line, section, undefined, undefined, arrRank) : offsetDep)
     : computeTotalOffset(line, section, arrivalStation, arrPathSegIdx);
 
-  const directedDep = t1 > t2 ? -offsetDep : offsetDep;
-  const directedArr = t1 > t2 ? -offsetArr : offsetArr;
+  const backward = t1.compare(t2) > 0;
+  const directedDep = backward ? -offsetDep : offsetDep;
+  const directedArr = backward ? -offsetArr : offsetArr;
 
   if (directedDep === directedArr) {
     const sub = centerline.sub(t1, t2).elevateToCubic();
     return directedDep === 0 ? [sub] : sub.offsetAdaptive(directedDep);
   }
 
-  return [computeCrossingSeg(centerline, t1, t2, offsetDep, offsetArr)];
+  return [computeCrossingSeg(centerline, t1.toFloat(), t2.toFloat(), offsetDep, offsetArr)];
 }
 
 export function appendJunctionCurve(pb: PathBuilder, prev: CubicBezierPoints, next: CubicBezierPoints): void {

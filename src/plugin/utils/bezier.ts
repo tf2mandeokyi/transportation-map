@@ -1,4 +1,5 @@
 import { PathBuilder } from './path';
+import { OffsetT, assertValidBiasPair } from './offset-t';
 
 function lerp(a: Vector, b: Vector, t: number): Vector {
   return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
@@ -15,9 +16,19 @@ function perp(v: Vector): Vector {
 
 abstract class BezierPoints<T extends BezierPoints<T>> {
   abstract eval(t: number): Vector;
-  abstract evalTangent(t: number): Vector;
+  protected abstract evalTangentAt(t: number): Vector;
   abstract split(t: number): { left: T; right: T };
-  abstract sub(t1: number, t2: number): T;
+  abstract sub(t1: OffsetT, t2: OffsetT): T;
+
+  evalTangent(t: number): Vector;
+  evalTangent(t: OffsetT): Vector;
+  evalTangent(t: number | OffsetT): Vector {
+    if (t instanceof OffsetT) {
+      const raw = this.evalTangentAt(t.toFloat());
+      return t.bias === 'positive' ? { x: -raw.x, y: -raw.y } : raw;
+    }
+    return this.evalTangentAt(t);
+  }
 
   subForward(t1: number, t2: number): T {
     const { left } = this.split(t2);
@@ -49,7 +60,7 @@ export class QuadBezierPoints extends BezierPoints<QuadBezierPoints> {
     };
   }
 
-  evalTangent(t: number): Vector {
+  protected evalTangentAt(t: number): Vector {
     const u = 1 - t;
     return {
       x: 2 * (u * (this.p1.x - this.p0.x) + t * (this.p2.x - this.p1.x)),
@@ -67,12 +78,13 @@ export class QuadBezierPoints extends BezierPoints<QuadBezierPoints> {
     };
   }
 
-  sub(t1: number, t2: number): QuadBezierPoints {
-    if (t1 > t2) {
-      const s = this.subForward(t2, t1);
+  sub(t1: OffsetT, t2: OffsetT): QuadBezierPoints {
+    assertValidBiasPair(t1, t2);
+    if (t1.compare(t2) > 0) {
+      const s = this.subForward(t2.toFloat(), t1.toFloat());
       return new QuadBezierPoints(s.p2, s.p1, s.p0);
     }
-    return this.subForward(t1, t2);
+    return this.subForward(t1.toFloat(), t2.toFloat());
   }
 
   // Exact, lossless conversion: the resulting cubic traces the identical curve.
@@ -110,7 +122,7 @@ export class CubicBezierPoints extends BezierPoints<CubicBezierPoints> {
     };
   }
 
-  evalTangent(t: number): Vector {
+  protected evalTangentAt(t: number): Vector {
     const u = 1 - t;
     return {
       x: 3 * (u * u * (this.p1.x - this.p0.x) + 2 * u * t * (this.p2.x - this.p1.x) + t * t * (this.p3.x - this.p2.x)),
@@ -149,12 +161,13 @@ export class CubicBezierPoints extends BezierPoints<CubicBezierPoints> {
     return result;
   }
 
-  sub(t1: number, t2: number): CubicBezierPoints {
-    if (t1 > t2) {
-      const s = this.subForward(t2, t1);
+  sub(t1: OffsetT, t2: OffsetT): CubicBezierPoints {
+    assertValidBiasPair(t1, t2);
+    if (t1.compare(t2) > 0) {
+      const s = this.subForward(t2.toFloat(), t1.toFloat());
       return new CubicBezierPoints(s.p3, s.p2, s.p1, s.p0);
     }
-    return this.subForward(t1, t2);
+    return this.subForward(t1.toFloat(), t2.toFloat());
   }
 }
 

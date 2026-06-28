@@ -4,8 +4,9 @@ import { hexToRgb } from "@/common/utils/color";
 import { SegmentResult } from "./segment-path";
 import { isInvalidJump, buildSegmentPath } from "./path-builder";
 import { createDashedLine, bezierPathToSegments } from "./segment-nodes";
+import { OffsetT, TBias } from "../../utils/offset-t";
 
-type StopInfo = { pathIdx: number; station: Station };
+type StopInfo = { pathIdx: number; station: Station; bias: TBias };
 
 function collectStopsAndRSEs(
   line: Line,
@@ -18,11 +19,24 @@ function collectStopsAndRSEs(
     if (p.kind === 'road-section-change') {
       pendingRSEs.push(p);
     } else if (p.kind === 'station-stop') {
-      stops.push({ pathIdx: p.index, station: p.station });
+      stops.push({ pathIdx: p.index, station: p.station, bias: 'zero' });
       rsesBefore.push(pendingRSEs);
       pendingRSEs = [];
     }
   }
+
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (stops[i].station !== stops[i + 1].station) continue;
+    const t = stops[i].station.interpT;
+    const approachT = i > 0 ? stops[i - 1].station.interpT
+      : i + 2 < stops.length ? stops[i + 2].station.interpT
+      : null;
+    if (approachT === null) continue;
+    const forward = approachT < t;
+    stops[i].bias     = forward ? 'negative' : 'positive';
+    stops[i + 1].bias = forward ? 'positive' : 'negative';
+  }
+
   return { stops, rsesBefore };
 }
 
@@ -52,9 +66,11 @@ export class LineRenderer {
       const { pathIdx: startPathIdx, station: startStation } = stops[si];
       const { pathIdx: endPathIdx,   station: endStation   } = stops[si + 1];
 
+      const startT = new OffsetT(startStation.interpT, stops[si].bias);
+      const endT   = new OffsetT(endStation.interpT,   stops[si + 1].bias);
       const result = this.renderLineSegment(
         line, startPathIdx, endPathIdx,
-        startStation, endStation, rsesBefore[si + 1], color
+        startStation, endStation, rsesBefore[si + 1], color, startT, endT
       );
       if (!result) continue;
       if (result.kind === 'normal') {
@@ -82,7 +98,9 @@ export class LineRenderer {
     startStation: Station,
     endStation: Station,
     rseBetween: RoadSectionChange[],
-    color: RGB
+    color: RGB,
+    startT: OffsetT,
+    endT: OffsetT,
   ): SegmentResult | null {
     const startPoint = this.stationRenderer.getConnectionPoint(startStation, line, startPathIdx);
     const endPoint   = this.stationRenderer.getConnectionPoint(endStation,   line, endPathIdx);
@@ -97,7 +115,7 @@ export class LineRenderer {
 
     const pathData = buildSegmentPath(
       line, startStation, endStation, rseBetween, startPoint, endPoint,
-      startPathIdx, endPathIdx,
+      startPathIdx, endPathIdx, startT, endT,
     );
     return { ...bezierPathToSegments(pathData, color), kind: 'normal' };
   }

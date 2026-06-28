@@ -1,6 +1,7 @@
 import { Line, Road, RoadSection, RoadSectionChange, Station } from "../../models/structures";
 import { CubicBezierPoints } from "../../utils/bezier";
 import { PathBuilder } from "../../utils/path";
+import { OffsetT } from "../../utils/offset-t";
 import { appendJunctionCurve, computeCrossingSeg, computeSectionSegs, computeTotalOffset } from "./segment-path";
 
 export function isInvalidJump(
@@ -19,8 +20,8 @@ export function isInvalidJump(
 type RoadTraversal = {
   road: Road;
   section: RoadSection | null;
-  entryT: number;
-  exitT: number;
+  entryT: OffsetT;
+  exitT: OffsetT;
   depStation: Station | undefined;
   arrStation: Station | undefined;
   depPathSegIdx: number | undefined;
@@ -35,6 +36,7 @@ function buildTraversals(
   startStation: Station, endStation: Station,
   startSection: RoadSection, endSection: RoadSection,
   startPathIdx: number, endPathIdx: number,
+  startT: OffsetT, endT: OffsetT,
 ): RoadTraversal[] {
   const traversals: RoadTraversal[] = [];
 
@@ -42,8 +44,8 @@ function buildTraversals(
   traversals.push({
     road: startRoad,
     section: startSection,
-    entryT: startStation.interpT,
-    exitT: firstRsc.node === startRoad.endpoints[1].node ? 1 : 0,
+    entryT: startT,
+    exitT: firstRsc.node === startRoad.endpoints[1].node ? new OffsetT(1, 'negative') : new OffsetT(0, 'positive'),
     depStation: startStation,
     arrStation: undefined,
     depPathSegIdx: startPathIdx,
@@ -60,8 +62,8 @@ function buildTraversals(
     traversals.push({
       road,
       section: rsc.entering.section,
-      entryT: rsc.node === road.endpoints[0].node ? 0 : 1,
-      exitT:  nextRsc.node === road.endpoints[1].node ? 1 : 0,
+      entryT: rsc.node === road.endpoints[0].node ? new OffsetT(0, 'positive') : new OffsetT(1, 'negative'),
+      exitT:  nextRsc.node === road.endpoints[1].node ? new OffsetT(1, 'negative') : new OffsetT(0, 'positive'),
       depStation: undefined,
       arrStation: undefined,
       depPathSegIdx: undefined,
@@ -77,8 +79,8 @@ function buildTraversals(
   traversals.push({
     road: lastRoad,
     section: endSection,
-    entryT: lastRsc.node === lastRoad.endpoints[0].node ? 0 : 1,
-    exitT: endStation.interpT,
+    entryT: lastRsc.node === lastRoad.endpoints[0].node ? new OffsetT(0, 'positive') : new OffsetT(1, 'negative'),
+    exitT: endT,
     depStation: undefined,
     arrStation: endStation,
     depPathSegIdx: undefined,
@@ -110,19 +112,32 @@ export function buildSegmentPath(
   tailCanvas: Vector,
   startPathIdx: number,
   endPathIdx: number,
+  startT: OffsetT,
+  endT: OffsetT,
 ): string {
   const startSection = startStation.parentRoadSection;
   const endSection = endStation.parentRoadSection;
-
   const startRoad = startSection.parentRoad;
-
   const fallback = new PathBuilder().moveTo(headCanvas).lineTo(tailCanvas).build();
-  const t1 = startStation.interpT;
-  const t2 = endStation.interpT;
+
+  if (startStation === endStation) {
+    const centerline = startRoad.computeBezier();
+    if (!centerline) return fallback;
+    const tangent = centerline.evalTangent(startT);
+    const tlen = Math.hypot(tangent.x, tangent.y);
+    if (tlen < 0.001) return fallback;
+    const chord = Math.hypot(tailCanvas.x - headCanvas.x, tailCanvas.y - headCanvas.y);
+    const ctrlLen = chord;
+    const ux = tangent.x / tlen;
+    const uy = tangent.y / tlen;
+    const p1 = { x: headCanvas.x + ux * ctrlLen, y: headCanvas.y + uy * ctrlLen };
+    const p2 = { x: tailCanvas.x + ux * ctrlLen, y: tailCanvas.y + uy * ctrlLen };
+    return new PathBuilder().moveTo(headCanvas).cubicTo(p1, p2, tailCanvas).build();
+  }
 
   if (rseBetween.length === 0) {
     if (startSection === endSection) {
-      const segs = computeSectionSegs(line, startRoad, startSection, t1, t2, startStation, endStation, startPathIdx, endPathIdx);
+      const segs = computeSectionSegs(line, startRoad, startSection, startT, endT, startStation, endStation, startPathIdx, endPathIdx);
       return segs.length === 0 ? fallback : new PathBuilder().beziers(segs).build();
     }
     // Different sections on the same road — single crossing segment.
@@ -130,15 +145,15 @@ export function buildSegmentPath(
     if (!centerline) return fallback;
     const offsetDep = computeTotalOffset(line, startSection, startStation, startPathIdx);
     const offsetArr = computeTotalOffset(line, endSection,   endStation,   endPathIdx);
-    const seg = computeCrossingSeg(centerline, t1, t2, offsetDep, offsetArr);
+    const seg = computeCrossingSeg(centerline, startT.toFloat(), endT.toFloat(), offsetDep, offsetArr);
     return new PathBuilder().beziers([seg]).build();
   }
 
-  // Multi-road path or same-road U-turn via RSE.
+  // Multi-road path.
   const traversals = buildTraversals(
     rseBetween, startRoad,
     startStation, endStation, startSection, endSection,
-    startPathIdx, endPathIdx,
+    startPathIdx, endPathIdx, startT, endT,
   );
 
   const entries: CubicBezierPoints[][] = [];
