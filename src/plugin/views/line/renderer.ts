@@ -1,43 +1,12 @@
-import { Line, MapState, RoadSectionChange, Station } from "../../models/structures";
+import { Line, LinePath, MapState, RoadSectionChange } from "../../models/structures";
 import { StationRenderer } from "../station";
 import { hexToRgb } from "@/common/utils/color";
 import { SegmentResult } from "./segment-path";
 import { isInvalidJump, buildSegmentPath } from "./path-builder";
 import { createDashedLine, bezierPathToSegments } from "./segment-nodes";
-import { OffsetT, TBias } from "../../utils/offset-t";
 
-type StopInfo = { pathIdx: number; station: Station; bias: TBias };
-
-function collectStopsAndRSEs(
-  line: Line,
-): { stops: StopInfo[]; rsesBefore: RoadSectionChange[][] } {
-  const stops: StopInfo[] = [];
-  const rsesBefore: RoadSectionChange[][] = [];
-  let pendingRSEs: RoadSectionChange[] = [];
-
-  for (const p of line.paths) {
-    if (p.kind === 'road-section-change') {
-      pendingRSEs.push(p);
-    } else if (p.kind === 'station-stop') {
-      stops.push({ pathIdx: p.index, station: p.station, bias: 'zero' });
-      rsesBefore.push(pendingRSEs);
-      pendingRSEs = [];
-    }
-  }
-
-  for (let i = 0; i < stops.length - 1; i++) {
-    if (stops[i].station !== stops[i + 1].station) continue;
-    const t = stops[i].station.interpT;
-    const approachT = i > 0 ? stops[i - 1].station.interpT
-      : i + 2 < stops.length ? stops[i + 2].station.interpT
-      : null;
-    if (approachT === null) continue;
-    const forward = approachT < t;
-    stops[i].bias     = forward ? 'negative' : 'positive';
-    stops[i + 1].bias = forward ? 'positive' : 'negative';
-  }
-
-  return { stops, rsesBefore };
+function collectStops(line: Line): LinePath[] {
+  return line.paths.filter(p => p.renderStop() !== null);
 }
 
 async function cleanupOldLineGroup(line: Line): Promise<void> {
@@ -60,18 +29,10 @@ export class LineRenderer {
 
     const segmentNodes: SceneNode[] = [];
     const color = hexToRgb(line.color);
-    const { stops, rsesBefore } = collectStopsAndRSEs(line);
+    const stops: LinePath[] = collectStops(line);
 
     for (let si = 0; si < stops.length - 1; si++) {
-      const { pathIdx: startPathIdx, station: startStation } = stops[si];
-      const { pathIdx: endPathIdx,   station: endStation   } = stops[si + 1];
-
-      const startT = new OffsetT(startStation.interpT, stops[si].bias);
-      const endT   = new OffsetT(endStation.interpT,   stops[si + 1].bias);
-      const result = this.renderLineSegment(
-        line, startPathIdx, endPathIdx,
-        startStation, endStation, rsesBefore[si + 1], color, startT, endT
-      );
+      const result = this.renderLineSegment(line, stops[si], stops[si + 1], color);
       if (!result) continue;
       if (result.kind === 'normal') {
         segmentNodes.push(
@@ -93,30 +54,28 @@ export class LineRenderer {
 
   private renderLineSegment(
     line: Line,
-    startPathIdx: number,
-    endPathIdx: number,
-    startStation: Station,
-    endStation: Station,
-    rseBetween: RoadSectionChange[],
+    startStop: LinePath,
+    endStop: LinePath,
     color: RGB,
-    startT: OffsetT,
-    endT: OffsetT,
   ): SegmentResult | null {
-    const startPoint = this.stationRenderer.getConnectionPoint(startStation, line, startPathIdx);
-    const endPoint   = this.stationRenderer.getConnectionPoint(endStation,   line, endPathIdx);
+    const startStation = startStop.renderStop()!;
+    const endStation   = endStop.renderStop()!;
+    const startPoint = this.stationRenderer.getConnectionPoint(startStation, line, startStop.index);
+    const endPoint   = this.stationRenderer.getConnectionPoint(endStation,   line, endStop.index);
     if (!startPoint || !endPoint) {
       console.warn(`Missing connection points for line ${line.id}`);
       return null;
     }
 
+    const rseBetween = line.paths
+      .slice(startStop.index + 1, endStop.index)
+      .filter(p => p instanceof RoadSectionChange) as unknown as RoadSectionChange[];
+
     if (isInvalidJump(startStation, endStation, rseBetween)) {
       return { kind: 'dashed', node: createDashedLine(startPoint, endPoint, color) };
     }
 
-    const pathData = buildSegmentPath(
-      line, startStation, endStation, rseBetween, startPoint, endPoint,
-      startPathIdx, endPathIdx, startT, endT,
-    );
+    const pathData = buildSegmentPath(line, startStop, endStop, rseBetween, startPoint, endPoint);
     return { ...bezierPathToSegments(pathData, color), kind: 'normal' };
   }
 

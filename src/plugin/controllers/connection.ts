@@ -1,8 +1,9 @@
 import { LineId, RoadId, RoadSectionId, StationId } from "@/common/types";
 import { LinePathData } from "@/common/messages";
 import { AddingStationsPluginSession } from "../sessions/adding-stations";
-import { LinePath, Station } from "../models/structures";
+import { LinePath, Station, StationStop } from "../models/structures";
 import { postMessageToUI } from "../figma";
+import { buildDisplayEntries } from "../utils/display-entries";
 import { BaseController } from "./base";
 import { UIMessageRouter } from "./router";
 
@@ -17,6 +18,8 @@ export class ConnectionController extends BaseController {
     this.sessionManager.create(new AddingStationsPluginSession());
   }
 
+  // ── Line path handler ────────────────────────────────────────────────────────
+
   public async handleGetLinePath(lineId: LineId): Promise<void> {
     const line = this.model.state.getLine(lineId);
     if (!line) { console.error("Line not found:", lineId); return; }
@@ -24,8 +27,9 @@ export class ConnectionController extends BaseController {
     const stationNames: Record<StationId, string> = {};
     const stationRoadIds: Record<StationId, RoadId | null> = {};
     const stationSectionIds: Record<StationId, RoadSectionId | null> = {};
+
     for (const path of line.paths) {
-      if (path.kind === 'station-stop') {
+      if (path instanceof StationStop) {
         const station = path.station;
         stationNames[station.id] = station.name;
         stationRoadIds[station.id] = station.parentRoadSection?.parentRoad?.id ?? null;
@@ -33,14 +37,16 @@ export class ConnectionController extends BaseController {
       }
     }
 
-    postMessageToUI({ type: 'line-path-data', lineId, paths: line.paths.map(p => LinePath.toData(p)), stationNames, stationRoadIds, stationSectionIds });
+    const displayEntries = buildDisplayEntries(line.paths);
+
+    postMessageToUI({ type: 'line-path-data', lineId, paths: line.paths.map(p => LinePath.toData(p)), stationNames, stationRoadIds, stationSectionIds, displayEntries });
   }
 
   public insertStationIntoLine(lineId: LineId, newStation: Station, relativeToStation: Station, insertAfter: boolean): boolean {
     const line = this.model.state.getLine(lineId);
     if (!line) return false;
 
-    const refIndex = line.paths.findIndex(p => p.kind === 'station-stop' && p.station === relativeToStation);
+    const refIndex = line.paths.findIndex(p => p instanceof StationStop && p.station === relativeToStation);
     if (refIndex === -1) return false;
 
     const insertAt = insertAfter ? refIndex + 1 : refIndex;
@@ -57,7 +63,7 @@ export class ConnectionController extends BaseController {
     const line = this.model.state.getLine(lineId);
     if (!line) return;
 
-    const hasStart = line.paths.some(p => p.kind === 'station-stop' && p.station === startStation);
+    const hasStart = line.paths.some(p => p instanceof StationStop && p.station === startStation);
     if (!hasStart) {
       line.addPath({ kind: 'station-stop', stationId: startStation.id, direction: 'ascending' });
     }
@@ -83,5 +89,4 @@ export class ConnectionController extends BaseController {
       });
     }
   }
-
 }

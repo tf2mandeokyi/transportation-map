@@ -30,8 +30,8 @@ describe('line end positions match station/RSC positions', () => {
         const bezier = road.computeBezier();
         if (!bezier) continue;
 
-        const pos = bezier.eval(p.station.interpT);
-        const tan = bezier.evalTangent(p.station.interpT);
+        const pos = p.station.interpT.evalBezier(bezier);
+        const tan = p.station.interpT.evalBezierTangent(bezier);
 
         const totalSlots = section.getMaxStationStopCount();
         const effectiveCount = Math.max(totalSlots, p.rank + 1);

@@ -56,6 +56,7 @@ export class LineController extends BaseController {
     const line = this.model.state.getLine(lineId);
     if (!line) { console.error("Line not found:", lineId); return; }
     line.replacePaths(paths);
+    await this.render();
     await this.save();
   }
 
@@ -63,6 +64,7 @@ export class LineController extends BaseController {
     const line = this.model.state.getLine(lineId);
     if (!line) { console.warn(`Line ${lineId} not found`); return; }
     line.removePath(pathIndex);
+    await this.render();
     await this.save();
     postMessageToUI({ type: 'station-removed-from-line' });
   }
@@ -91,6 +93,7 @@ export class LineController extends BaseController {
     ].map(p => LinePath.toData(p));
 
     line.replacePaths(rotated);
+    await this.render();
     await this.save();
   }
 

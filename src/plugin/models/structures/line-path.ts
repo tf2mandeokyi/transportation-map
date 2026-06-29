@@ -6,6 +6,9 @@ import { NodeId, RoadSectionId, StationId } from "@/common/types";
 import { MapState } from "./map-state";
 import { LinePathData } from "@/common/messages/line";
 import { own, Owned } from "@/common/utils/ownership";
+import { OffsetT } from "@/plugin/utils/offset-t";
+import { Line } from "./line";
+import { PathEntry } from "@/plugin/utils/path-entry";
 
 function findSharedNode(roadA: Road, roadB: Road): Node | null {
   if (roadA.endpoints[1].node === roadB.endpoints[0].node || roadA.endpoints[1].node === roadB.endpoints[1].node) return roadA.endpoints[1].node;
@@ -13,11 +16,18 @@ function findSharedNode(roadA: Road, roadB: Road): Node | null {
   return null;
 }
 
+export interface RoadSectionPos {
+  section: RoadSection;
+  offset: OffsetT;
+}
+
 export interface SerializedLinePath {
   k: 'ss' | 'sc';    // kind
+
   i?: StationId;     // 'ss': stationId
   r?: number;        // 'ss': rank (absent → 0)
   d?: 'a' | 'd';     // 'ss': direction (ascending/descending)
+
   n?: NodeId;        // 'sc': nodeId
   e?: [RoadSectionId, 0 | 1]; // 'sc': exiting sectionId
   a?: [RoadSectionId, 0 | 1]; // 'sc': entering sectionId
@@ -25,7 +35,16 @@ export interface SerializedLinePath {
   g?: number;        // 'sc': enterRank (absent → 0)
 }
 
-export type LinePath = StationStop | RoadSectionChange;
+export abstract class LinePath {
+  index: number = 0;
+  abstract applySerialized(ser: SerializedLinePath): this;
+  abstract serialize(): SerializedLinePath;
+  abstract start(): RoadSectionPos | undefined;
+  abstract end(): RoadSectionPos | undefined;
+  // Returns the station this entry represents, or null for junctions.
+  abstract renderStop(): Station | null;
+  abstract computeEntry(line: Line): PathEntry<this>;
+}
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace LinePath {
@@ -54,7 +73,7 @@ export namespace LinePath {
   }
 
   export function toData(p: LinePath): LinePathData {
-    if (p.kind === 'station-stop') {
+    if (p instanceof StationStop) {
       return {
         kind: 'station-stop',
         index: p.index,
@@ -64,13 +83,16 @@ export namespace LinePath {
         rank: p.rank
       };
     }
-    return {
-      kind: 'road-section-change',
-      index: p.index,
-      nodeId: p.node.id,
-      exiting: p.exiting ? { sectionId: p.exiting.section.getRoadSectionId(), side: p.exiting.side } : null,
-      entering: p.entering ? { sectionId: p.entering.section.getRoadSectionId(), side: p.entering.side } : null,
-    };
+    else if (p instanceof RoadSectionChange) {
+      return {
+        kind: 'road-section-change',
+        index: p.index,
+        nodeId: p.node.id,
+        exiting: p.exiting ? { sectionId: p.exiting.section.getRoadSectionId(), side: p.exiting.side } : null,
+        entering: p.entering ? { sectionId: p.entering.section.getRoadSectionId(), side: p.entering.side } : null,
+      };
+    }
+    throw new Error(`Unhandled line path type: ${p.constructor.name}`);
   }
 
   export function deserialize(mapState: Readonly<MapState>, ser: SerializedLinePath): Owned<LinePath> {
@@ -86,9 +108,7 @@ export namespace LinePath {
   }
 }
 
-export class StationStop {
-  readonly kind = 'station-stop' as const;
-  index: number = 0;
+export class StationStop extends LinePath {
   mapState: Readonly<MapState>;
   station!: Station;
   rank!: number;
@@ -96,6 +116,7 @@ export class StationStop {
   direction!: 'ascending' | 'descending'; // direction of travel along the line (for sorting)
 
   constructor(mapState: Readonly<MapState>) {
+    super();
     this.mapState = mapState;
   }
 
@@ -118,6 +139,28 @@ export class StationStop {
     };
   }
 
+  start() {
+    return {
+      section: this.station.parentRoadSection,
+      offset: this.station.interpT.withBias(this.direction === 'ascending' ? 'negative' : 'positive'),
+    };
+  }
+
+  end() {
+    return {
+      section: this.station.parentRoadSection,
+      offset: this.station.interpT.withBias(this.direction === 'ascending' ? 'positive' : 'negative'),
+    };
+  }
+
+  renderStop() { return this.stops ? this.station : null; }
+
+  computeEntry(line: Line): PathEntry<this> {
+    const section = (this.station.parentRoadSection as RoadSection | undefined) ?? null;
+    const road = section?.parentRoad ?? null;
+    return new PathEntry(line, this, this.rank, road, section);
+  }
+
   autoInsertRSCTo(currStop: StationStop): Owned<RoadSectionChange> | null {
     const prevStation = this.station;
     const currStation = currStop.station;
@@ -136,9 +179,7 @@ export class StationStop {
   }
 }
 
-export class RoadSectionChange {
-  readonly kind = 'road-section-change' as const;
-  index: number = 0;
+export class RoadSectionChange extends LinePath {
   mapState: Readonly<MapState>;
   node!: Node;
   exiting!: { section: RoadSection, side: 0 | 1 } | null;
@@ -147,6 +188,7 @@ export class RoadSectionChange {
   enterRank!: number;
 
   constructor(mapState: Readonly<MapState>) {
+    super();
     this.mapState = mapState;
   }
 
@@ -170,5 +212,31 @@ export class RoadSectionChange {
       f: this.exitRank,
       g: this.enterRank,
     };
+  }
+
+  start() {
+    if (!this.exiting) return undefined;
+    return {
+      section: this.exiting.section,
+      offset: new OffsetT(this.exiting.side, this.exiting.side === 0 ? 'positive' : 'negative')
+    }
+  }
+
+  end() {
+    if (!this.entering) return undefined;
+    return {
+      section: this.entering.section,
+      offset: new OffsetT(this.entering.side, this.entering.side === 0 ? 'positive' : 'negative')
+    }
+  }
+
+  renderStop() { return null; }
+
+  computeEntry(line: Line): PathEntry<this> {
+    const entry = this?.exiting ?? this?.entering;
+    const section = entry?.section ?? null;
+    const road = section?.parentRoad ?? null;
+    const rank = this?.exiting === null ? (this?.enterRank ?? 0) : (this?.exitRank ?? 0);
+    return new PathEntry(line, this, rank, road, section);
   }
 }

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { NodeId, RoadId, RoadSectionId } from '@/common/types';
+import { RoadSectionData } from '@/common/messages';
 import { useMessageManager } from '../../contexts/MessageContext';
 import { useNetworkContext } from '../../contexts/NetworkContext';
 
@@ -11,40 +12,50 @@ interface RseAddingPanelProps {
   onCancel: () => void;
 }
 
-const RseAddingPanel: React.FC<RseAddingPanelProps> = ({ afterPathIndex, sourceRoadId, exitingSectionId, onCommitRse, onCancel }) => {
+type PendingConfig = {
+  isUturn: boolean;
+  nodeOptions: Array<{ nodeId: NodeId; nodeName: string }>;
+  sections: RoadSectionData[];
+  preselectedNodeId: NodeId | null;
+  preselectedSectionIndex: number;
+};
+
+const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
+  afterPathIndex, sourceRoadId, exitingSectionId, onCommitRse, onCancel,
+}) => {
   const manager = useMessageManager();
   const { roads, nodes } = useNetworkContext();
 
-  const [rseError, setRseError]           = useState<string | null>(null);
-  const [rseNodeOptions, setRseNodeOptions] = useState<Array<{ nodeId: NodeId; nodeName: string }> | null>(null);
-  const [rsePendingRoadId, setRsePendingRoadId] = useState<RoadId | null>(null);
-  const [rseSelectedNodeId, setRseSelectedNodeId] = useState<NodeId | ''>('');
+  const [error, setError]                       = useState<string | null>(null);
+  const [pending, setPending]                   = useState<PendingConfig | null>(null);
+  const [selectedNodeId, setSelectedNodeId]     = useState<string>('');
+  const [selectedSectionIdx, setSelectedSectionIdx] = useState<string>('');
 
-  const [isUturn, setIsUturn] = useState(false);
-
-  // Ref-based handler so the stable subscription always sees latest props/state.
   const handleRef = useRef<(destRoadId: RoadId) => void>(() => {});
   handleRef.current = (destRoadId: RoadId) => {
-    if (!sourceRoadId) {
-      setRseError('No road context at this position.');
-      return;
-    }
-
     const destRoad = roads.find(r => r.id === destRoadId);
     if (!destRoad) return;
 
-    setRseError(null);
+    setError(null);
 
     if (sourceRoadId === destRoadId) {
-      // U-turn: line returns on the same road. Let the user pick which endpoint to wrap around.
-      const endpointNodes = ([destRoad.startNodeId, destRoad.endNodeId] as NodeId[]).map(nodeId => {
-        const node = nodes.find(n => n.id === nodeId);
-        return { nodeId, nodeName: node?.name ?? nodeId };
-      });
-      setIsUturn(true);
-      setRseNodeOptions(endpointNodes);
-      setRsePendingRoadId(destRoadId);
-      setRseSelectedNodeId('');
+      // U-turn: same road — pick endpoint node + section to re-enter
+      const nodeOptions = ([destRoad.startNodeId, destRoad.endNodeId] as NodeId[]).map(nodeId => ({
+        nodeId,
+        nodeName: nodes.find(n => n.id === nodeId)?.name ?? nodeId,
+      }));
+      const exitingIdx = exitingSectionId
+        ? destRoad.sections.findIndex(s => s.id[1] === exitingSectionId[1])
+        : 0;
+      const preselectedSectionIndex = exitingIdx >= 0 ? exitingIdx : 0;
+      setPending({ isUturn: true, nodeOptions, sections: destRoad.sections, preselectedNodeId: null, preselectedSectionIndex });
+      setSelectedNodeId('');
+      setSelectedSectionIdx(String(preselectedSectionIndex));
+      return;
+    }
+
+    if (!sourceRoadId) {
+      setError('No road context at this position.');
       return;
     }
 
@@ -54,76 +65,105 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({ afterPathIndex, sourceR
     const sourceNodeIds = new Set([sourceRoad.startNodeId, sourceRoad.endNodeId]);
     const sharedNodes = ([destRoad.startNodeId, destRoad.endNodeId] as NodeId[])
       .filter(n => sourceNodeIds.has(n))
-      .map(nodeId => {
-        const node = nodes.find(n => n.id === nodeId);
-        return { nodeId, nodeName: node?.name ?? nodeId };
-      });
+      .map(nodeId => ({ nodeId, nodeName: nodes.find(n => n.id === nodeId)?.name ?? nodeId }));
 
     if (sharedNodes.length === 0) {
-      setRseError('Roads are not directly connected by a shared junction.');
+      setError('Roads are not directly connected by a shared junction.');
       return;
     }
 
-    setIsUturn(false);
-
-    if (sharedNodes.length === 1) {
-      const enteringSectionId = (destRoad.sections[0]?.id ?? null) as RoadSectionId | null;
-      onCommitRse(afterPathIndex, exitingSectionId, sharedNodes[0].nodeId, enteringSectionId);
-      return;
-    }
-
-    setRseNodeOptions(sharedNodes);
-    setRsePendingRoadId(destRoadId);
-    setRseSelectedNodeId('');
+    const preselectedNodeId = sharedNodes.length === 1 ? sharedNodes[0].nodeId : null;
+    setPending({ isUturn: false, nodeOptions: sharedNodes, sections: destRoad.sections, preselectedNodeId, preselectedSectionIndex: 0 });
+    setSelectedNodeId(preselectedNodeId ?? '');
+    setSelectedSectionIdx(destRoad.sections.length > 0 ? '0' : '');
   };
 
   useEffect(() => {
     return manager.onMessage('road-clicked', msg => handleRef.current(msg.roadId));
   }, [manager]);
 
+  const handleCommit = () => {
+    if (!pending) return;
+    const nodeId = selectedNodeId as NodeId;
+    const idx = parseInt(selectedSectionIdx, 10);
+    const enteringSectionId = pending.sections[idx]?.id ?? null;
+    onCommitRse(afterPathIndex, exitingSectionId, nodeId, enteringSectionId);
+  };
+
+  const canCommit = !!selectedNodeId && selectedSectionIdx !== '';
+
   return (
     <div style={{ padding: '12px', background: '#f5f5f5', borderRadius: '4px', border: '2px solid #18a0fb', marginTop: '8px' }}>
       <p style={{ fontSize: '11px', color: '#666', margin: '0 0 8px 0' }}>
-        <strong>Adding road enter</strong><br />
-        Click a road section on the canvas to enter from that road. Click the same road to create a U-turn.
+        <strong>Adding road junction</strong><br />
+        Click a road on the canvas. Click the same road to create a U-turn.
       </p>
-      {rseError && (
-        <p style={{ fontSize: '11px', color: '#c00', margin: '0 0 8px 0' }}>{rseError}</p>
+
+      {error && (
+        <div style={{ fontSize: '11px', color: '#c00', background: '#fff0f0', border: '1px solid #f00', borderRadius: '3px', padding: '6px 8px', marginBottom: '8px' }}>
+          {error}
+        </div>
       )}
-      {rseNodeOptions && rsePendingRoadId && (
+
+      {pending && (
         <div style={{ marginBottom: '8px' }}>
-          <p style={{ fontSize: '11px', color: '#333', margin: '0 0 4px 0' }}>
-            {isUturn ? 'U-turn — pick endpoint:' : 'Multiple junctions — pick one:'}
+          <p style={{ fontSize: '11px', fontWeight: 600, color: '#333', margin: '0 0 6px 0' }}>
+            {pending.isUturn ? '↩ U-turn — configure:' : '↪ Junction — configure:'}
           </p>
-          <select
-            className="input"
-            value={rseSelectedNodeId}
-            onChange={e => setRseSelectedNodeId(e.target.value as NodeId)}
-            style={{ fontSize: '11px', width: '100%', marginBottom: '6px' }}
-          >
-            <option value="">{isUturn ? '-- select endpoint --' : '-- select junction --'}</option>
-            {rseNodeOptions.map(opt => (
-              <option key={opt.nodeId} value={opt.nodeId}>{opt.nodeName}</option>
-            ))}
-          </select>
+
+          {pending.nodeOptions.length > 1 && (
+            <div style={{ marginBottom: '6px' }}>
+              <label style={{ fontSize: '11px', color: '#555', display: 'block', marginBottom: '2px' }}>
+                {pending.isUturn ? 'Endpoint node:' : 'Junction node:'}
+              </label>
+              <select
+                className="input"
+                value={selectedNodeId}
+                onChange={e => setSelectedNodeId(e.target.value)}
+                style={{ fontSize: '11px', width: '100%' }}
+              >
+                <option value="">— select node —</option>
+                {pending.nodeOptions.map(opt => (
+                  <option key={opt.nodeId} value={opt.nodeId}>{opt.nodeName}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div style={{ marginBottom: '8px' }}>
+            <label style={{ fontSize: '11px', color: '#555', display: 'block', marginBottom: '2px' }}>
+              {pending.isUturn ? 'Re-enter on section:' : 'Enter on section:'}
+            </label>
+            {pending.sections.length === 0 ? (
+              <p style={{ fontSize: '11px', color: '#c00', margin: 0 }}>Road has no sections.</p>
+            ) : (
+              <select
+                className="input"
+                value={selectedSectionIdx}
+                onChange={e => setSelectedSectionIdx(e.target.value)}
+                style={{ fontSize: '11px', width: '100%' }}
+              >
+                <option value="">— select section —</option>
+                {pending.sections.map((s, idx) => (
+                  <option key={idx} value={String(idx)}>
+                    {s.name ?? `Section ${s.index + 1}`}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
           <button
             className="button button--primary"
-            disabled={!rseSelectedNodeId}
+            disabled={!canCommit}
             style={{ width: '100%', marginBottom: '4px' }}
-            onClick={() => {
-              if (rseSelectedNodeId && rsePendingRoadId) {
-                const pendingDest = roads.find(r => r.id === rsePendingRoadId);
-                const enteringSectionId = isUturn
-                  ? exitingSectionId
-                  : (pendingDest?.sections[0]?.id ?? null) as RoadSectionId | null;
-                onCommitRse(afterPathIndex, exitingSectionId, rseSelectedNodeId as NodeId, enteringSectionId);
-              }
-            }}
+            onClick={handleCommit}
           >
-            {isUturn ? 'Add U-turn' : 'Add Road Junction'}
+            {pending.isUturn ? 'Add U-turn' : 'Add Junction'}
           </button>
         </div>
       )}
+
       <button className="button button--secondary" style={{ width: '100%' }} onClick={onCancel}>Cancel</button>
     </div>
   );

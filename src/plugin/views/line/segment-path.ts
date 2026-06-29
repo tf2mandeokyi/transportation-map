@@ -39,15 +39,15 @@ export function computeTotalOffset(
 // and ends at offsetAtT2 from the centerline at t2, following the road tangents.
 export function computeCrossingSeg(
   centerline: QuadBezierPoints,
-  t1: number, t2: number,
+  t1: OffsetT, t2: OffsetT,
   offsetAtT1: number, offsetAtT2: number,
 ): CubicBezierPoints {
-  const sign = t1 > t2 ? -1 : 1;
+  const sign = t1.compare(t2) > 0 ? -1 : 1;
 
-  const pos1 = centerline.eval(t1);
-  const pos2 = centerline.eval(t2);
-  const tan1 = centerline.evalTangent(t1);
-  const tan2 = centerline.evalTangent(t2);
+  const pos1 = t1.evalBezier(centerline);
+  const pos2 = t2.evalBezier(centerline);
+  const tan1 = t1.geometricTangent(centerline);
+  const tan2 = t2.geometricTangent(centerline);
 
   const len1 = Math.hypot(tan1.x, tan1.y) || 1;
   const len2 = Math.hypot(tan2.x, tan2.y) || 1;
@@ -95,7 +95,7 @@ export function computeSectionSegs(
     return directedDep === 0 ? [sub] : sub.offsetAdaptive(directedDep);
   }
 
-  return [computeCrossingSeg(centerline, t1.toFloat(), t2.toFloat(), offsetDep, offsetArr)];
+  return [computeCrossingSeg(centerline, t1, t2, offsetDep, offsetArr)];
 }
 
 export function appendJunctionCurve(pb: PathBuilder, prev: CubicBezierPoints, next: CubicBezierPoints): void {

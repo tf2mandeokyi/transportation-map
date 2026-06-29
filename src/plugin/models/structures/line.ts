@@ -1,7 +1,7 @@
 import { LineId } from "@/common/types";
 import { LinePathData } from "@/common/messages";
 import { MapState } from './map-state';
-import { LinePath, SerializedLinePath, StationStop } from './line-path';
+import { LinePath, RoadSectionChange, SerializedLinePath, StationStop } from './line-path';
 import { validateLinePaths } from '../../utils/line-validator';
 import { TransportationMapObject } from "./types";
 import { Owned } from "@/common/utils/ownership";
@@ -62,16 +62,7 @@ export class Line extends TransportationMapObject<LineId> {
   }
   
   computeEntry(path: LinePath): PathEntry<LinePath> {
-    if (path.kind === 'station-stop') {
-      const section = (path.station.parentRoadSection as RoadSection | undefined) ?? null;
-      const road = section?.parentRoad ?? null;
-      return new PathEntry(this, path, path.rank, road, section);
-    }
-    const entry = path.exiting ?? path.entering;
-    const section = entry?.section ?? null;
-    const road = section?.parentRoad ?? null;
-    const rank = path.exiting === null ? path.enterRank : path.exitRank;
-    return new PathEntry(this, path, rank, road, section);
+    return path.computeEntry(this);
   }
 
   addPath(path: LinePathData): void {
@@ -114,7 +105,7 @@ export class Line extends TransportationMapObject<LineId> {
     let enteredViaRse = false;
 
     for (const p of this.paths) {
-      if (p.kind === 'road-section-change') {
+      if (p instanceof RoadSectionChange) {
         if (enteredViaRse) {
           passes++;
           enteredViaRse = false;
@@ -123,7 +114,7 @@ export class Line extends TransportationMapObject<LineId> {
         if (p.entering?.section === section) enteredViaRse = true;
         continue;
       }
-      if (!sectionStationSet.has(p.station)) {
+      if (!(p instanceof StationStop) || !sectionStationSet.has(p.station)) {
         if (enteredViaRse) {
           passes++;
           enteredViaRse = false;

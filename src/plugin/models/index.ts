@@ -1,5 +1,5 @@
 import { LineId, NodeId, RoadId, RoadSectionId, SectionId, StationId } from "@/common/types";
-import { Line, LineProps, MapState, Node, NodeProps, Road, RoadProps, RoadSection, RoadSectionProps, Station, StationProps } from "./structures";
+import { Line, LineProps, MapState, Node, NodeProps, Road, RoadProps, RoadSection, RoadSectionChange, RoadSectionProps, Station, StationProps, StationStop } from "./structures";
 import { deserializeMapState, serializeMapState } from "./serde";
 import { validateLinePaths } from "../utils/line-validator";
 import { own } from "@/common/utils/ownership";
@@ -100,7 +100,7 @@ export class Model {
     const sectionSet = new Set(road.getSections());
     for (const line of this.state.getLines()) {
       line.paths = line.paths.filter(p => {
-        if (p.kind !== 'road-section-change') return true;
+        if (!(p instanceof RoadSectionChange)) return true;
         return !((p.exiting !== null && sectionSet.has(p.exiting.section)) ||
                  (p.entering !== null && sectionSet.has(p.entering.section)));
       });
@@ -135,7 +135,7 @@ export class Model {
       parentSection.stations = parentSection.stations.filter(s => s !== station);
     }
     for (const line of this.state.getLines()) {
-      line.paths = line.paths.filter(p => !(p.kind === 'station-stop' && p.station === station));
+      line.paths = line.paths.filter(p => !(p instanceof StationStop && p.station === station));
       this._reindexLinePaths(line);
     }
     this.state.removeStation(station);

@@ -14,7 +14,7 @@ function perp(v: Vector): Vector {
   return { x: -v.y, y: v.x };
 }
 
-abstract class BezierPoints<T extends BezierPoints<T>> {
+export abstract class BezierPoints<T extends BezierPoints<T>> {
   abstract eval(t: number): Vector;
   protected abstract evalTangentAt(t: number): Vector;
   abstract split(t: number): { left: T; right: T };
@@ -23,14 +23,11 @@ abstract class BezierPoints<T extends BezierPoints<T>> {
   evalTangent(t: number): Vector;
   evalTangent(t: OffsetT): Vector;
   evalTangent(t: number | OffsetT): Vector {
-    if (t instanceof OffsetT) {
-      const raw = this.evalTangentAt(t.toFloat());
-      return t.bias === 'positive' ? { x: -raw.x, y: -raw.y } : raw;
-    }
+    if (t instanceof OffsetT) return t.evalBezierTangent(this);
     return this.evalTangentAt(t);
   }
 
-  subForward(t1: number, t2: number): T {
+  subForward(t1: number, t2: number): T {  // public so OffsetT.subBezierForward can call it
     const { left } = this.split(t2);
     const t1r = t2 > 0.0001 ? t1 / t2 : 0;
     const { right } = left.split(t1r);
@@ -81,10 +78,10 @@ export class QuadBezierPoints extends BezierPoints<QuadBezierPoints> {
   sub(t1: OffsetT, t2: OffsetT): QuadBezierPoints {
     assertValidBiasPair(t1, t2);
     if (t1.compare(t2) > 0) {
-      const s = this.subForward(t2.toFloat(), t1.toFloat());
+      const s = t2.subBezierForward(this, t1);
       return new QuadBezierPoints(s.p2, s.p1, s.p0);
     }
-    return this.subForward(t1.toFloat(), t2.toFloat());
+    return t1.subBezierForward(this, t2);
   }
 
   // Exact, lossless conversion: the resulting cubic traces the identical curve.
@@ -164,10 +161,10 @@ export class CubicBezierPoints extends BezierPoints<CubicBezierPoints> {
   sub(t1: OffsetT, t2: OffsetT): CubicBezierPoints {
     assertValidBiasPair(t1, t2);
     if (t1.compare(t2) > 0) {
-      const s = this.subForward(t2.toFloat(), t1.toFloat());
+      const s = t2.subBezierForward(this, t1);
       return new CubicBezierPoints(s.p3, s.p2, s.p1, s.p0);
     }
-    return this.subForward(t1.toFloat(), t2.toFloat());
+    return t1.subBezierForward(this, t2);
   }
 }
 

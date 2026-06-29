@@ -4,6 +4,7 @@ import type { RoadSection } from './road-section';
 import { StationStop } from "./line-path";
 import { Line } from "./line";
 import { own, Owned } from "@/common/utils/ownership";
+import { OffsetT } from "@/plugin/utils/offset-t";
 
 export interface SerializedStation {
   n: string;                        // name
@@ -32,7 +33,8 @@ export class Station extends TransportationMapObject<StationId> {
   textHAlign!: 'left' | 'center' | 'right';
   textRotation!: number;
   flipped!: boolean;
-  interpT!: number;
+  private _interpT!: number;
+  get interpT(): OffsetT { return new OffsetT(this._interpT, 'zero'); }
   parentRoadSection!: RoadSection;
 
   applyProps(props: StationProps): this {
@@ -41,7 +43,7 @@ export class Station extends TransportationMapObject<StationId> {
     this.textHAlign = props.textHAlign;
     this.textRotation = props.textRotation;
     this.flipped = props.flipped;
-    this.interpT = props.interpT;
+    this._interpT = props.interpT;
     return this;
   }
 
@@ -51,12 +53,24 @@ export class Station extends TransportationMapObject<StationId> {
     this.textHAlign = ser.h ?? 'left';
     this.textRotation = ser.r ?? 0;
     this.flipped = ser.l ?? false;
-    this.interpT = ser.p;
+    this._interpT = ser.p;
     return this;
   }
 
   setParent(roadSection: RoadSection): void {
     this.parentRoadSection = roadSection;
+  }
+
+  createCopyProps(): StationProps {
+    return {
+      name: this.name,
+      textAlign: this.textAlign,
+      textHAlign: this.textHAlign,
+      textRotation: this.textRotation,
+      flipped: this.flipped,
+      interpT: this._interpT,
+      roadSection: this.parentRoadSection,
+    };
   }
 
   makePassThroughStop(rank: number, direction: 'ascending' | 'descending'): Owned<StationStop> {
@@ -76,7 +90,7 @@ export class Station extends TransportationMapObject<StationId> {
       h: this.textHAlign,
       r: this.textRotation || undefined,
       l: this.flipped || undefined,
-      p: this.interpT,
+      p: this._interpT,
     };
   }
 
@@ -99,7 +113,7 @@ export class Station extends TransportationMapObject<StationId> {
   }
 
   getStopsAcrossLines(): Array<{ line: Line; path: StationStop; position: Vector }> {
-    return this.mapState.getLinePaths((p): p is StationStop => p.kind === 'station-stop' && p.station === this);
+    return this.mapState.getLinePaths((p): p is StationStop => p instanceof StationStop && p.station === this);
   }
 
   computePosition(): Vector {
@@ -112,7 +126,7 @@ export class Station extends TransportationMapObject<StationId> {
 
     const offset = section.computeOffset();
 
-    const pos = base.eval(this.interpT);
+    const pos = base.eval(this._interpT);
     if (offset === 0) return pos;
 
     const tangent = base.evalTangent(this.interpT);

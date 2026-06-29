@@ -1,77 +1,140 @@
 import React from 'react';
 import { StationId } from '@/common/types';
-import { LinePathData, RoadData } from '@/common/messages';
+import { DisplayEntry } from '@/common/messages';
 import StationPathItem from './StationPathItem';
-import InsertionButtons from './InsertionButtons';
 
 interface PathItemsListProps {
-  linePaths: LinePathData[];
-  stationNames: Record<string, string>;
-  roads: RoadData[];
+  displayEntries: DisplayEntry[];
   inactive: boolean;
   onRemoveStop: (pathIndex: number) => void;
   onRemoveRse: (pathIndex: number) => void;
   onSelectStation: (stationId: StationId) => void;
   onToggleStops: (pathIndex: number, stops: boolean) => void;
-  onStartAddingStation: (afterPathIndex: number) => void;
+  onAddSectionStation: (stationId: StationId, afterPathIndex: number) => void;
   onStartAddingRse: (afterPathIndex: number) => void;
 }
 
 const PathItemsList: React.FC<PathItemsListProps> = ({
-  linePaths, stationNames, roads, inactive,
+  displayEntries, inactive,
   onRemoveStop, onRemoveRse, onSelectStation, onToggleStops,
-  onStartAddingStation, onStartAddingRse,
+  onAddSectionStation, onStartAddingRse,
 }) => {
   const elements: React.ReactNode[] = [];
-  const hasStopAfter = (i: number) => linePaths.slice(i + 1).some(p => p.kind === 'station-stop');
 
-  const maybeInsertionButtons = (afterPathIndex: number) => {
-    if (!inactive) return;
-    const isBeforeAll = afterPathIndex === -1;
-    const nextPath = isBeforeAll ? linePaths[0] : linePaths[afterPathIndex + 1];
-    const showStation = isBeforeAll || !nextPath || nextPath.kind === 'station-stop';
-    const showRse = !isBeforeAll && hasStopAfter(afterPathIndex);
-    elements.push(
-      <InsertionButtons
-        key={`insert-${afterPathIndex}`}
-        onAddStation={showStation ? () => onStartAddingStation(afterPathIndex) : undefined}
-        onAddRse={showRse ? () => onStartAddingRse(afterPathIndex) : undefined}
-      />
-    );
-  };
+  // Track the last in-path pathIndex seen so far — used to compute insertion point
+  // for greyed-out station "+" buttons and for the ↪ Road button.
+  let lastInPathIdx = -1;
 
-  maybeInsertionButtons(-1);
+  for (let ei = 0; ei < displayEntries.length; ei++) {
+    const entry = displayEntries[ei];
 
-  for (let i = 0; i < linePaths.length; i++) {
-    const path = linePaths[i];
+    if (entry.kind === 'rse') {
+      const { isUturn, nodeId, nodeName, exitRoadName, enterRoadName } = entry;
 
-    if (path.kind === 'station-stop') {
+      // ↪ Road insertion button before this RSE (uses last in-path position)
+      if (inactive) {
+        const afterIdx = lastInPathIdx;
+        // Only show if there is at least one traversal with in-path stops after this point
+        const hasStopAfter = displayEntries.slice(ei).some(
+          e => e.kind === 'traversal' && e.stations.some(s => s.inPath)
+        );
+        if (hasStopAfter) {
+          elements.push(
+            <div key={`rse-btn-${ei}`} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '2px 0' }}>
+              <div style={{ flex: 1, height: '1px', background: '#d0d0d0' }} />
+              <button
+                className="button button--secondary"
+                style={{ fontSize: '10px', padding: '2px 6px', lineHeight: '14px' }}
+                onClick={() => onStartAddingRse(afterIdx)}
+              >↪ Road</button>
+              <div style={{ flex: 1, height: '1px', background: '#d0d0d0' }} />
+            </div>
+          );
+        }
+      }
+
+      if (isUturn) {
+        elements.push(
+          <div key={`rse-${ei}`} style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '5px 8px', background: '#fff8f0',
+            borderRadius: '4px', borderLeft: '3px solid #e07800',
+            margin: '4px 0 2px',
+          }}>
+            <span style={{ fontSize: '14px' }}>↩</span>
+            <span style={{ flex: 1, fontSize: '12px', fontWeight: 500, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+              U-turn at <strong>{nodeName ?? nodeId}</strong>
+              {exitRoadName && <span style={{ fontWeight: 400, color: '#888' }}> — {exitRoadName}</span>}
+            </span>
+            {inactive && <button className="button button--secondary small-btn" onClick={() => onRemoveRse(entry.pathIndex)}>X</button>}
+          </div>
+        );
+      } else {
+        elements.push(
+          <div key={`rse-${ei}`} style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '5px 8px', background: '#f0f4ff',
+            borderRadius: '4px', borderLeft: '3px solid #18a0fb',
+            margin: '4px 0 2px',
+          }}>
+            <span style={{ fontSize: '14px' }}>↪</span>
+            <span style={{ flex: 1, fontSize: '12px', fontWeight: 500, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+              <span style={{ color: '#777', fontWeight: 400 }}>{exitRoadName ?? '—'}</span>
+              {' → '}
+              <strong>{nodeName ?? nodeId}</strong>
+              {' → '}
+              <span style={{ color: '#444' }}>{enterRoadName ?? '—'}</span>
+            </span>
+            {inactive && <button className="button button--secondary small-btn" onClick={() => onRemoveRse(entry.pathIndex)}>X</button>}
+          </div>
+        );
+      }
+    } else if (entry.kind === 'virtual-uturn') {
       elements.push(
-        <StationPathItem
-          key={`stop-${i}`}
-          name={stationNames[path.stationId] ?? path.stationId}
-          index={i}
-          stops={path.stops ?? true}
-          onRemove={() => onRemoveStop(path.index ?? i)}
-          onSelect={() => onSelectStation(path.stationId)}
-          onToggleStops={stops => onToggleStops(path.index ?? i, stops)}
-        />
-      );
-    } else {
-      const enteringId = path.entering ? path.entering.sectionId : null;
-      const enteringRoad = enteringId ? roads.find(r => r.id === enteringId[0]) : null;
-      elements.push(
-        <div key={`rse-${i}`} className="station-path-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span className="station-number" style={{ paddingLeft: '4px', paddingRight: '4px' }}>{i + 1}</span>
-          <span style={{ flex: 1, fontStyle: 'italic', color: '#666' }}>↪ {enteringRoad?.name ?? (enteringId ? enteringId.join(':') : '?')}</span>
-          {inactive && (
-            <button className="button button--secondary small-btn" onClick={() => onRemoveRse(i)}>X</button>
-          )}
+        <div key={`vuturn-${ei}`} style={{
+          display: 'flex', alignItems: 'center', gap: '8px',
+          padding: '5px 8px', background: '#fff8f0',
+          borderRadius: '4px', borderLeft: '3px solid #e07800',
+          margin: '4px 0 2px',
+        }}>
+          <span style={{ fontSize: '14px' }}>↩</span>
+          <span style={{ flex: 1, fontSize: '12px', fontWeight: 500, color: '#e07800' }}>U-turn</span>
         </div>
       );
+    } else {
+      // Traversal: render each station in the order the plugin computed
+      for (const s of entry.stations) {
+        if (s.inPath) {
+          lastInPathIdx = s.pathIndex;
+          elements.push(
+            <div key={`stop-${s.pathIndex}`} style={{ paddingLeft: '12px' }}>
+              <StationPathItem
+                name={s.name}
+                index={s.pathIndex}
+                stops={s.stops}
+                onRemove={() => onRemoveStop(s.pathIndex)}
+                onSelect={() => onSelectStation(s.stationId)}
+                onToggleStops={stops => onToggleStops(s.pathIndex, stops)}
+              />
+            </div>
+          );
+        } else {
+          const insertAfter = lastInPathIdx;
+          elements.push(
+            <div key={`grey-${ei}-${s.stationId}`} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '2px 8px 2px 20px' }}>
+              <span style={{ flex: 1, fontSize: '11px', color: '#aaa', fontStyle: 'italic' }}>{s.name}</span>
+              {inactive && (
+                <button
+                  className="button button--secondary small-btn"
+                  onClick={() => onAddSectionStation(s.stationId, insertAfter)}
+                  title="Add to path"
+                >+</button>
+              )}
+            </div>
+          );
+        }
+      }
     }
-
-    maybeInsertionButtons(i);
   }
 
   return <div>{elements}</div>;

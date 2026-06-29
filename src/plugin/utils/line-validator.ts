@@ -1,192 +1,127 @@
-import { Line, LinePath, Road, RoadSection, RoadSectionChange, Station, StationStop } from "../models/structures";
-import { own, Owned } from "@/common/utils/ownership";
+import { Line, LinePath, RoadSectionChange, Station, StationStop } from "../models/structures";
+import { Owned } from "@/common/utils/ownership";
+import { RoadSectionPos } from "../models/structures/line-path";
 
-
-// ── Pass-through helpers ──────────────────────────────────────────────────────
-
-type RoadSpan = { road: Road; tEntry: number; tExit: number; section: RoadSection | null };
-
-// Decomposes a segment (dep → arr, with the RSEs between them) into a sequence of
-// road spans, each with the entry and exit interpT values on that road.
-function getRoadSpans(
-  depStation: Station,
-  arrStation: Station,
-  rsesBetween: RoadSectionChange[],
-): RoadSpan[] {
-  const depRoad = depStation.parentRoadSection.parentRoad;
-  const arrRoad = arrStation.parentRoadSection.parentRoad;
-
-  if (rsesBetween.length === 0) {
-    if (depRoad !== arrRoad) return [];
-    return [{ road: depRoad, tEntry: depStation.interpT, tExit: arrStation.interpT, section: depStation.parentRoadSection }];
-  }
-
-  const spans: RoadSpan[] = [];
-
-  // First span: departure station → first junction node.
-  const firstRsc = rsesBetween[0];
-  spans.push({
-    road: depRoad,
-    tEntry: depStation.interpT,
-    tExit: firstRsc.node === depRoad.endpoints[1].node ? 1 : 0,
-    section: depStation.parentRoadSection,
-  });
-
-  // Middle spans: one per road entered by an RSC (all except the last).
-  for (let k = 0; k < rsesBetween.length - 1; k++) {
-    const rsc     = rsesBetween[k];
-    const nextRsc = rsesBetween[k + 1];
-    if (!rsc.entering) return spans;
-    const road = rsc.entering.section.parentRoad;
-    spans.push({
-      road,
-      tEntry: rsc.node === road.endpoints[0].node ? 0 : 1,
-      tExit:  nextRsc.node === road.endpoints[1].node ? 1 : 0,
-      section: rsc.entering.section,
-    });
-  }
-
-  // Last span: last junction node → arrival station.
-  const lastRsc = rsesBetween[rsesBetween.length - 1];
-  if (!lastRsc.entering) return spans;
-  const lastRoad = lastRsc.entering.section.parentRoad;
-  spans.push({
-    road: lastRoad,
-    tEntry: lastRsc.node === lastRoad.endpoints[0].node ? 0 : 1,
-    tExit: arrStation.interpT,
-    section: arrStation.parentRoadSection,
-  });
-
-  return spans;
+// Returns stations on `section` that lie strictly between from and to (in travel order),
+// excluding any station in `exclude`.
+function fillBetween(
+  from: RoadSectionPos,
+  to: RoadSectionPos,
+  rank: number,
+  exclude: Set<Station>,
+): Owned<StationStop>[] {
+  if (from.section !== to.section) return [];
+  const ascending = from.offset.compare(to.offset) < 0;
+  const dir: 'ascending' | 'descending' = ascending ? 'ascending' : 'descending';
+  return from.section.stations
+    .filter(st => {
+      if (exclude.has(st)) return false;
+      // Station is strictly between from and to using bias-aware comparison.
+      return ascending
+        ? from.offset.compare(st.interpT) < 0 && st.interpT.compare(to.offset) < 0
+        : from.offset.compare(st.interpT) > 0 && st.interpT.compare(to.offset) > 0;
+    })
+    .sort((a, b) => ascending ? a.interpT.compare(b.interpT) : b.interpT.compare(a.interpT))
+    .map(st => st.makePassThroughStop(rank, dir));
 }
 
-// Returns stations on a road whose interpT lies strictly inside (tEntry, tExit),
-// sorted in travel order, excluding any already in stoppingSet.
-function findIntermediateStations(
-  road: Road, tEntry: number, tExit: number,
-  stoppingSet: Set<Station>,
-  section: RoadSection | null,
-): Station[] {
-  const tMin = Math.min(tEntry, tExit);
-  const tMax = Math.max(tEntry, tExit);
-  const candidates = section
-    ? section.stations
-    : [...road.getSections()].flatMap(s => s.stations);
-  return candidates
-    .filter(st => !stoppingSet.has(st) && st.interpT > tMin && st.interpT < tMax)
-    .sort((a, b) => tEntry <= tExit ? a.interpT - b.interpT : b.interpT - a.interpT);
-}
-
-// Updates the `direction` field on each stopping (stops=true) StationStop based on
-// the actual order of traversal, so that ascending/descending reflects which way
-// the line travels along the road when it reaches that station.
-function updateStoppingStopDirections(paths: Owned<LinePath>[]): void {
-  let prevStopIdx = -1;
-
-  for (let i = 0; i < paths.length; i++) {
-    const p = paths[i];
-    if (p.kind !== 'station-stop' || !p.stops) continue;
-
-    if (prevStopIdx >= 0) {
-      const dep = paths[prevStopIdx] as StationStop;
-      const arr = p as StationStop;
-
-      const rsesBetween: RoadSectionChange[] = [];
-      for (let k = prevStopIdx + 1; k < i; k++) {
-        if (paths[k].kind === 'road-section-change') rsesBetween.push(paths[k] as RoadSectionChange);
-      }
-
-      if (dep.station === arr.station) {
-        // U-turn: dep.direction was already set correctly by the previous segment; arr reverses it.
-        arr.direction = dep.direction === 'ascending' ? 'descending' : 'ascending';
-      } else {
-        const spans = getRoadSpans(dep.station, arr.station, rsesBetween);
-        if (spans.length > 0) {
-          dep.direction = spans[0].tEntry <= spans[0].tExit ? 'ascending' : 'descending';
-          const lastSpan = spans[spans.length - 1];
-          arr.direction = lastSpan.tEntry <= lastSpan.tExit ? 'ascending' : 'descending';
-        }
-      }
-    }
-
-    prevStopIdx = i;
+// Fills missing entries between currentPos and path.start():
+//   - pass-through stops when on the same section
+//   - auto-inserted RSC + surrounding pass-throughs when sections differ
+function fillInMissingPaths(
+  from: RoadSectionPos,
+  to: RoadSectionPos,
+  rank: number,
+  prevStop: StationStop | null,
+  nextStop: StationStop | null,
+): Owned<LinePath>[] {
+  if (from.section === to.section) {
+    const exclude = new Set<Station>([
+      ...(prevStop ? [prevStop.station] : []),
+      ...(nextStop ? [nextStop.station] : []),
+    ]);
+    return fillBetween(from, to, rank, exclude);
   }
-}
 
-// Inserts stops:false entries for every station a line passes through without stopping.
-function insertPassThroughStops(paths: Owned<LinePath>[]): Owned<LinePath>[] {
+  // Different sections: try to auto-insert an RSC between the two stops
+  if (!prevStop || !nextStop) return [];
+  const rsc = prevStop.autoInsertRSCTo(nextStop);
+  if (!rsc) return [];
+
   const result: Owned<LinePath>[] = [];
-  let i = 0;
+  const rscStart = rsc.start();
+  const rscEnd   = rsc.end();
 
-  const pushPassThroughs = (span: RoadSpan, rank: number, stoppingSet: Set<Station>) => {
-    const direction: 'ascending' | 'descending' = span.tEntry <= span.tExit ? 'ascending' : 'descending';
-    for (const st of findIntermediateStations(span.road, span.tEntry, span.tExit, stoppingSet, span.section)) {
-      result.push(st.makePassThroughStop(rank, direction));
-    }
-  };
-
-  while (i < paths.length) {
-    const p = paths[i];
-
-    if (p.kind !== 'station-stop') { result.push(p); i++; continue; }
-
-    // Collect the RSEs between this stop and the next stop.
-    let j = i + 1;
-    const rsesBetween: RoadSectionChange[] = [];
-    while (j < paths.length && paths[j].kind === 'road-section-change') {
-      rsesBetween.push(paths[j] as RoadSectionChange);
-      j++;
-    }
-    const nextStop = (j < paths.length && paths[j].kind === 'station-stop')
-      ? paths[j] as StationStop : null;
-
-    result.push(p);
-
-    if (!nextStop) { i++; continue; }
-
-    const depStation = p.station;
-    const arrStation = nextStop.station;
-    const spans = getRoadSpans(depStation, arrStation, rsesBetween);
-
-    if (spans.length !== rsesBetween.length + 1) { i++; continue; }
-
-    const segmentExclude = new Set<Station>([depStation, arrStation]);
-    pushPassThroughs(spans[0], p.rank, segmentExclude);
-    for (let k = 0; k < rsesBetween.length; k++) {
-      result.push(own(rsesBetween[k]));
-      pushPassThroughs(spans[k + 1], rsesBetween[k].enterRank, segmentExclude);
-    }
-    i = j;
+  if (rscStart?.section === from.section) {
+    result.push(...fillBetween(from, rscStart, rank, new Set([prevStop.station])));
   }
-
-  result.forEach((p, idx) => { p.index = idx; });
+  result.push(rsc);
+  if (rscEnd?.section === to.section) {
+    result.push(...fillBetween(rscEnd, to, rsc.enterRank, new Set([nextStop.station])));
+  }
   return result;
 }
 
-// ── Main validator ────────────────────────────────────────────────────────────
-
 export function validateLinePaths(line: Line): Owned<LinePath>[] {
-  const result: Owned<LinePath>[] = [];
-  let prevStopResultIdx = -1;
+  // Strip stale pass-throughs left over from a previous validation run
+  const inputPaths = line.paths.filter(p => !(p instanceof StationStop) || p.stops);
 
-  for (const p of line.paths) {
-    if (p.kind === 'station-stop' && !p.stops) continue;
-
-    if (p.kind === 'road-section-change') {
-      if (prevStopResultIdx >= 0) result.push(p);
-    } else {
-      if (prevStopResultIdx >= 0 && result.length === prevStopResultIdx + 1) {
-        const rsc = (result[prevStopResultIdx] as StationStop).autoInsertRSCTo(p);
-        if (rsc) result.push(rsc);
-      }
-      prevStopResultIdx = result.length;
-      result.push(p);
+  // The first stop has no prior currentPos to derive direction from, so it keeps whatever
+  // direction it had when it was created ('ascending' by default). If it's immediately followed
+  // on the same section by another stop (no RSC between), fix its direction now — otherwise
+  // buildDisplayEntries sees a direction reversal and inserts a spurious virtual U-turn.
+  const firstStopIdx = inputPaths.findIndex(p => p instanceof StationStop);
+  if (firstStopIdx >= 0 && firstStopIdx + 1 < inputPaths.length) {
+    const first = inputPaths[firstStopIdx] as LinePath as StationStop;
+    const after = inputPaths[firstStopIdx + 1];
+    if (after instanceof StationStop && after.station.parentRoadSection === first.station.parentRoadSection) {
+      const cmp = first.station.interpT.compare(after.station.interpT);
+      if (cmp !== 0) first.direction = cmp < 0 ? 'ascending' : 'descending';
     }
   }
 
-  while (result.length > 0 && result[result.length - 1].kind !== 'station-stop') result.pop();
+  let currentPos: RoadSectionPos | undefined;
+  let prevStop: StationStop | null = null;
+  const result: Owned<LinePath>[] = [];
+
+  for (const path of inputPaths) {
+    if (path instanceof StationStop) {
+      // Direction must be set before calling start()/end(), since those use it for bias.
+      if (currentPos) {
+        const cmp = currentPos.offset.compare(path.station.interpT);
+        path.direction = cmp < 0 ? 'ascending' : 'descending';
+      }
+
+      const pathStart = path.start();
+      if (currentPos && pathStart) {
+        const rank = prevStop?.rank ?? path.rank;
+        for (const fill of fillInMissingPaths(currentPos, pathStart, rank, prevStop, path)) {
+          result.push(fill);
+        }
+      }
+
+      result.push(path);
+      currentPos = path.end();
+      prevStop = path;
+
+    } else if (path instanceof RoadSectionChange) {
+      const pathStart = path.start();
+      if (currentPos && currentPos.section === pathStart?.section) {
+        const rank = prevStop?.rank ?? 0;
+        const exclude = new Set<Station>(prevStop ? [prevStop.station] : []);
+        for (const fill of fillBetween(currentPos, pathStart, rank, exclude)) {
+          result.push(fill);
+        }
+      }
+
+      result.push(path);
+      currentPos = path.end();
+    }
+  }
+
+  // Drop trailing RSCs — a valid path ends on a stop
+  while (result.length > 0 && !(result[result.length - 1] instanceof StationStop)) result.pop();
 
   result.forEach((p, i) => { p.index = i; });
-  updateStoppingStopDirections(result);
-  return insertPassThroughStops(result);
+  return result;
 }

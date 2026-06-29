@@ -1,30 +1,9 @@
-import { NodeId, RoadId, SectionId } from "@/common/types";
+import { RoadId, SectionId } from "@/common/types";
 import { QuadBezierPoints } from '../../utils/bezier';
 import { TransportationMapObject } from './types';
 import { RoadSection, SerializedRoadSection } from './road-section';
-import type { Node } from './node';
-import { MapState } from "./map-state";
 import { own, Owned } from "@/common/utils/ownership";
-
-interface SerializedConnection {
-  n: NodeId;                   // nodeId
-  p: { x: number; y: number }; // endpointPos
-  g: number;                   // groupNumber
-}
-
-export interface Connection {
-  node: Node;
-  endpointPos: Vector;
-  groupNumber: number;
-}
-
-function serializeConnection(c: Connection): SerializedConnection {
-  return { n: c.node.id, p: c.endpointPos, g: c.groupNumber };
-}
-
-function deserializeConnection(mapState: Readonly<MapState>, c: SerializedConnection): Connection {
-  return { node: mapState.getNodeHarsh(c.n), endpointPos: c.p, groupNumber: c.g };
-}
+import { Connection, deserializeConnection, serializeConnection, SerializedConnection } from "./connection";
 
 export interface SerializedRoad {
   n?: string;                                         // name

@@ -60,7 +60,7 @@ export class Node extends TransportationMapObject<NodeId> {
   }
 
   getRscEntries(): Array<{ line: Line; path: RoadSectionChange; position: Vector }> {
-    return this.mapState.getLinePaths((p): p is RoadSectionChange => p.kind === 'road-section-change' && p.node === this);
+    return this.mapState.getLinePaths((p): p is RoadSectionChange => p instanceof RoadSectionChange && p.node === this);
   }
 
   updateRscRanks(changes: Array<{ lineId: LineId; pathIndex: number; exitRank: number; enterRank: number }>): void {

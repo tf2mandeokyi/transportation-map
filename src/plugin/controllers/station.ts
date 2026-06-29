@@ -2,7 +2,7 @@ import { LineAtStationData, StationParams, StationPatch } from "@/common/message
 import { LineId, RoadSectionId, StationId } from "@/common/types";
 import { PlacingStationPluginSession } from "../sessions/placing-station";
 import { postMessageToUI } from "../figma";
-import { RoadSection } from "../models/structures";
+import { RoadSection, StationStop } from "../models/structures";
 import { findNearestRoadSection } from "../utils/snap";
 import { BaseController } from "./base";
 import { ListenerHandle } from "./listener";
@@ -222,18 +222,7 @@ export class StationController extends BaseController {
     const station = this.model.state.getStation(stationId);
     if (!station) { console.warn(`Station ${stationId} not found`); return; }
 
-    const interpTOffset = direction === 'forwards' ? 0.1 : -0.1;
-    const newInterpT = Math.max(0, Math.min(1, station.interpT + interpTOffset));
-
-    const newStation = this.model.addStation({
-      name: station.name,
-      textAlign: station.textAlign,
-      textHAlign: station.textHAlign,
-      textRotation: station.textRotation,
-      flipped: station.flipped,
-      interpT: newInterpT,
-      roadSection: station.parentRoadSection,
-    });
+    const newStation = this.model.addStation(station.createCopyProps());
 
     if (this.connectionController) {
       const linesAtStation = station.getLineStackingRanks();
@@ -258,7 +247,7 @@ export class StationController extends BaseController {
 
     for (const line of this.model.state.getLines()) {
       for (const path of line.paths) {
-        if (path.kind === 'station-stop' && path.station === sourceStation) {
+        if (path instanceof StationStop && path.station === sourceStation) {
           path.station = targetStation;
         }
       }

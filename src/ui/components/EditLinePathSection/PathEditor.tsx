@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { NodeId, RoadId, RoadSectionId, StationId } from '@/common/types';
-import { LinePathData } from '@/common/messages';
+import { DisplayEntry, LinePathData } from '@/common/messages';
 import { postMessageToPlugin } from '../../figma';
 import { useLinesContext } from '../../contexts/LinesContext';
 import { useNetworkContext } from '../../contexts/NetworkContext';
@@ -19,23 +19,24 @@ const PathEditor: React.FC = () => {
   const manager = useMessageManager();
 
   const [linePaths, setLinePaths]           = useState<LinePathData[]>([]);
-  const [stationNames, setStationNames]     = useState<Record<string, string>>({});
+  const [, setStationNames]     = useState<Record<string, string>>({});
   const [stationRoadIds, setStationRoadIds] = useState<Record<string, RoadId | null>>({});
   const [stationSectionIds, setStationSectionIds] = useState<Record<string, RoadSectionId | null>>({});
+  const [displayEntries, setDisplayEntries] = useState<DisplayEntry[]>([]);
   const [stationInsertAfterIndex, setStationInsertAfterIndex] = useState<number | null>(null);
   const [addingRseAfterPathIndex, setAddingRseAfterPathIndex] = useState<number | null>(null);
 
-  const currentLineIdRef    = useRef(currentEditingLineId);
-  const linePathsRef        = useRef<LinePathData[]>(linePaths);
-  const stationRoadIdsRef   = useRef(stationRoadIds);
+  const currentLineIdRef     = useRef(currentEditingLineId);
+  const linePathsRef         = useRef<LinePathData[]>(linePaths);
+  const stationRoadIdsRef    = useRef(stationRoadIds);
   const stationSectionIdsRef = useRef(stationSectionIds);
-  const stationsSession   = useUISession<AddingStationsUISession>();
-  const rseSession        = useUISession<AddingRseUISession>();
+  const stationsSession      = useUISession<AddingStationsUISession>();
+  const rseSession           = useUISession<AddingRseUISession>();
 
-  useEffect(() => { currentLineIdRef.current    = currentEditingLineId; }, [currentEditingLineId]);
-  useEffect(() => { linePathsRef.current        = linePaths; },           [linePaths]);
-  useEffect(() => { stationRoadIdsRef.current   = stationRoadIds; },      [stationRoadIds]);
-  useEffect(() => { stationSectionIdsRef.current = stationSectionIds; },  [stationSectionIds]);
+  useEffect(() => { currentLineIdRef.current     = currentEditingLineId; }, [currentEditingLineId]);
+  useEffect(() => { linePathsRef.current          = linePaths; },           [linePaths]);
+  useEffect(() => { stationRoadIdsRef.current     = stationRoadIds; },      [stationRoadIds]);
+  useEffect(() => { stationSectionIdsRef.current  = stationSectionIds; },   [stationSectionIds]);
 
   useEffect(() => {
     const unsub1 = manager.onMessage('line-path-data', msg => {
@@ -43,6 +44,7 @@ const PathEditor: React.FC = () => {
       setStationNames(msg.stationNames);
       setStationRoadIds(msg.stationRoadIds);
       setStationSectionIds(msg.stationSectionIds);
+      setDisplayEntries(msg.displayEntries);
     });
     const unsub2 = manager.onMessage('station-removed-from-line', () => {
       const lineId = currentLineIdRef.current;
@@ -71,7 +73,7 @@ const PathEditor: React.FC = () => {
     return { roadId: stationRoadIds[p.stationId] ?? null, sectionId: stationSectionIds[p.stationId] ?? null };
   };
 
-  // ─── Station adding ────────────────────────────────────────────────────────
+  // ─── Station adding (empty-path only) ─────────────────────────────────────
 
   const handleStartAdding = (afterPathIndex: number) => {
     if (!currentEditingLineId) return;
@@ -96,6 +98,18 @@ const PathEditor: React.FC = () => {
   const handleCancelAdding = () => {
     stationsSession.close(s => s.stop());
     setStationInsertAfterIndex(null);
+  };
+
+  // ─── Section station adding (inline, no canvas session) ───────────────────
+
+  const handleAddSectionStation = (stationId: StationId, afterPathIndex: number) => {
+    if (!currentEditingLineId) return;
+    const newStop: LinePathData = { kind: 'station-stop', stationId, direction: 'ascending' };
+    const insertAt = afterPathIndex + 1;
+    const paths = linePathsRef.current;
+    const newPaths = [...paths.slice(0, insertAt), newStop, ...paths.slice(insertAt)];
+    postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'update-path', paths: newPaths } });
+    postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
   };
 
   // ─── RSE adding ────────────────────────────────────────────────────────────
@@ -161,22 +175,26 @@ const PathEditor: React.FC = () => {
           {inactive && <InsertionButtons onAddStation={() => handleStartAdding(-1)} />}
         </div>
       ) : (
-        <PathItemsList
-          linePaths={linePaths}
-          stationNames={stationNames}
-          roads={roads}
-          inactive={inactive}
-          onRemoveStop={handleRemovePath}
-          onRemoveRse={handleRemoveRse}
-          onSelectStation={(stationId) => postMessageToPlugin({ type: 'select-station', stationId })}
-          onToggleStops={handleToggleStops}
-          onStartAddingStation={handleStartAdding}
-          onStartAddingRse={startRseMode}
-        />
+        <div>
+          {inactive && <InsertionButtons onAddStation={() => handleStartAdding(-1)} />}
+          <PathItemsList
+            displayEntries={displayEntries}
+            inactive={inactive}
+            onRemoveStop={handleRemovePath}
+            onRemoveRse={handleRemoveRse}
+            onSelectStation={(stationId) => postMessageToPlugin({ type: 'select-station', stationId })}
+            onToggleStops={handleToggleStops}
+            onAddSectionStation={handleAddSectionStation}
+            onStartAddingRse={startRseMode}
+          />
+          {inactive && <InsertionButtons onAddStation={() => handleStartAdding(linePaths.length - 1)} />}
+        </div>
       )}
 
       {stationInsertAfterIndex !== null && (
         <StationAddingPanel
+          currentRoadId={getSourceAt(stationInsertAfterIndex).roadId}
+          stationRoadIds={stationRoadIds}
           onFinish={handleFinishAdding}
           onCancel={handleCancelAdding}
         />

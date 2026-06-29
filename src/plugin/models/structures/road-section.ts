@@ -3,7 +3,7 @@ import type { Road } from './road';
 import type { Station } from './station';
 import { TransportationMapObject } from "./types";
 import { Line } from "./line";
-import { RoadSectionChange } from "./line-path";
+import { RoadSectionChange, StationStop } from "./line-path";
 import { SECTION_GAP, sectionBandWidth } from "@/plugin/utils/constants";
 
 // A single directed pass of a line through a section.
@@ -93,7 +93,7 @@ export class RoadSection extends TransportationMapObject<SectionId> {
       const passes: Array<LinePass & { rank: number }> = [];
       for (const line of this.mapState.getLines()) {
         for (const p of line.paths) {
-          if (p.kind === 'station-stop' && p.station === referenceStation) {
+          if (p instanceof StationStop && p.station === referenceStation) {
             passes.push({ line, segmentIndex: p.index, rank: p.rank });
           }
         }
