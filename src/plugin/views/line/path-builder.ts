@@ -131,7 +131,7 @@ export function buildSegmentPath(
   if (startStation === endStation) {
     const centerline = startRoad.computeBezier();
     if (!centerline) return fallback;
-    const tangent = centerline.evalTangent(startT);
+    const tangent = centerline.evalTangent(startStop.start()!.offset);
     const tlen = Math.hypot(tangent.x, tangent.y);
     if (tlen < 0.001) return fallback;
     const chord = Math.hypot(tailCanvas.x - headCanvas.x, tailCanvas.y - headCanvas.y);
