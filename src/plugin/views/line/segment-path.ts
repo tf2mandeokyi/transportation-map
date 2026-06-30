@@ -69,22 +69,12 @@ export function computeCrossingSeg(
 }
 
 export function computeSectionSegs(
-  line: Line, road: Road, section: RoadSection,
+  road: Road,
   t1: OffsetT, t2: OffsetT,
-  departureStation?: Station,
-  arrivalStation?: Station,
-  depPathSegIdx?: number,
-  arrPathSegIdx?: number,
-  depRank?: number,
-  arrRank?: number,
+  offsetDep: number, offsetArr: number,
 ): CubicBezierPoints[] {
   const centerline = road.computeBezier();
   if (!centerline) return [];
-
-  const offsetDep = computeTotalOffset(line, section, departureStation, depPathSegIdx, depRank);
-  const offsetArr = arrivalStation === undefined
-    ? (arrRank !== undefined ? computeTotalOffset(line, section, undefined, undefined, arrRank) : offsetDep)
-    : computeTotalOffset(line, section, arrivalStation, arrPathSegIdx, arrRank);
 
   const backward = t1.compare(t2) > 0;
   const directedDep = backward ? -offsetDep : offsetDep;

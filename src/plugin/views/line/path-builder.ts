@@ -22,15 +22,12 @@ type RoadTraversal = {
   section: RoadSection | null;
   entryT: OffsetT;
   exitT: OffsetT;
-  depStation: Station | undefined;
-  arrStation: Station | undefined;
-  depPathSegIdx: number | undefined;
-  arrPathSegIdx: number | undefined;
-  depRank: number | undefined;
-  arrRank: number | undefined;
+  offsetDep: number;
+  offsetArr: number;
 };
 
 function buildTraversals(
+  line: Line,
   rseBetween: RoadSectionChange[],
   startStop: LinePath,
   endStop: LinePath,
@@ -51,30 +48,23 @@ function buildTraversals(
     section: startSection,
     entryT: startT,
     exitT: firstRsc.node === startRoad.endpoints[1].node ? new OffsetT(1, 'negative') : new OffsetT(0, 'positive'),
-    depStation: startStation,
-    arrStation: undefined,
-    depPathSegIdx: startStop.index,
-    arrPathSegIdx: undefined,
-    depRank: undefined,
-    arrRank: firstRsc.exitRank,
+    offsetDep: computeTotalOffset(line, startSection, startStation, startStop.index),
+    offsetArr: computeTotalOffset(line, startSection, undefined, undefined, firstRsc.exitRank),
   });
 
   for (let k = 0; k < rseBetween.length - 1; k++) {
     const rsc     = rseBetween[k];
     const nextRsc = rseBetween[k + 1];
     if (!rsc.entering) return traversals;
-    const road = rsc.entering.section.parentRoad;
+    const road    = rsc.entering.section.parentRoad;
+    const section = rsc.entering.section;
     traversals.push({
       road,
-      section: rsc.entering.section,
+      section,
       entryT: rsc.node === road.endpoints[0].node ? new OffsetT(0, 'positive') : new OffsetT(1, 'negative'),
       exitT:  nextRsc.node === road.endpoints[1].node ? new OffsetT(1, 'negative') : new OffsetT(0, 'positive'),
-      depStation: undefined,
-      arrStation: undefined,
-      depPathSegIdx: undefined,
-      arrPathSegIdx: undefined,
-      depRank: rsc.enterRank,
-      arrRank: nextRsc.exitRank,
+      offsetDep: computeTotalOffset(line, section, undefined, undefined, rsc.enterRank),
+      offsetArr: computeTotalOffset(line, section, undefined, undefined, nextRsc.exitRank),
     });
   }
 
@@ -89,12 +79,8 @@ function buildTraversals(
     section: endSection,
     entryT: lastRsc.node === lastRoad.endpoints[0].node ? new OffsetT(0, 'positive') : new OffsetT(1, 'negative'),
     exitT: endT,
-    depStation: undefined,
-    arrStation: endStation,
-    depPathSegIdx: undefined,
-    arrPathSegIdx: endStop.index,
-    depRank: isUTurnRsc ? (endStop as StationStop).rank : lastRsc.enterRank,
-    arrRank: undefined,
+    offsetDep: computeTotalOffset(line, endSection, undefined, undefined, isUTurnRsc ? (endStop as StationStop).rank : lastRsc.enterRank),
+    offsetArr: computeTotalOffset(line, endSection, endStation, endStop.index),
   });
 
   return traversals;
@@ -149,7 +135,9 @@ export function buildSegmentPath(
 
   if (rseBetween.length === 0) {
     if (startSection === endSection) {
-      const segs = computeSectionSegs(line, startRoad, startSection, startT, endT, startStation, endStation, startStop.index, endStop.index, depRankOverride, arrRankOverride);
+      const offsetDep = computeTotalOffset(line, startSection, startStation, startStop.index, depRankOverride);
+      const offsetArr = computeTotalOffset(line, endSection,   endStation,   endStop.index,   arrRankOverride);
+      const segs = computeSectionSegs(startRoad, startT, endT, offsetDep, offsetArr);
       return segs.length === 0 ? fallback : new PathBuilder().beziers(segs).build();
     }
     // Different sections on the same road — single crossing segment.
@@ -162,11 +150,11 @@ export function buildSegmentPath(
   }
 
   // Multi-road path.
-  const traversals = buildTraversals(rseBetween, startStop, endStop);
+  const traversals = buildTraversals(line, rseBetween, startStop, endStop);
   const entries: CubicBezierPoints[][] = [];
   for (const tr of traversals) {
     if (tr.section === null) continue;
-    const segs = computeSectionSegs(line, tr.road, tr.section, tr.entryT, tr.exitT, tr.depStation, tr.arrStation, tr.depPathSegIdx, tr.arrPathSegIdx, tr.depRank, tr.arrRank);
+    const segs = computeSectionSegs(tr.road, tr.entryT, tr.exitT, tr.offsetDep, tr.offsetArr);
     if (segs.length > 0) entries.push(segs);
   }
 
