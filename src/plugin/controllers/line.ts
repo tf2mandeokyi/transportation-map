@@ -1,6 +1,5 @@
 import { LineId } from "@/common/types";
 import { LinePatch, LinePathData } from "@/common/messages";
-import { LinePath } from "../models/structures/line-path";
 import { postMessageToUI } from "../figma";
 import { BaseController } from "./base";
 import { UIMessageRouter } from "./router";
@@ -90,7 +89,7 @@ export class LineController extends BaseController {
     const rotated = [
       ...line.paths.slice(normalized),
       ...line.paths.slice(0, normalized),
-    ].map(p => LinePath.toData(p));
+    ].map(p => p.toData());
 
     line.replacePaths(rotated);
     await this.render();

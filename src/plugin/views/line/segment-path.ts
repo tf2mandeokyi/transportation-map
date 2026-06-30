@@ -81,10 +81,10 @@ export function computeSectionSegs(
   const centerline = road.computeBezier();
   if (!centerline) return [];
 
-  const offsetDep = computeTotalOffset(line, section, departureStation, depPathSegIdx, departureStation === undefined ? depRank : undefined);
+  const offsetDep = computeTotalOffset(line, section, departureStation, depPathSegIdx, depRank);
   const offsetArr = arrivalStation === undefined
     ? (arrRank !== undefined ? computeTotalOffset(line, section, undefined, undefined, arrRank) : offsetDep)
-    : computeTotalOffset(line, section, arrivalStation, arrPathSegIdx);
+    : computeTotalOffset(line, section, arrivalStation, arrPathSegIdx, arrRank);
 
   const backward = t1.compare(t2) > 0;
   const directedDep = backward ? -offsetDep : offsetDep;

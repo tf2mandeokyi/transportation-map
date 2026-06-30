@@ -142,16 +142,21 @@ export function buildSegmentPath(
     return new PathBuilder().moveTo(headCanvas).cubicTo(p1, p2, tailCanvas).build();
   }
 
+  const startSS = startStop instanceof StationStop ? startStop : null;
+  const endSS   = endStop   instanceof StationStop ? endStop   : null;
+  const depRankOverride = startSS && !startSS.stops ? startSS.rank : undefined;
+  const arrRankOverride = endSS   && !endSS.stops   ? endSS.rank   : undefined;
+
   if (rseBetween.length === 0) {
     if (startSection === endSection) {
-      const segs = computeSectionSegs(line, startRoad, startSection, startT, endT, startStation, endStation, startStop.index, endStop.index);
+      const segs = computeSectionSegs(line, startRoad, startSection, startT, endT, startStation, endStation, startStop.index, endStop.index, depRankOverride, arrRankOverride);
       return segs.length === 0 ? fallback : new PathBuilder().beziers(segs).build();
     }
     // Different sections on the same road — single crossing segment.
     const centerline = startRoad.computeBezier();
     if (!centerline) return fallback;
-    const offsetDep = computeTotalOffset(line, startSection, startStation, startStop.index);
-    const offsetArr = computeTotalOffset(line, endSection,   endStation,   endStop.index);
+    const offsetDep = computeTotalOffset(line, startSection, startStation, startStop.index, depRankOverride);
+    const offsetArr = computeTotalOffset(line, endSection,   endStation,   endStop.index,   arrRankOverride);
     const seg = computeCrossingSeg(centerline, startT, endT, offsetDep, offsetArr);
     return new PathBuilder().beziers([seg]).build();
   }

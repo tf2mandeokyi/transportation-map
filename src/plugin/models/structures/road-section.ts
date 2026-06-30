@@ -10,6 +10,7 @@ import { SECTION_GAP, sectionBandWidth } from "@/plugin/utils/constants";
 export type LinePass = {
   line: Line;
   segmentIndex: number;    // path index of the station-stop entry at the reference station
+  stops: boolean;
 };
 
 export interface SerializedRoadSection {
@@ -62,7 +63,7 @@ export class RoadSection extends TransportationMapObject<SectionId> {
   
   getMaxStationStopCount(): number {
     if (this.stations.length === 0) return 0;
-    return Math.max(...this.stations.map(s => this.getLines(s).length));
+    return Math.max(...this.stations.map(s => this.getLines(s).filter(lp => lp.stops).length));
   }
 
   getWidth(): number {
@@ -94,7 +95,7 @@ export class RoadSection extends TransportationMapObject<SectionId> {
       for (const line of this.mapState.getLines()) {
         for (const p of line.paths) {
           if (p instanceof StationStop && p.station === referenceStation) {
-            passes.push({ line, segmentIndex: p.index, rank: p.rank });
+            passes.push({ line, segmentIndex: p.index, rank: p.rank, stops: p.stops });
           }
         }
       }
@@ -110,7 +111,7 @@ export class RoadSection extends TransportationMapObject<SectionId> {
     for (const line of this.mapState.getLines()) {
       const count = line.countPassesOnSection(this);
       for (let i = 0; i < count; i++) {
-        allPasses.push({ line, segmentIndex: -1 });
+        allPasses.push({ line, segmentIndex: -1, stops: true });
       }
     }
     return allPasses;

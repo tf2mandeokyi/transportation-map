@@ -1,99 +1,7 @@
-import { PathBuilder } from './path';
-import { OffsetT, assertValidBiasPair } from './offset-t';
-
-function lerp(a: Vector, b: Vector, t: number): Vector {
-  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-}
-
-function normalize(v: Vector): Vector {
-  const len = Math.hypot(v.x, v.y);
-  return len < 0.001 ? { x: 1, y: 0 } : { x: v.x / len, y: v.y / len };
-}
-
-function perp(v: Vector): Vector {
-  return { x: -v.y, y: v.x };
-}
-
-export abstract class BezierPoints<T extends BezierPoints<T>> {
-  abstract eval(t: number): Vector;
-  protected abstract evalTangentAt(t: number): Vector;
-  abstract split(t: number): { left: T; right: T };
-  abstract sub(t1: OffsetT, t2: OffsetT): T;
-
-  evalTangent(t: number): Vector;
-  evalTangent(t: OffsetT): Vector;
-  evalTangent(t: number | OffsetT): Vector {
-    if (t instanceof OffsetT) return t.evalBezierTangent(this);
-    return this.evalTangentAt(t);
-  }
-
-  subForward(t1: number, t2: number): T {  // public so OffsetT.subBezierForward can call it
-    const { left } = this.split(t2);
-    const t1r = t2 > 0.0001 ? t1 / t2 : 0;
-    const { right } = left.split(t1r);
-    return right;
-  }
-}
-
-// Quadratic bezier — stored in Road.bezierMidPoint.
-// p1 is the single control point; the curve passes through p0 and p2.
-export class QuadBezierPoints extends BezierPoints<QuadBezierPoints> {
-  p0: Vector;
-  p1: Vector;
-  p2: Vector;
-
-  constructor(p0: Vector, p1: Vector, p2: Vector) {
-    super();
-    this.p0 = p0;
-    this.p1 = p1;
-    this.p2 = p2;
-  }
-
-  eval(t: number): Vector {
-    const u = 1 - t;
-    return {
-      x: u * u * this.p0.x + 2 * u * t * this.p1.x + t * t * this.p2.x,
-      y: u * u * this.p0.y + 2 * u * t * this.p1.y + t * t * this.p2.y,
-    };
-  }
-
-  protected evalTangentAt(t: number): Vector {
-    const u = 1 - t;
-    return {
-      x: 2 * (u * (this.p1.x - this.p0.x) + t * (this.p2.x - this.p1.x)),
-      y: 2 * (u * (this.p1.y - this.p0.y) + t * (this.p2.y - this.p1.y)),
-    };
-  }
-
-  split(t: number): { left: QuadBezierPoints; right: QuadBezierPoints } {
-    const p01  = lerp(this.p0, this.p1, t);
-    const p12  = lerp(this.p1, this.p2, t);
-    const p012 = lerp(p01, p12, t);
-    return {
-      left:  new QuadBezierPoints(this.p0, p01,  p012 ),
-      right: new QuadBezierPoints(p012, p12, this.p2 ),
-    };
-  }
-
-  sub(t1: OffsetT, t2: OffsetT): QuadBezierPoints {
-    assertValidBiasPair(t1, t2);
-    if (t1.compare(t2) > 0) {
-      const s = t2.subBezierForward(this, t1);
-      return new QuadBezierPoints(s.p2, s.p1, s.p0);
-    }
-    return t1.subBezierForward(this, t2);
-  }
-
-  // Exact, lossless conversion: the resulting cubic traces the identical curve.
-  elevateToCubic(): CubicBezierPoints {
-    return new CubicBezierPoints(
-      this.p0,
-      { x: this.p0.x / 3 + 2 * this.p1.x / 3, y: this.p0.y / 3 + 2 * this.p1.y / 3 },
-      { x: 2 * this.p1.x / 3 + this.p2.x / 3, y: 2 * this.p1.y / 3 + this.p2.y / 3 },
-      this.p2
-    );
-  }
-}
+import { assertValidBiasPair, OffsetT } from "../offset-t";
+import { PathBuilder } from "../path";
+import { BezierPoints } from "./base";
+import { lerp, normalize, perp } from "../math";
 
 // Cubic bezier — used for offset computation and SVG path output.
 // A quadratic can be losslessly elevated to cubic via elevateToCubic().
@@ -167,6 +75,7 @@ export class CubicBezierPoints extends BezierPoints<CubicBezierPoints> {
     return t1.subBezierForward(this, t2);
   }
 }
+
 
 function offsetApproxError(original: CubicBezierPoints, approx: CubicBezierPoints, offset: number): number {
   let maxErr = 0;

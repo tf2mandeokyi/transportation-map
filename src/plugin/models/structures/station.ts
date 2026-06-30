@@ -94,12 +94,12 @@ export class Station extends TransportationMapObject<StationId> {
     };
   }
 
-  getLineStackingRanks(): Array<{ line: Line; pathIndex: number; rank: number }> {
-    const stops: Array<{ path: StationStop; line: Line; pathIndex: number; rank: number }> = [];
+  getLineStackingRanks(): Array<{ line: Line; pathIndex: number; rank: number, stops: boolean }> {
+    const stops: Array<{ path: StationStop; line: Line; pathIndex: number; rank: number, stops: boolean }> = [];
     for (const line of this.mapState.getLines()) {
       for (const [index, p] of line.paths.entries()) {
-        if (p instanceof StationStop && p.station === this && p.stops) {
-          stops.push({ path: p, line, pathIndex: index, rank: p.rank });
+        if (p instanceof StationStop && p.station === this) {
+          stops.push({ path: p, line, pathIndex: index, rank: p.rank, stops: p.stops });
         }
       }
     }
@@ -109,7 +109,7 @@ export class Station extends TransportationMapObject<StationId> {
       return a.pathIndex - b.pathIndex;
     });
     stops.forEach(({ path }, i) => { path.rank = i; });
-    return stops.map(({ line, pathIndex, rank }) => ({ line, pathIndex, rank }));
+    return stops.map(({ line, pathIndex, rank, stops }) => ({ line, pathIndex, rank, stops  }));
   }
 
   getStopsAcrossLines(): Array<{ line: Line; path: StationStop; position: Vector }> {

@@ -23,7 +23,8 @@ describe('normalize → serialize → deserialize round-trip', () => {
         const p = line.paths[i];
         const p2 = line2.paths[i];
         if (p instanceof StationStop && p2 instanceof StationStop) {
-          expect(p2.rank, `line "${line.id}" path ${i} station stop rank`).toBe(p.rank);
+          expect(p2.rank,  `line "${line.id}" path ${i} station stop rank`).toBe(p.rank);
+          expect(p2.stops, `line "${line.id}" path ${i} station stop stops`).toBe(p.stops);
         } else if (p instanceof RoadSectionChange && p2 instanceof RoadSectionChange) {
           expect(p2.enterRank, `line "${line.id}" path ${i} enterRank`).toBe(p.enterRank);
           expect(p2.exitRank,  `line "${line.id}" path ${i} exitRank`).toBe(p.exitRank);

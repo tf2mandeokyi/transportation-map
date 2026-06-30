@@ -7,6 +7,8 @@ import { RoadSection } from "./road-section";
 import { Owned } from "@/common/utils/ownership";
 import { LinePath } from "./line-path";
 import { PathEntry } from "@/plugin/utils/path-entry";
+import { distSq } from "@/plugin/utils/math";
+import { SnapResult } from "@/plugin/utils/snap";
 
 export class MapState {
   private readonly nodes: Map<NodeId, Owned<Node>> = new Map();
@@ -105,4 +107,30 @@ export class MapState {
     }
     return entries.map(e => ({ line: e.line, path: e.path, position: e.computePosition() }));
   }
+
+  findNearestRoadSection(point: Vector): SnapResult | null {
+    let best: SnapResult | null = null;
+    let bestDist = Infinity;
+
+    for (const road of this.getRoads()) {
+      const bezier = road.computeBezier();
+      if (!bezier) continue;
+      const sections = [...road.getSections()];
+      if (sections.length === 0) continue;
+
+      const t = bezier.nearestT(point);
+
+      for (const section of sections) {
+        const pos = bezier.sectionPosAt(t, section.computeOffset());
+        const d = distSq(pos, point);
+        if (d < bestDist) {
+          bestDist = d;
+          best = { section, interpT: t, pos };
+        }
+      }
+    }
+
+    return best;
+  }
+
 }

@@ -1,7 +1,7 @@
 import { LineId } from "@/common/types";
 import { LinePathData } from "@/common/messages";
 import { MapState } from './map-state';
-import { LinePath, RoadSectionChange, SerializedLinePath, StationStop } from './line-path';
+import { LinePath, RoadSectionChange, SerializedLinePath, StationStop, linePathFromData, linePathDeserialize } from './line-path';
 import { validateLinePaths } from '../../utils/line-validator';
 import { TransportationMapObject } from "./types";
 import { Owned } from "@/common/utils/ownership";
@@ -46,7 +46,7 @@ export class Line extends TransportationMapObject<LineId> {
     this.name = ser.n;
     this.color = ser.c;
     this.isCircular = ser.l;
-    this.paths = (ser.p ?? []).map(p => LinePath.deserialize(this.mapState, p));
+    this.paths = (ser.p ?? []).map(p => linePathDeserialize(this.mapState, p));
     this.figmaGroupId = ser.g ?? null;
     return this;
   }
@@ -66,7 +66,7 @@ export class Line extends TransportationMapObject<LineId> {
   }
 
   addPath(path: LinePathData): void {
-    this.paths.push(LinePath.fromData(this.mapState, path));
+    this.paths.push(linePathFromData(this.mapState, path));
     this.paths = validateLinePaths(this);
   }
 
@@ -74,7 +74,7 @@ export class Line extends TransportationMapObject<LineId> {
     const newPaths: Owned<LinePath>[] = [];
     for (let i = 0; i < paths.length; i++) {
       const p = paths[i];
-      const linePath = LinePath.fromData(this.mapState, p);
+      const linePath = linePathFromData(this.mapState, p);
       linePath.index = i;
       newPaths.push(linePath);
     }

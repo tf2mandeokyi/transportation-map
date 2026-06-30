@@ -1,7 +1,7 @@
 import { LineId, RoadId, RoadSectionId, StationId } from "@/common/types";
 import { LinePathData } from "@/common/messages";
 import { AddingStationsPluginSession } from "../sessions/adding-stations";
-import { LinePath, Station, StationStop } from "../models/structures";
+import { Station, StationStop } from "../models/structures";
 import { postMessageToUI } from "../figma";
 import { buildDisplayEntries } from "../utils/display-entries";
 import { BaseController } from "./base";
@@ -39,7 +39,7 @@ export class ConnectionController extends BaseController {
 
     const displayEntries = buildDisplayEntries(line.paths);
 
-    postMessageToUI({ type: 'line-path-data', lineId, paths: line.paths.map(p => LinePath.toData(p)), stationNames, stationRoadIds, stationSectionIds, displayEntries });
+    postMessageToUI({ type: 'line-path-data', lineId, paths: line.paths.map(p => p.toData()), stationNames, stationRoadIds, stationSectionIds, displayEntries });
   }
 
   public insertStationIntoLine(lineId: LineId, newStation: Station, relativeToStation: Station, insertAfter: boolean): boolean {
@@ -52,8 +52,8 @@ export class ConnectionController extends BaseController {
     const insertAt = insertAfter ? refIndex + 1 : refIndex;
     const newStop: LinePathData = { kind: 'station-stop', stationId: newStation.id, direction: 'ascending' };
 
-    const before = line.paths.slice(0, insertAt).map(p => LinePath.toData(p));
-    const after  = line.paths.slice(insertAt).map(p => LinePath.toData(p));
+    const before = line.paths.slice(0, insertAt).map(p => p.toData());
+    const after  = line.paths.slice(insertAt).map(p => p.toData());
     line.replacePaths([...before, newStop, ...after]);
 
     return true;

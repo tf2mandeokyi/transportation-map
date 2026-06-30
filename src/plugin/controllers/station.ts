@@ -3,7 +3,6 @@ import { LineId, RoadSectionId, StationId } from "@/common/types";
 import { PlacingStationPluginSession } from "../sessions/placing-station";
 import { postMessageToUI } from "../figma";
 import { RoadSection, StationStop } from "../models/structures";
-import { findNearestRoadSection } from "../utils/snap";
 import { BaseController } from "./base";
 import { ListenerHandle } from "./listener";
 import { UIMessageRouter } from "./router";
@@ -66,7 +65,7 @@ export class StationController extends BaseController {
     preview.name = '_station-placing-preview';
     figma.currentPage.appendChild(preview);
 
-    const initialSnap = findNearestRoadSection(center, this.model.state);
+    const initialSnap = this.model.state.findNearestRoadSection(center);
     if (initialSnap) {
       preview.x = initialSnap.pos.x - PREVIEW_SIZE / 2;
       preview.y = initialSnap.pos.y - PREVIEW_SIZE / 2;
@@ -88,7 +87,7 @@ export class StationController extends BaseController {
       const h = handleNode as EllipseNode;
       const handleCenter = { x: h.x + h.width / 2, y: h.y + h.height / 2 };
 
-      const snap = findNearestRoadSection(handleCenter, this.model.state);
+      const snap = this.model.state.findNearestRoadSection(handleCenter);
       if (!snap) return;
 
       const previewNode = await figma.getNodeByIdAsync(previewId);

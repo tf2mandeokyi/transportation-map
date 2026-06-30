@@ -1,4 +1,4 @@
-import { Line, LinePath, MapState, RoadSectionChange } from "../../models/structures";
+import { Line, LinePath, MapState, RoadSectionChange, StationStop } from "../../models/structures";
 import { StationRenderer } from "../station";
 import { hexToRgb } from "@/common/utils/color";
 import { SegmentResult } from "./segment-path";
@@ -6,7 +6,7 @@ import { isInvalidJump, buildSegmentPath } from "./path-builder";
 import { createDashedLine, bezierPathToSegments } from "./segment-nodes";
 
 function collectStops(line: Line): LinePath[] {
-  return line.paths.filter(p => p.renderStop() !== null);
+  return line.paths.filter(p => p instanceof StationStop);
 }
 
 async function cleanupOldLineGroup(line: Line): Promise<void> {

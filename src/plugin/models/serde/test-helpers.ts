@@ -12,7 +12,6 @@ export function initState(json: string): MapState {
   if (!deserializeMapState(json, s)) throw new Error('Failed to deserialize');
   for (const line of s.getLines()) line.paths = validateLinePaths(line);
   s.normalize();
-  for (const line of s.getLines()) line.paths = validateLinePaths(line);
   return s;
 }
 

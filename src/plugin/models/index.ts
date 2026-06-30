@@ -215,7 +215,6 @@ export class Model {
     model.validateRoadSections();
     model.validateAllLinePaths();
     model.state.normalize();
-    model.validateAllLinePaths();
     return model;
   }
 }
