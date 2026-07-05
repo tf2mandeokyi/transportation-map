@@ -34,12 +34,12 @@ export class View {
           .catch(ErrorChain.thrower(`Error rendering line ${line.name}`))
       ));
 
-      // 4. Move line segments behind stations
-      await this.lineSegmentRenderer.moveSegmentsToBack(state);
-
-      // 5. Move all road infrastructure (roads, junctions, node markers) to the very back
-      //    so they sit below line segments and stations.
-      RoadRenderer.moveAllToBack();
+      // 4. Bring every plugin-rendered layer to the front of the page's z-order, in
+      //    bottom-to-top order, so all plugin objects sit above any non-plugin content
+      //    and the internal stacking is: roads < junctions < node markers < line segments < stations.
+      RoadRenderer.bringInfraToFront();
+      await this.lineSegmentRenderer.bringSegmentsToFront(state);
+      await this.stationRenderer.bringStationsToFront(state);
     } finally {
       this.isRendering = false;
     }

@@ -1,6 +1,6 @@
 import { Line } from "../../models/structures/line";
 import { Station } from "../../models/structures/station";
-import { RoadSection } from "../../models/structures";
+import { MapState, RoadSection } from "../../models/structures";
 import { renderStation, renderStationLine } from "../../figmls";
 import { computeStationTangentAngle } from "./position";
 import { getLinesForStation } from "./layout";
@@ -138,5 +138,19 @@ export class StationRenderer {
 
   public clearConnectionPoints(): void {
     this.lineConnectionPoints.clear();
+  }
+
+  // Re-appending each station frame moves it to the top of the page's z-order,
+  // above the road infrastructure and line segments brought to front just before this runs.
+  public async bringStationsToFront(state: Readonly<MapState>): Promise<void> {
+    for (const station of state.getStations()) {
+      if (!station.figmaNodeId) continue;
+      try {
+        const frame = await figma.getNodeByIdAsync(station.figmaNodeId);
+        if (frame && !frame.removed && frame.parent && 'appendChild' in frame.parent) {
+          frame.parent.appendChild(frame as SceneNode);
+        }
+      } catch {}
+    }
   }
 }

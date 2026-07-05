@@ -6,9 +6,13 @@ import { FIGMA_KEY_NODE_ID, FIGMA_KEY_IS_NODE_MARKER, FIGMA_KEY_ROAD_ID, FIGMA_K
 // Legacy group name kept so old renders from previous sessions can be cleaned up.
 const ROAD_NETWORK_GROUP_NAME = '_road-network';
 
-function pushToBack(children: readonly SceneNode[], predicate: (c: SceneNode) => boolean): void {
+// Re-appending a child moves it to the very top of the page's z-order, above
+// everything else (including non-plugin content). Calling this in bottom-to-top
+// order for each layer therefore both fixes the relative order *and* guarantees
+// all plugin layers end up above any non-plugin objects on the page.
+function bringToFront(children: readonly SceneNode[], predicate: (c: SceneNode) => boolean): void {
   for (const child of children) {
-    if (!child.removed && predicate(child)) figma.currentPage.insertChild(0, child);
+    if (!child.removed && predicate(child)) figma.currentPage.appendChild(child);
   }
 }
 
@@ -39,19 +43,23 @@ export class RoadRenderer {
     }
   }
 
-  // Pushes all road infrastructure (roads, junctions, node markers) to the back of the
-  // page z-order so lines and stations appear on top.
-  // Call after moveSegmentsToBack so the final stacking is:
+  // Brings road infrastructure (roads, junctions, node markers) to the front of the
+  // page z-order, in that relative order. Call before LineRenderer/StationRenderer's
+  // own front-ordering so the final stacking (bottom to top) is:
   //   roads < junctions < node markers < line segments < stations
-  public static moveAllToBack(): void {
+  // and all of it ends up above any non-plugin content on the page.
+  public static bringInfraToFront(): void {
     const children = [...figma.currentPage.children];
-    // Push node markers first — they end up above junctions once junctions are pushed.
-    pushToBack(children, c => c.getPluginData(FIGMA_KEY_IS_NODE_MARKER) === 'true');
-    pushToBack(children, c => c.type === 'FRAME'   && c.getPluginData(FIGMA_KEY_NODE_ID) !== '');
-    pushToBack(children, c =>
+    bringToFront(children, c =>
       c.getPluginData(FIGMA_KEY_ROAD_ID) !== '' &&
       c.getPluginData(FIGMA_KEY_IS_ROAD_CONTROL) !== 'true'
     );
+    bringToFront(children, c =>
+      c.type === 'FRAME' &&
+      c.getPluginData(FIGMA_KEY_NODE_ID) !== '' &&
+      c.getPluginData(FIGMA_KEY_IS_NODE_MARKER) !== 'true'
+    );
+    bringToFront(children, c => c.getPluginData(FIGMA_KEY_IS_NODE_MARKER) === 'true');
   }
 
   private static async clearPrevious(): Promise<void> {

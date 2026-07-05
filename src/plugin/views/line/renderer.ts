@@ -102,14 +102,16 @@ export class LineRenderer {
     return { ...bezierPathToSegments(pathData, color), kind: 'normal' };
   }
 
-  public async moveSegmentsToBack(state: Readonly<MapState>): Promise<void> {
+  // Re-appending each line group moves it to the top of its parent's z-order,
+  // above the road infrastructure brought to front just before this runs.
+  public async bringSegmentsToFront(state: Readonly<MapState>): Promise<void> {
     for (const line of state.getLines()) {
       if (!line.figmaGroupId) continue;
       try {
         const lineGroup = await figma.getNodeByIdAsync(line.figmaGroupId);
         if (lineGroup && !lineGroup.removed) {
           const parent = lineGroup.parent;
-          if (parent && 'insertChild' in parent) parent.insertChild(0, lineGroup as SceneNode);
+          if (parent && 'appendChild' in parent) parent.appendChild(lineGroup as SceneNode);
         }
       } catch {}
     }
