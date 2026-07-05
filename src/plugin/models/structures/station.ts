@@ -74,13 +74,19 @@ export class Station extends TransportationMapObject<StationId> {
     };
   }
 
-  makePassThroughStop(rank: number, direction: 'ascending' | 'descending'): Owned<StationStop> {
+  // Builds a stop at this station traveling in `direction`. `stops` defaults to true
+  // (a real, user-authored stop); pass-throughs are built via makePassThroughStop.
+  generateStop(direction: 'ascending' | 'descending', rank = 0, stops = true): Owned<StationStop> {
     const ss = new StationStop();
     ss.station = this;
     ss.rank = rank;
-    ss.stops = false;
+    ss.stops = stops;
     ss.direction = direction;
     return own(ss);
+  }
+
+  makePassThroughStop(rank: number, direction: 'ascending' | 'descending'): Owned<StationStop> {
+    return this.generateStop(direction, rank, false);
   }
 
   serialize(): SerializedStation {

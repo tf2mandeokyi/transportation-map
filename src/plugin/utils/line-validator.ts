@@ -1,53 +1,53 @@
-import { Line, RoadSectionChange, Station, StationStop } from "../models/structures";
+import { Line, RoadSectionChange, StationStop } from "../models/structures";
 import { Owned, own } from "@/common/utils/ownership";
 import { LinePath, RoadSectionPos } from "../models/structures/line-path";
+import { OffsetT } from "./offset-t";
 
-// Returns stations on `section` that lie strictly between from and to (in travel order),
-// excluding any station in `exclude`.
+// Returns pass-through stops for every station on `from.section` that lies strictly
+// between `from` and `to` (in travel order implied by `from.compare(to)`).
+//
+// `from` carries a directional bias (it's always some stop's biased start()/end(), or
+// a junction-crossing offset), while `to` is always a station's raw (zero-bias) offset.
+// That asymmetry is deliberate: when the line reverses direction right at a station —
+// a virtual U-turn — `from` is biased to the side the line just departed on, but the
+// station's own raw offset sits exactly at that value with no bias. The bias-aware
+// `compare()` then treats the raw offset as lying just on the "before" side of `from`,
+// so that same station is picked up again here as a passing stop for the new direction.
+// This is how a U-turn's turnaround station ends up duplicated (once as the real stop,
+// once as a pass-through immediately after) without any special-cased pivot detection.
 function fillBetween(
   from: RoadSectionPos,
-  to: RoadSectionPos,
+  to: OffsetT,
   rank: number,
-  exclude: Set<Station>,
   savedPassRanks?: Map<string, number>,
 ): StationStop[] {
-  if (from.section !== to.section) return [];
-  const ascending = from.offset.compare(to.offset) < 0;
+  const ascending = from.offset.compare(to) < 0;
   const dir: 'ascending' | 'descending' = ascending ? 'ascending' : 'descending';
   return from.section.stations
-    .filter(st => {
-      if (exclude.has(st)) return false;
-      // Station is strictly between from and to using bias-aware comparison.
-      return ascending
-        ? from.offset.compare(st.interpT) < 0 && st.interpT.compare(to.offset) < 0
-        : from.offset.compare(st.interpT) > 0 && st.interpT.compare(to.offset) > 0;
-    })
+    .filter(st => ascending
+      ? from.offset.compare(st.interpT) < 0 && st.interpT.compare(to) < 0
+      : from.offset.compare(st.interpT) > 0 && st.interpT.compare(to) > 0)
     .sort((a, b) => ascending ? a.interpT.compare(b.interpT) : b.interpT.compare(a.interpT))
     .map(st => st.makePassThroughStop(savedPassRanks?.get(`${st.id}:${dir}`) ?? rank, dir));
 }
 
-// Fills missing entries between currentPos and stop.start():
-//   - pass-through stops when on the same section
+// Fills missing entries between currentPos and the upcoming stop:
+//   - pass-through stops (via fillBetween) when on the same section
 //   - auto-inserted RSC + surrounding pass-throughs when sections differ
 function fillInMissingPaths(
   from: RoadSectionPos,
-  to: RoadSectionPos,
+  to: StationStop,
   rank: number,
   prevStop: StationStop | null,
-  nextStop: StationStop | null,
   savedPassRanks?: Map<string, number>,
 ): (RoadSectionChange | StationStop)[] {
-  if (from.section === to.section) {
-    const exclude = new Set<Station>([
-      ...(prevStop ? [prevStop.station] : []),
-      ...(nextStop ? [nextStop.station] : []),
-    ]);
-    return fillBetween(from, to, rank, exclude, savedPassRanks);
+  if (from.section === to.station.parentRoadSection) {
+    return fillBetween(from, to.station.interpT, rank, savedPassRanks);
   }
 
   // Different sections: try to auto-insert an RSC between the two stops
-  if (!prevStop || !nextStop) return [];
-  const rsc = prevStop.autoInsertRSCTo(nextStop);
+  if (!prevStop) return [];
+  const rsc = prevStop.autoInsertRSCTo(to);
   if (!rsc) return [];
 
   const result: (RoadSectionChange | StationStop)[] = [];
@@ -55,24 +55,13 @@ function fillInMissingPaths(
   const rscEnd   = rsc.end();
 
   if (rscStart?.section === from.section) {
-    result.push(...fillBetween(from, rscStart, rank, new Set([prevStop.station]), savedPassRanks));
+    result.push(...fillBetween(from, rscStart.offset, rank, savedPassRanks));
   }
   result.push(rsc);
-  if (rscEnd?.section === to.section) {
-    result.push(...fillBetween(rscEnd, to, rsc.enterRank, new Set([nextStop.station]), savedPassRanks));
+  if (rscEnd?.section === to.station.parentRoadSection) {
+    result.push(...fillBetween(rscEnd, to.station.interpT, rsc.enterRank, savedPassRanks));
   }
   return result;
-}
-
-// Returns the next non-stale stop within the same group, for direction inference.
-// A group boundary always means either an RSC or the end of the path, both of which
-// should be treated the same as "no forward stop" (findNextStopOnSameSection's old
-// cross-group behavior), so this never needs to look past the current group.
-function findNextStopInGroup(stops: readonly StationStop[], fromIdx: number): StationStop | null {
-  for (let i = fromIdx; i < stops.length; i++) {
-    if (stops[i].stops) return stops[i];
-  }
-  return null;
 }
 
 export function validateLinePaths(line: Line): Owned<LinePath>[] {
@@ -109,6 +98,13 @@ export function validateLinePaths(line: Line): Owned<LinePath>[] {
     else pushStop(entry);
   };
 
+  // `currentPos` is the single running "previous" pointer the whole algorithm hinges
+  // on: its offset carries the bias of whichever direction the line was last traveling
+  // in. Every stop's direction is decided once, at the moment it's inserted, as the
+  // sign of the hop that reached it (compare currentPos against the stop's raw
+  // position) — never by looking ahead to what comes after it. That's what lets a
+  // U-turn's pivot naturally re-surface via fillBetween's bias tie-break instead of
+  // needing a dedicated "is this stop a pivot" check.
   let currentPos: RoadSectionPos | undefined;
   let prevStop: StationStop | null = null;
 
@@ -118,8 +114,7 @@ export function validateLinePaths(line: Line): Owned<LinePath>[] {
       const rscStart = rsc.start();
       if (currentPos && currentPos.section === rscStart?.section) {
         const rank = prevStop?.rank ?? 0;
-        const exclude = new Set<Station>(prevStop ? [prevStop.station] : []);
-        for (const fill of fillBetween(currentPos, rscStart, rank, exclude, savedPassRanks)) {
+        for (const fill of fillBetween(currentPos, rscStart.offset, rank, savedPassRanks)) {
           pushStop(fill);
         }
       }
@@ -133,25 +128,18 @@ export function validateLinePaths(line: Line): Owned<LinePath>[] {
       if (!stop.stops) continue; // strip stale pass-throughs left over from a previous validation run
 
       // Direction must be set before calling start()/end(), since those use it for bias.
-      // Prefer looking AHEAD to the next stop on the same section: the stop's direction
-      // should represent where the line goes AFTER it (the departing direction). This
-      // correctly handles virtual U-turn bottom stops, which are reached descending but
-      // depart ascending. Fall back to the incoming-position approach only when no
-      // forward stop on the same section exists.
-      const nextStop = findNextStopInGroup(stops, i + 1);
-      if (nextStop) {
-        const cmp = stop.station.interpT.compare(nextStop.station.interpT);
-        if (cmp !== 0) stop.direction = cmp < 0 ? 'ascending' : 'descending';
-      } else if (currentPos) {
-        const cmp = currentPos.offset.compare(stop.station.interpT);
-        stop.direction = cmp < 0 ? 'ascending' : 'descending';
+      if (currentPos && currentPos.section === stop.station.parentRoadSection) {
+        stop.direction = currentPos.offset.compare(stop.station.interpT) < 0 ? 'ascending' : 'descending';
+      } else if (!currentPos) {
+        // Very first stop of the line — nothing to compare against yet.
+        stop.direction = 'ascending';
       }
-      // else: first stop with no lookahead — keep the stored/default direction.
+      // else: currentPos is on a different section (RSC crossing handled below via
+      // fillInMissingPaths' auto-insert branch) — keep the stored/default direction.
 
-      const stopStart = stop.start();
-      if (currentPos && stopStart) {
+      if (currentPos) {
         const rank = prevStop?.rank ?? stop.rank;
-        for (const fill of fillInMissingPaths(currentPos, stopStart, rank, prevStop, stop, savedPassRanks)) {
+        for (const fill of fillInMissingPaths(currentPos, stop, rank, prevStop, savedPassRanks)) {
           pushEntry(fill);
         }
       }
