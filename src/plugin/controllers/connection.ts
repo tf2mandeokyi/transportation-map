@@ -80,16 +80,11 @@ export class ConnectionController extends BaseController {
 
     const station = this.model.findStationFromNode(selection[0]);
     if (station) {
-      const lines = [];
-      for (const { line, path, groupIndex, stopIndex } of station.getStopsAcrossLines()) {
-        const facing: 'left' | 'right' = path.direction === 'ascending' ? 'right' : 'left';
-        lines.push({ id: line.id, name: line.name, color: line.color, groupIndex, stopIndex, rank: path.rank, facing, stops: path.stops });
-      }
       postMessageToUI({
         type: 'station-clicked',
         stationId: station.id,
         station: { name: station.name, textAlign: station.textAlign, textHAlign: station.textHAlign, textRotation: station.textRotation, flipped: station.flipped },
-        lines,
+        lines: station.getLinesAtStationData(),
       });
     }
   }

@@ -80,7 +80,7 @@ export class MapState {
       }
     }
     for (const station of this.getStations()) {
-      station.getLineStackingRanks();
+      station.getStopsAcrossLines();
     }
   }
 

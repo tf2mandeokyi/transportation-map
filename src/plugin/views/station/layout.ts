@@ -1,15 +1,5 @@
 import { Line, Station } from "../../models/structures";
 
-type CollectedEntry = {
-  line: Line;
-  groupIndex: number;
-  stopIndex: number;
-  rank: number;
-  facing: 'left' | 'right';
-  passThrough: boolean;
-  stackingOrder: number;
-};
-
 export type LineAtStation = {
   line: Line;
   groupIndex: number;
@@ -18,17 +8,8 @@ export type LineAtStation = {
   passThrough: boolean;
 };
 
-export function getLinesForStation(
-  station: Station
-): LineAtStation[] {
-  const entries: CollectedEntry[] = [];
-
-  for (const { line, path, groupIndex, stopIndex } of station.getStopsAcrossLines()) {
-    const facing: 'left' | 'right' = path.direction === 'ascending' ? 'right' : 'left';
-    entries.push({ line, groupIndex, stopIndex, rank: path.rank, facing, passThrough: !path.stops, stackingOrder: 0 });
-  }
-
-  entries.sort((a, b) => a.rank !== b.rank ? a.rank - b.rank : a.stackingOrder - b.stackingOrder);
-
-  return entries.map(({ line, groupIndex, stopIndex, facing, passThrough }) => ({ line, groupIndex, stopIndex, facing, passThrough }));
+export function getLinesForStation(station: Station): LineAtStation[] {
+  return station.getStopsAcrossLines().map(({ line, groupIndex, stopIndex, facing, stops }) => ({
+    line, groupIndex, stopIndex, facing, passThrough: !stops,
+  }));
 }

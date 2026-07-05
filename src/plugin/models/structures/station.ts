@@ -1,4 +1,5 @@
 import { HVAlign, StationId } from "@/common/types";
+import { LineAtStationData } from "@/common/messages";
 import { TransportationMapObject } from './types';
 import type { RoadSection } from './road-section';
 import { StationStop } from "./line-path";
@@ -94,39 +95,41 @@ export class Station extends TransportationMapObject<StationId> {
     };
   }
 
-  getLineStackingRanks(): Array<{ line: Line; groupIndex: number; stopIndex: number; rank: number, stops: boolean }> {
-    const stops: Array<{ path: StationStop; line: Line; groupIndex: number; stopIndex: number; rank: number, stops: boolean }> = [];
+  // Collects every stop this line makes at this station, normalizes their ranks to a
+  // dense 0..n-1 stacking order (breaking ties deterministically), and drops stops that
+  // can't currently be positioned (e.g. incomplete road data).
+  getStopsAcrossLines(): Array<{ line: Line; groupIndex: number; stopIndex: number; rank: number; stops: boolean; facing: 'left' | 'right'; position: Vector }> {
+    const entries: Array<{ path: StationStop; line: Line; groupIndex: number; stopIndex: number }> = [];
     for (const line of this.mapState.getLines()) {
       for (const [groupIndex, group] of line.paths.entries()) {
-        for (const [stopIndex, p] of group.stationStops.entries()) {
-          if (p.station === this) {
-            stops.push({ path: p, line, groupIndex, stopIndex, rank: p.rank, stops: p.stops });
-          }
+        for (const [stopIndex, path] of group.stationStops.entries()) {
+          if (path.station === this) entries.push({ path, line, groupIndex, stopIndex });
         }
       }
     }
-    stops.sort((a, b) => {
-      if (a.rank !== b.rank) return a.rank - b.rank;
-      if (a.line.id !== b.line.id) return a.line.id < b.line.id ? -1 : 1;
-      if (a.groupIndex !== b.groupIndex) return a.groupIndex - b.groupIndex;
-      return a.stopIndex - b.stopIndex;
-    });
-    stops.forEach(({ path }, i) => { path.rank = i; });
-    return stops.map(({ line, groupIndex, stopIndex, rank, stops }) => ({ line, groupIndex, stopIndex, rank, stops  }));
-  }
 
-  getStopsAcrossLines(): Array<{ line: Line; path: StationStop; groupIndex: number; stopIndex: number; position: Vector }> {
-    const result: Array<{ line: Line; path: StationStop; groupIndex: number; stopIndex: number; position: Vector }> = [];
-    for (const line of this.mapState.getLines()) {
-      for (const [groupIndex, group] of line.paths.entries()) {
-        for (const [stopIndex, p] of group.stationStops.entries()) {
-          if (p.station !== this) continue;
-          const position = p.computePosition();
-          if (position) result.push({ line, path: p, groupIndex, stopIndex, position });
-        }
-      }
+    entries.sort((a, b) =>
+      (a.path.rank - b.path.rank)
+      || (a.line.id < b.line.id ? -1 : a.line.id > b.line.id ? 1 : 0)
+      || (a.groupIndex - b.groupIndex)
+      || (a.stopIndex - b.stopIndex)
+    );
+    entries.forEach(({ path }, rank) => { path.rank = rank; });
+
+    const result: Array<{ line: Line; groupIndex: number; stopIndex: number; rank: number; stops: boolean; facing: 'left' | 'right'; position: Vector }> = [];
+    for (const { path, line, groupIndex, stopIndex } of entries) {
+      const position = path.computePosition();
+      if (!position) continue;
+      const facing: 'left' | 'right' = path.direction === 'ascending' ? 'right' : 'left';
+      result.push({ line, groupIndex, stopIndex, rank: path.rank, stops: path.stops, facing, position });
     }
     return result;
+  }
+
+  getLinesAtStationData(): LineAtStationData[] {
+    return this.getStopsAcrossLines().map(({ line, groupIndex, stopIndex, rank, stops, facing }) => ({
+      id: line.id, name: line.name, color: line.color, groupIndex, stopIndex, rank, facing, stops,
+    }));
   }
 
   computePosition(): Vector {

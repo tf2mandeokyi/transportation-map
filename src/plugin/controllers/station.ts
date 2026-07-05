@@ -1,4 +1,4 @@
-import { LineAtStationData, StationParams, StationPatch } from "@/common/messages";
+import { StationParams, StationPatch } from "@/common/messages";
 import { LineId, RoadSectionId, StationId } from "@/common/types";
 import { PlacingStationPluginSession } from "../sessions/placing-station";
 import { postMessageToUI } from "../figma";
@@ -160,18 +160,11 @@ export class StationController extends BaseController {
       return;
     }
 
-    const lines: Array<LineAtStationData> = [];
-    for (const { line, path, groupIndex, stopIndex } of station.getStopsAcrossLines()) {
-      const facing: 'left' | 'right' = path.direction === 'ascending' ? 'right' : 'left';
-      lines.push({ id: line.id, name: line.name, color: line.color, groupIndex, stopIndex, rank: path.rank, facing, stops: path.stops });
-    }
-    lines.sort((a, b) => a.rank - b.rank);
-
     postMessageToUI({
       type: 'station-clicked',
       stationId,
       station: { name: station.name, textAlign: station.textAlign, textHAlign: station.textHAlign, textRotation: station.textRotation, flipped: station.flipped },
-      lines,
+      lines: station.getLinesAtStationData(),
     });
   }
 
@@ -225,7 +218,7 @@ export class StationController extends BaseController {
     const newStation = this.model.addStation(station.createCopyProps());
 
     if (this.connectionController) {
-      const linesAtStation = station.getLineStackingRanks();
+      const linesAtStation = station.getStopsAcrossLines();
       for (const { line } of linesAtStation) {
         this.connectionController.insertStationIntoLine(line.id, newStation, station, direction === 'forwards');
       }
