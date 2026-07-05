@@ -25,7 +25,9 @@ const FocusedRoadPanel: React.FC<{
         </button>
       </div>
       <div>{element.name ?? element.roadId}</div>
-      <div style={{ color: '#666', marginTop: '2px' }}>{startNode?.name ?? element.startNodeId} → {endNode?.name ?? element.endNodeId}</div>
+      <div style={{ color: '#666', marginTop: '2px' }}>
+        {startNode?.name ?? `junction #${element.startNodeId}`} → {endNode?.name ?? `junction #${element.endNodeId}`}
+      </div>
       <div style={{ color: '#999', fontSize: '11px', marginTop: '4px', marginBottom: '8px' }}>Drag the blue handles on the canvas to adjust the curve.</div>
 
       <div style={{ borderTop: '1px solid #d0e4f7', paddingTop: '8px' }}>

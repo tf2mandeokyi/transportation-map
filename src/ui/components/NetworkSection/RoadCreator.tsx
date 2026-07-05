@@ -13,10 +13,10 @@ const RoadCreator: React.FC = () => {
   }
 
   const startLabel = roadSnapState?.startSnap
-    ? (roadSnapState.startSnap.name ?? roadSnapState.startSnap.nodeId)
+    ? (roadSnapState.startSnap.name ?? `junction #${roadSnapState.startSnap.nodeId}`)
     : 'new node';
   const endLabel = roadSnapState?.endSnap
-    ? (roadSnapState.endSnap.name ?? roadSnapState.endSnap.nodeId)
+    ? (roadSnapState.endSnap.name ?? `junction #${roadSnapState.endSnap.nodeId}`)
     : 'new node';
 
   return (

@@ -18,16 +18,15 @@ const FocusedNodePanel: React.FC<{ element: Extract<NetworkFocusedElement, { kin
     }
   };
 
-  const getSectionLabel = (sectionId: RoadSectionId | null): string => {
-    if (!sectionId) return '(none)';
+  const sectionIdKey = (id: RoadSectionId) => id.join(':');
+
+  const findRoadAndSection = (sectionId: RoadSectionId) => {
     for (const road of roads) {
       const sec = road.sections.find(s => s.id[0] === sectionId[0] && s.id[1] === sectionId[1]);
-      if (sec) return sec.name ? `${road.name ?? road.id} / ${sec.name}` : road.name ?? road.id;
+      if (sec) return { road, sec };
     }
-    return sectionId.join(':');
+    return null;
   };
-
-  const sectionIdKey = (id: RoadSectionId) => id.join(':');
 
   const allSectionIds = [
     ...new Map([
@@ -35,6 +34,25 @@ const FocusedNodePanel: React.FC<{ element: Extract<NetworkFocusedElement, { kin
       ...lines.map(l => l.enteringSectionId),
     ].filter(Boolean).map(id => [sectionIdKey(id as RoadSectionId), id as RoadSectionId])).values(),
   ];
+
+  // Group arms by their parent road so sections of the same road appear together.
+  const roadGroups: Array<{ roadKey: string; roadLabel: string; sectionIds: RoadSectionId[] }> = [];
+  for (const sectionId of allSectionIds) {
+    const found = findRoadAndSection(sectionId);
+    const roadKey = found ? found.road.id : `unknown:${sectionIdKey(sectionId)}`;
+    const roadLabel = found ? (found.road.name ?? `road #${found.road.id}`) : `road #${sectionId[0]}`;
+    let group = roadGroups.find(g => g.roadKey === roadKey);
+    if (!group) {
+      group = { roadKey, roadLabel, sectionIds: [] };
+      roadGroups.push(group);
+    }
+    group.sectionIds.push(sectionId);
+  }
+
+  const getSectionLabel = (sectionId: RoadSectionId): string => {
+    const found = findRoadAndSection(sectionId);
+    return found?.sec.name ?? `section #${found?.sec.index ?? sectionId[1]}`;
+  };
 
   return (
     <div style={{ padding: '8px', background: '#e8f4ff', borderRadius: '4px', marginBottom: '12px', fontSize: '12px' }}>
@@ -56,22 +74,28 @@ const FocusedNodePanel: React.FC<{ element: Extract<NetworkFocusedElement, { kin
       <div style={{ color: '#666', marginTop: '2px' }}>x: {element.pos.x.toFixed(1)},&nbsp; y: {element.pos.y.toFixed(1)}</div>
       <div style={{ color: '#999', fontSize: '11px', marginTop: '4px' }}>Drag the junction marker on the canvas to move it.</div>
 
-      {allSectionIds.map(sectionId => {
-        const key = sectionIdKey(sectionId);
-        const items: ArmItem[] = [
-          ...lines.filter(l => l.exitingSectionId && sectionIdKey(l.exitingSectionId) === key).map(l => ({ line: l, role: 'exit' as const, rank: l.exitRank })),
-          ...lines.filter(l => l.enteringSectionId && sectionIdKey(l.enteringSectionId) === key).map(l => ({ line: l, role: 'enter' as const, rank: l.enterRank })),
-        ].sort((a, b) => a.rank - b.rank);
+      {roadGroups.map((group, gi) => (
+        <React.Fragment key={group.roadKey}>
+          {gi > 0 && <hr style={{ border: 'none', borderTop: '1px solid #d0e4f7', margin: '10px 0 4px' }} />}
+          <div style={{ fontWeight: 600, color: '#555', marginTop: '6px' }}>{group.roadLabel}</div>
+          {group.sectionIds.map(sectionId => {
+            const key = sectionIdKey(sectionId);
+            const items: ArmItem[] = [
+              ...lines.filter(l => l.exitingSectionId && sectionIdKey(l.exitingSectionId) === key).map(l => ({ line: l, role: 'exit' as const, rank: l.exitRank })),
+              ...lines.filter(l => l.enteringSectionId && sectionIdKey(l.enteringSectionId) === key).map(l => ({ line: l, role: 'enter' as const, rank: l.enterRank })),
+            ].sort((a, b) => a.rank - b.rank);
 
-        return (
-          <NodeArmList
-            key={key}
-            label={`${getSectionLabel(sectionId)} (drag to reorder)`}
-            nodeId={element.nodeId}
-            items={items}
-          />
-        );
-      })}
+            return (
+              <NodeArmList
+                key={key}
+                label={`${getSectionLabel(sectionId)} (drag to reorder)`}
+                nodeId={element.nodeId}
+                items={items}
+              />
+            );
+          })}
+        </React.Fragment>
+      ))}
     </div>
   );
 };

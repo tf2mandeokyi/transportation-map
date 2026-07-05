@@ -17,6 +17,8 @@ export type DisplayEntry =
       nodeName: string | null;
       exitRoadName: string | null;
       enterRoadName: string | null;
+      exitSectionLabel: string | null;
+      enterSectionLabel: string | null;
     }
   | {
       kind: 'traversal';

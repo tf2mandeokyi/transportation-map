@@ -90,6 +90,8 @@ export function buildDisplayEntries(paths: readonly LinePath[]): DisplayEntry[] 
       nodeName: rse.node.name ?? null,
       exitRoadName:  rse.exiting?.section.parentRoad.name  ?? null,
       enterRoadName: rse.entering?.section.parentRoad.name ?? null,
+      exitSectionLabel:  rse.exiting  ? (rse.exiting.section.name  ?? `section #${rse.exiting.section.id}`)  : null,
+      enterSectionLabel: rse.entering ? (rse.entering.section.name ?? `section #${rse.entering.section.id}`) : null,
     });
     if (!isUturn) prevLastSortedIdx = null;
   };

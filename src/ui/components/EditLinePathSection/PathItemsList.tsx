@@ -44,63 +44,49 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
     const entry = displayEntries[ei];
 
     if (entry.kind === 'rse') {
-      const { isUturn, nodeId, nodeName, exitRoadName, enterRoadName } = entry;
+      const { isUturn, nodeId, nodeName, exitRoadName, enterRoadName, exitSectionLabel, enterSectionLabel } = entry;
       const item = rscItems[rscCursor++];
       const address: LinePathAddress = { groupIndex: item.groupIndex, stopIndex: item.stopIndex };
 
       lastAddress = address;
 
-      if (isUturn) {
-        elements.push(
-          <div key={`rse-${ei}`} style={{
-            display: 'flex', alignItems: 'center', gap: '8px',
-            padding: '5px 8px', background: '#fff8f0',
-            borderRadius: '4px', borderLeft: '3px solid #e07800',
-            margin: '4px 0 2px',
-          }}>
-            <span style={{ fontSize: '14px' }}>↩</span>
-            <span style={{ flex: 1, fontSize: '12px', fontWeight: 500, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-              U-turn at <strong>{nodeName ?? nodeId}</strong>
-              {exitRoadName && <span style={{ fontWeight: 400, color: '#888' }}> — {exitRoadName}</span>}
-            </span>
-            {inactive && <button className="button button--secondary small-btn" onClick={() => onRemoveRse(item.groupIndex)}>X</button>}
-          </div>
-        );
-      } else {
-        elements.push(
-          <div key={`rse-${ei}`} style={{
-            display: 'flex', alignItems: 'center', gap: '8px',
-            padding: '5px 8px', background: '#f0f4ff',
-            borderRadius: '4px', borderLeft: '3px solid #18a0fb',
-            margin: '4px 0 2px',
-          }}>
-            <span style={{ fontSize: '14px' }}>↪</span>
-            <span style={{ flex: 1, fontSize: '12px', fontWeight: 500, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-              <span style={{ color: '#777', fontWeight: 400 }}>{exitRoadName ?? '—'}</span>
-              {' → '}
-              <strong>{nodeName ?? nodeId}</strong>
-              {' → '}
-              <span style={{ color: '#444' }}>{enterRoadName ?? '—'}</span>
-            </span>
-            {inactive && <button className="button button--secondary small-btn" onClick={() => onRemoveRse(item.groupIndex)}>X</button>}
-          </div>
-        );
-      }
+      const accent = isUturn ? '#e07800' : '#18a0fb';
+      const background = isUturn ? '#fff8f0' : '#f0f4ff';
+      const roadLineStyle: React.CSSProperties = {
+        fontSize: '11px', color: '#888', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
+      };
 
-      // ↪ Road insertion button after each RSC/U-turn
-      if (inactive) {
-        elements.push(
-          <div key={`rse-btn-after-${ei}`} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '2px 0' }}>
-            <div style={{ flex: 1, height: '1px', background: '#d0d0d0' }} />
-            <button
-              className="button button--secondary"
-              style={{ fontSize: '10px', padding: '2px 6px', lineHeight: '14px' }}
-              onClick={() => onStartAddingRse(address)}
-            >↪ Road</button>
-            <div style={{ flex: 1, height: '1px', background: '#d0d0d0' }} />
+      elements.push(
+        <div key={`rse-${ei}`} style={{
+          padding: '5px 8px', background,
+          borderRadius: '4px', borderLeft: `3px solid ${accent}`,
+          margin: '4px 0 2px',
+        }}>
+          <div style={roadLineStyle}>
+            {exitRoadName ?? '—'}{exitSectionLabel && <span style={{ color: '#aaa' }}> · {exitSectionLabel}</span>}
           </div>
-        );
-      }
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '2px 0' }}>
+            <span style={{ fontSize: '14px' }}>{isUturn ? '↩' : '↪'}</span>
+            <span style={{ flex: 1, fontSize: '12px', fontWeight: 500, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+              {isUturn && 'U-turn at '}<strong>{nodeName ?? nodeId}</strong>
+            </span>
+            {inactive && (
+              <>
+                <button
+                  className="button button--secondary small-btn"
+                  style={{ fontSize: '10px' }}
+                  onClick={() => onStartAddingRse(address)}
+                  title={`Insert road after this ${isUturn ? 'U-turn' : 'RSC'}`}
+                >↪ Road</button>
+                <button className="button button--secondary small-btn" onClick={() => onRemoveRse(item.groupIndex)}>X</button>
+              </>
+            )}
+          </div>
+          <div style={roadLineStyle}>
+            {enterRoadName ?? '—'}{enterSectionLabel && <span style={{ color: '#aaa' }}> · {enterSectionLabel}</span>}
+          </div>
+        </div>
+      );
     } else if (entry.kind === 'virtual-uturn') {
       elements.push(
         <div key={`vuturn-${ei}`} style={{
