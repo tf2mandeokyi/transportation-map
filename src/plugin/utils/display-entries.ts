@@ -15,16 +15,24 @@ export function buildDisplayEntries(paths: readonly LinePath[]): DisplayEntry[] 
   const displayEntries: DisplayEntry[] = [];
   let prevLastSortedIdx: number | null = null;
 
+  // Set to true right after a virtual U-turn; consumed by the *next* emitTraversal
+  // call so the group starting after the U-turn is padded all the way out to the
+  // section's far boundary — symmetric with extendToSi padding the group before
+  // it out to the same boundary. This shows the full section extent (greyed)
+  // receding from view on both sides of every U-turn, not just the pivot station.
+  let pendingStartExtend = false;
+
   // Current traversal accumulator — all stops share one direction and section.
   let travStops: StationStop[] = [];
   let travSection: RoadSection | null = null;
   let travDir: 'ascending' | 'descending' | null = null;
 
   // Emit the current traversal group.
-  // extendToSi: when the traversal is cut by a virtual U-turn, the next stop's si
-  // is passed so we can extend the visible range to include it as a greyed station
-  // (showing the line physically passing through it on the way to the reversal point).
-  const emitTraversal = (extendToSi: number | null = null) => {
+  // cutByUturn: true when this traversal is being cut short by a virtual U-turn —
+  // the whole remaining section extent (down to the far boundary) is padded in as
+  // greyed stations, showing the line physically receding toward the reversal point
+  // even past whatever station triggered it.
+  const emitTraversal = (cutByUturn: boolean = false) => {
     if (travStops.length === 0 || travSection === null || travDir === null) return;
 
     const section = travSection;
@@ -40,17 +48,26 @@ export function buildDisplayEntries(paths: readonly LinePath[]): DisplayEntry[] 
     const firstSi = stopsWithIdx[0].si;
     const lastSi  = stopsWithIdx[stopsWithIdx.length - 1].si;
 
+    const startExtend = pendingStartExtend;
+    pendingStartExtend = false;
+
     let lo: number, hi: number;
     if (dir === 'ascending') {
-      lo = prevLastSortedIdx !== null ? Math.min(prevLastSortedIdx, firstSi) : firstSi;
+      lo = firstSi;
+      if (prevLastSortedIdx !== null) lo = Math.min(lo, prevLastSortedIdx);
+      // Pad all the way down to the section's start (mirrors the U-turn on the other side).
+      if (startExtend) lo = 0;
       hi = lastSi;
-      // Extend hi upward to include the next descending stop as greyed.
-      if (extendToSi !== null) hi = Math.max(hi, extendToSi);
+      // Pad all the way up to the section's end, toward the reversal point.
+      if (cutByUturn) hi = sorted.length - 1;
     } else {
+      hi = firstSi;
+      if (prevLastSortedIdx !== null) hi = Math.max(hi, prevLastSortedIdx);
+      // Pad all the way up to the section's end (mirrors the U-turn on the other side).
+      if (startExtend) hi = sorted.length - 1;
       lo = lastSi;
-      hi = prevLastSortedIdx !== null ? Math.max(prevLastSortedIdx, firstSi) : firstSi;
-      // Extend lo downward to include the next ascending stop as greyed.
-      if (extendToSi !== null) lo = Math.min(lo, extendToSi);
+      // Pad all the way down to the section's start, toward the reversal point.
+      if (cutByUturn) lo = 0;
     }
 
     const stopMap = new Map<Station, boolean>();
@@ -82,7 +99,7 @@ export function buildDisplayEntries(paths: readonly LinePath[]): DisplayEntry[] 
   const processRse = (rse: RoadSectionChange) => {
     emitTraversal(); // no look-ahead extension at explicit RSE boundaries
 
-    const isUturn = !!(rse.exiting && rse.entering && rse.exiting.section === rse.entering.section);
+    const isUturn = !!(rse.exiting && rse.exiting.section === rse.entering?.section);
     displayEntries.push({
       kind: 'rse',
       isUturn,
@@ -102,12 +119,11 @@ export function buildDisplayEntries(paths: readonly LinePath[]): DisplayEntry[] 
 
     if (travDir !== null && travSection === section && travDir !== dir) {
       // Direction reversal on the same section without an RSC = virtual U-turn.
-      // Extend the current segment's range to include the next stop as a greyed
-      // pass-through, showing the line physically passing through it on the way down.
-      const sorted    = getSorted(section);
-      const nextSi    = sortedIdx(stop.station, sorted);
-      emitTraversal(nextSi);
+      // Pad the segment on both sides out to the section's boundary as greyed
+      // pass-throughs, showing the line physically receding toward the reversal point.
+      emitTraversal(true);
       displayEntries.push({ kind: 'virtual-uturn' });
+      pendingStartExtend = true;
       // prevLastSortedIdx is preserved through the virtual U-turn (set by emitTraversal).
     } else if (travSection !== null && travSection !== section) {
       // Section changed without RSC — shouldn't happen in valid data; just flush.
