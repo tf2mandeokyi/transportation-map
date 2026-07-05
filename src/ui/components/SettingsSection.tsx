@@ -37,16 +37,16 @@ const SettingsSection: React.FC = () => {
   const copyLabel = copyStatus === 'copied' ? 'Copied!' : copyStatus === 'error' ? 'Failed' : 'Copy Map Data';
 
   return (
-    <div className="section">
-      <h3>Development</h3>
-      <div className="button-container">
-        <button className="button button--secondary full-width" onClick={handleValidatePaths}>
+    <div className="mb-4 border-b border-neutral-200 pb-4">
+      <h3 className="mb-3 text-sm font-semibold">Development</h3>
+      <div className="mt-4 flex flex-col gap-2">
+        <button className="w-full rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium hover:bg-neutral-200" onClick={handleValidatePaths}>
           Validate Line Paths
         </button>
-        <button className="button button--secondary full-width" onClick={handleCopyMapData}>
+        <button className="w-full rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium hover:bg-neutral-200" onClick={handleCopyMapData}>
           {copyLabel}
         </button>
-        <button className="button button--secondary-destructive full-width" onClick={handleClearData}>
+        <button className="w-full rounded border border-red-300 bg-red-50 px-3 py-2 font-medium text-red-700 hover:bg-red-100" onClick={handleClearData}>
           Clear Saved Data
         </button>
       </div>

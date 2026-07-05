@@ -6,19 +6,19 @@ const InsertionButtons: React.FC<{
 }> = ({ onAddStation, onAddRse }) => {
   if (!onAddStation && !onAddRse) return null;
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '2px 0' }}>
-      <div style={{ flex: 1, height: '1px', background: '#d0d0d0' }} />
+    <div className="flex items-center gap-1.5 py-0.5">
+      <div className="h-px flex-1 bg-neutral-300" />
       {onAddStation && (
-        <button className="button button--secondary" style={{ fontSize: '10px', padding: '2px 6px', lineHeight: '14px' }} onClick={onAddStation}>
+        <button className="rounded border border-neutral-300 bg-neutral-100 px-1.5 py-0.5 text-[10px] leading-[14px] font-medium hover:bg-neutral-200" onClick={onAddStation}>
           + Station
         </button>
       )}
       {onAddRse && (
-        <button className="button button--secondary" style={{ fontSize: '10px', padding: '2px 6px', lineHeight: '14px' }} onClick={onAddRse}>
+        <button className="rounded border border-neutral-300 bg-neutral-100 px-1.5 py-0.5 text-[10px] leading-[14px] font-medium hover:bg-neutral-200" onClick={onAddRse}>
           ↪ Road
         </button>
       )}
-      <div style={{ flex: 1, height: '1px', background: '#d0d0d0' }} />
+      <div className="h-px flex-1 bg-neutral-300" />
     </div>
   );
 };

@@ -12,8 +12,8 @@ const NetworkSection: React.FC = () => {
       {networkFocus?.kind === 'node' && <FocusedNodePanel key={networkFocus.nodeId} element={networkFocus} />}
       {networkFocus?.kind === 'road' && <FocusedRoadPanel element={networkFocus} nodes={nodes} />}
 
-      <div className="section">
-        <h3>Add Road</h3>
+      <div className="mb-4 border-b border-neutral-200 pb-4">
+        <h3 className="mb-3 text-sm font-semibold">Add Road</h3>
         <RoadCreator />
       </div>
     </div>

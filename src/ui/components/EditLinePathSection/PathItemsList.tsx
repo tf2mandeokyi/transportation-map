@@ -50,53 +50,42 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
 
       lastAddress = address;
 
-      const accent = isUturn ? '#e07800' : '#18a0fb';
-      const background = isUturn ? '#fff8f0' : '#f0f4ff';
-      const roadLineStyle: React.CSSProperties = {
-        fontSize: '11px', color: '#888', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
-      };
+      const roadLineClass = 'overflow-hidden text-ellipsis whitespace-nowrap text-[11px] text-neutral-500';
 
       elements.push(
-        <div key={`rse-${ei}`} style={{
-          padding: '5px 8px', background,
-          borderRadius: '4px', borderLeft: `3px solid ${accent}`,
-          margin: '4px 0 2px',
-        }}>
-          <div style={roadLineStyle}>
-            {exitRoadName ?? '—'}{exitSectionLabel && <span style={{ color: '#aaa' }}> · {exitSectionLabel}</span>}
+        <div
+          key={`rse-${ei}`}
+          className={`my-1 mb-0.5 rounded px-2 py-1.5 ${isUturn ? 'border-l-[3px] border-[#e07800] bg-[#fff8f0]' : 'border-l-[3px] border-[#18a0fb] bg-[#f0f4ff]'}`}
+        >
+          <div className={roadLineClass}>
+            {exitRoadName ?? '—'}{exitSectionLabel && <span className="text-neutral-400"> · {exitSectionLabel}</span>}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '2px 0' }}>
-            <span style={{ fontSize: '14px' }}>{isUturn ? '↩' : '↪'}</span>
-            <span style={{ flex: 1, fontSize: '12px', fontWeight: 500, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+          <div className="my-0.5 flex items-center gap-2">
+            <span className="text-sm">{isUturn ? '↩' : '↪'}</span>
+            <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-medium">
               {isUturn && 'U-turn at '}<strong>{nodeName ?? nodeId}</strong>
             </span>
             {inactive && (
               <>
                 <button
-                  className="button button--secondary small-btn"
-                  style={{ fontSize: '10px' }}
+                  className="rounded border border-neutral-300 bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200"
                   onClick={() => onStartAddingRse(address)}
                   title={`Insert road after this ${isUturn ? 'U-turn' : 'RSC'}`}
                 >↪ Road</button>
-                <button className="button button--secondary small-btn" onClick={() => onRemoveRse(item.groupIndex)}>X</button>
+                <button className="rounded border border-neutral-300 bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200" onClick={() => onRemoveRse(item.groupIndex)}>X</button>
               </>
             )}
           </div>
-          <div style={roadLineStyle}>
-            {enterRoadName ?? '—'}{enterSectionLabel && <span style={{ color: '#aaa' }}> · {enterSectionLabel}</span>}
+          <div className={roadLineClass}>
+            {enterRoadName ?? '—'}{enterSectionLabel && <span className="text-neutral-400"> · {enterSectionLabel}</span>}
           </div>
         </div>
       );
     } else if (entry.kind === 'virtual-uturn') {
       elements.push(
-        <div key={`vuturn-${ei}`} style={{
-          display: 'flex', alignItems: 'center', gap: '8px',
-          padding: '5px 8px', background: '#fff8f0',
-          borderRadius: '4px', borderLeft: '3px solid #e07800',
-          margin: '4px 0 2px',
-        }}>
-          <span style={{ fontSize: '14px' }}>↩</span>
-          <span style={{ flex: 1, fontSize: '12px', fontWeight: 500, color: '#e07800' }}>U-turn</span>
+        <div key={`vuturn-${ei}`} className="my-1 mb-0.5 flex items-center gap-2 rounded border-l-[3px] border-[#e07800] bg-[#fff8f0] px-2 py-1.5">
+          <span className="text-sm">↩</span>
+          <span className="flex-1 text-xs font-medium text-[#e07800]">U-turn</span>
         </div>
       );
     } else {
@@ -114,7 +103,7 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
           const { groupIndex, stopIndex } = item;
           lastAddress = { groupIndex, stopIndex };
           elements.push(
-            <div key={`stop-${item.flatIndex}`} style={{ paddingLeft: '12px' }}>
+            <div key={`stop-${item.flatIndex}`} className="pl-3">
               <StationPathItem
                 name={s.name}
                 index={item.flatIndex}
@@ -128,11 +117,11 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
         } else {
           const insertAfter = lastAddress;
           elements.push(
-            <div key={`grey-${ei}-${s.stationId}`} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '2px 8px 2px 20px' }}>
-              <span style={{ flex: 1, fontSize: '11px', color: '#aaa', fontStyle: 'italic' }}>{s.name}</span>
+            <div key={`grey-${ei}-${s.stationId}`} className="flex items-center gap-2 py-0.5 pr-2 pl-5">
+              <span className="flex-1 text-[11px] text-neutral-400 italic">{s.name}</span>
               {inactive && (
                 <button
-                  className="button button--secondary small-btn"
+                  className="rounded border border-neutral-300 bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200"
                   onClick={() => onAddSectionStation(s.stationId, insertAfter, dir)}
                   title="Add to path"
                 >+</button>

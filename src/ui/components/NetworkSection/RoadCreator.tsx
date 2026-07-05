@@ -6,7 +6,7 @@ const RoadCreator: React.FC = () => {
 
   if (!isAddingRoad) {
     return (
-      <button className="button button--primary" style={{ width: '100%' }} onClick={handleStartRoadCreation}>
+      <button className="w-full rounded bg-[#18a0fb] px-3 py-2 font-medium text-white hover:bg-[#0d8ee0]" onClick={handleStartRoadCreation}>
         Add Road
       </button>
     );
@@ -20,21 +20,21 @@ const RoadCreator: React.FC = () => {
     : 'new node';
 
   return (
-    <div style={{ padding: '8px', background: '#fff8e1', borderRadius: '4px', border: '1px solid #ffe082', fontSize: '12px' }}>
-      <p style={{ margin: '0 0 6px 0', color: '#555' }}>
-        Drag the <strong style={{ color: '#e65c00' }}>orange</strong> handles to set endpoints,
-        the <strong style={{ color: '#1a78ff' }}>blue</strong> handle for the bezier curve.
+    <div className="rounded border border-[#ffe082] bg-[#fff8e1] p-2 text-xs">
+      <p className="mb-1.5 text-neutral-600">
+        Drag the <strong className="text-[#e65c00]">orange</strong> handles to set endpoints,
+        the <strong className="text-[#1a78ff]">blue</strong> handle for the bezier curve.
         Orange snaps to existing junctions.
       </p>
-      <div style={{ marginBottom: '3px' }}>
-        <span style={{ color: '#888' }}>Start: </span><strong>{startLabel}</strong>
+      <div className="mb-1">
+        <span className="text-neutral-500">Start: </span><strong>{startLabel}</strong>
       </div>
-      <div style={{ marginBottom: '8px' }}>
-        <span style={{ color: '#888' }}>End: </span><strong>{endLabel}</strong>
+      <div className="mb-2">
+        <span className="text-neutral-500">End: </span><strong>{endLabel}</strong>
       </div>
-      <div className="two-column">
-        <button className="button button--primary" onClick={handleConfirmRoadCreation}>Create</button>
-        <button className="button button--secondary" onClick={handleCancelRoadCreation}>Cancel</button>
+      <div className="grid grid-cols-2 gap-2">
+        <button className="rounded bg-[#18a0fb] px-3 py-2 font-medium text-white hover:bg-[#0d8ee0]" onClick={handleConfirmRoadCreation}>Create</button>
+        <button className="rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium hover:bg-neutral-200" onClick={handleCancelRoadCreation}>Cancel</button>
       </div>
     </div>
   );

@@ -17,18 +17,17 @@ const App: React.FC = () => {
   }, []);
 
   return (
-    <div>
-      <div className="button-container" style={{ marginBottom: '16px' }}>
+    <div className="p-4 font-sans text-xs text-neutral-900">
+      <div className="mb-4">
         <button
-          className="button button--secondary full-width"
+          className="w-full rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium hover:bg-neutral-200"
           onClick={() => postMessageToPlugin({ type: 'render-map' })}
-          style={{ width: '100%' }}
         >
           Render Map
         </button>
       </div>
 
-      <div style={{ display: 'flex', borderBottom: '1px solid #e0e0e0', marginBottom: '16px' }}>
+      <div className="mb-4 flex border-b border-neutral-200">
         <NavButton active={activeTab === 'stations'} onClick={() => setActiveTab('stations')}>Stations</NavButton>
         <NavButton active={activeTab === 'lines'}    onClick={() => setActiveTab('lines')}>Lines</NavButton>
         <NavButton active={activeTab === 'network'}  onClick={() => setActiveTab('network')}>Network</NavButton>

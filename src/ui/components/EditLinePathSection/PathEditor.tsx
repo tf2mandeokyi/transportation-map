@@ -18,12 +18,12 @@ import StationAddingPanel from './StationAddingPanel';
 import RseAddingPanel from './RseAddingPanel';
 
 const RoadInsertButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
-  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '2px 0' }}>
-    <div style={{ flex: 1, height: '1px', background: '#d0d0d0' }} />
-    <button className="button button--secondary" style={{ fontSize: '10px', padding: '2px 6px', lineHeight: '14px' }} onClick={onClick}>
+  <div className="flex items-center gap-1.5 py-0.5">
+    <div className="h-px flex-1 bg-neutral-300" />
+    <button className="rounded border border-neutral-300 bg-neutral-100 px-1.5 py-0.5 text-[10px] leading-[14px] font-medium hover:bg-neutral-200" onClick={onClick}>
       ↪ Road
     </button>
-    <div style={{ flex: 1, height: '1px', background: '#d0d0d0' }} />
+    <div className="h-px flex-1 bg-neutral-300" />
   </div>
 );
 
@@ -189,12 +189,12 @@ const PathEditor: React.FC = () => {
   const stationStopCount = linePaths.reduce((n, g) => n + g.stationStops.length, 0);
 
   return (
-    <div className="grid">
-      <label>Current Path</label>
+    <div className="flex flex-col gap-2">
+      <label className="mb-1 block font-medium select-none">Current Path</label>
 
       {isEmpty ? (
         <div>
-          <p style={{ color: '#666', fontSize: '11px', padding: '8px' }}>No stops in path</p>
+          <p className="p-2 text-[11px] text-neutral-500">No stops in path</p>
           {inactive && <InsertionButtons onAddStation={() => handleStartAdding(START_ADDRESS)} />}
         </div>
       ) : (
@@ -244,8 +244,8 @@ const PathEditor: React.FC = () => {
       })()}
 
       {inactive && stationStopCount > 1 && (
-        <div style={{ marginTop: '4px', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-          <button className="button button--secondary" onClick={() => handleRotatePath(1)} title="Rotate path by 1">↻</button>
+        <div className="mt-1 flex justify-end gap-2">
+          <button className="rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium hover:bg-neutral-200" onClick={() => handleRotatePath(1)} title="Rotate path by 1">↻</button>
         </div>
       )}
     </div>

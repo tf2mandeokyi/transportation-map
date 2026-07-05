@@ -17,30 +17,30 @@ const FocusedRoadPanel: React.FC<{
   };
 
   return (
-    <div style={{ padding: '8px', background: '#e8f4ff', borderRadius: '4px', marginBottom: '12px', fontSize: '12px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
-        <span style={{ fontWeight: 600, flex: 1 }}>Selected Road</span>
-        <button className="button button--secondary small-btn" onClick={() => postMessageToPlugin({ type: 'remove-road', roadId: element.roadId })}>
+    <div className="mb-3 rounded bg-[#e8f4ff] p-2 text-xs">
+      <div className="mb-1 flex items-center">
+        <span className="flex-1 font-semibold">Selected Road</span>
+        <button className="rounded border border-neutral-300 bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200" onClick={() => postMessageToPlugin({ type: 'remove-road', roadId: element.roadId })}>
           Delete
         </button>
       </div>
       <div>{element.name ?? element.roadId}</div>
-      <div style={{ color: '#666', marginTop: '2px' }}>
+      <div className="mt-0.5 text-neutral-500">
         {startNode?.name ?? `junction #${element.startNodeId}`} → {endNode?.name ?? `junction #${element.endNodeId}`}
       </div>
-      <div style={{ color: '#999', fontSize: '11px', marginTop: '4px', marginBottom: '8px' }}>Drag the blue handles on the canvas to adjust the curve.</div>
+      <div className="mt-1 mb-2 text-[11px] text-neutral-400">Drag the blue handles on the canvas to adjust the curve.</div>
 
-      <div style={{ borderTop: '1px solid #d0e4f7', paddingTop: '8px' }}>
-        <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Sections</label>
-        {element.sections.length === 0 && <p style={{ color: '#999', fontSize: '11px', margin: '0 0 8px 0' }}>No sections yet.</p>}
+      <div className="border-t border-[#d0e4f7] pt-2">
+        <label className="mb-1 block text-[11px] text-neutral-500">Sections</label>
+        {element.sections.length === 0 && <p className="mb-2 text-[11px] text-neutral-400">No sections yet.</p>}
         {element.sections.map(section => (
-          <div key={section.id.join(':')} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-            <span style={{ flex: 1 }}>{section.name ?? `Section ${section.index}`}</span>
-            <button className="button button--secondary small-btn" onClick={() => postMessageToPlugin({ type: 'patch-road', roadId: element.roadId, patch: { op: 'remove-section', sectionId: section.id } })}>×</button>
+          <div key={section.id.join(':')} className="mb-1 flex items-center gap-2">
+            <span className="flex-1">{section.name ?? `Section ${section.index}`}</span>
+            <button className="rounded border border-neutral-300 bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200" onClick={() => postMessageToPlugin({ type: 'patch-road', roadId: element.roadId, patch: { op: 'remove-section', sectionId: section.id } })}>×</button>
           </div>
         ))}
-        <input className="input" placeholder="Section name (optional)" value={sectionName} onChange={e => setSectionName(e.target.value)} style={{ marginBottom: '4px', marginTop: '4px' }} />
-        <button className="button button--secondary" style={{ width: '100%' }} onClick={handleAddSection}>+ Add Section</button>
+        <input className="my-1 w-full rounded border border-neutral-300 px-2 py-1 text-xs" placeholder="Section name (optional)" value={sectionName} onChange={e => setSectionName(e.target.value)} />
+        <button className="w-full rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium hover:bg-neutral-200" onClick={handleAddSection}>+ Add Section</button>
       </div>
     </div>
   );

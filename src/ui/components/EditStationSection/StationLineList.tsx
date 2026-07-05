@@ -11,8 +11,8 @@ interface Props {
 
 const StationLineList: React.FC<Props> = ({ stationId, lines }) => (
   <div>
-    <label>Lines at this station (drag to reorder)</label>
-    <div style={{ maxHeight: '200px', overflowY: 'auto', marginTop: '8px' }}>
+    <label className="mb-1 block font-medium select-none">Lines at this station (drag to reorder)</label>
+    <div className="mt-2 max-h-[200px] overflow-y-auto">
       <DraggableLineList
         items={lines}
         getKey={l => `${l.id}-${l.groupIndex}-${l.stopIndex}`}
@@ -24,7 +24,7 @@ const StationLineList: React.FC<Props> = ({ stationId, lines }) => (
         getRank={l => l.rank}
         right={l => (
           <>
-            <span style={{ color: '#999', fontSize: '12px' }}>
+            <span className="text-xs text-neutral-400">
               {l.facing === 'right' ? '→' : '←'}
             </span>
             <input

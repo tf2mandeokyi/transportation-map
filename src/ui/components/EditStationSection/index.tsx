@@ -56,18 +56,18 @@ const EditStationSection: React.FC = () => {
 
   if (!stationId || stationName === null || stationTextAlign === null || stationTextHAlign === null || stationTextRotation === null || stationFlipped === null) {
     return (
-      <div className="section">
-        <h3>Edit Station</h3>
-        <p style={{ color: '#666', fontSize: '11px', padding: '8px' }}>Click on a station in the canvas to edit it</p>
+      <div className="mb-4 border-b border-neutral-200 pb-4">
+        <h3 className="mb-3 text-sm font-semibold">Edit Station</h3>
+        <p className="p-2 text-[11px] text-neutral-500">Click on a station in the canvas to edit it</p>
       </div>
     );
   }
 
   return (
-    <div className="section">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h3>Edit Station</h3>
-        <button className="button button--secondary" onClick={onClose} style={{ padding: '4px 8px', fontSize: '11px' }}>Close</button>
+    <div className="mb-4 border-b border-neutral-200 pb-4">
+      <div className="flex items-center justify-between">
+        <h3 className="mb-3 text-sm font-semibold">Edit Station</h3>
+        <button className="rounded border border-neutral-300 bg-neutral-100 px-2 py-1 text-[11px] font-medium hover:bg-neutral-200" onClick={onClose}>Close</button>
       </div>
       <StationFormFields
         stationId={stationId}

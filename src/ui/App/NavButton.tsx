@@ -9,15 +9,7 @@ export interface NavButtonProps {
 const NavButton: React.FC<NavButtonProps> = ({ active, onClick, children }) => (
   <button
     onClick={onClick}
-    style={{
-      flex: 1,
-      padding: '12px',
-      border: 'none',
-      background: active ? '#18a0fb' : 'transparent',
-      color: active ? 'white' : '#333',
-      cursor: 'pointer',
-      fontWeight: active ? 'bold' : 'normal'
-    }}
+    className={`flex-1 cursor-pointer border-none p-3 ${active ? 'bg-[#18a0fb] font-bold text-white' : 'bg-transparent font-normal text-[#333]'}`}
   >
     {children}
   </button>

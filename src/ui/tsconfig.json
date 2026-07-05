@@ -6,5 +6,6 @@
     "jsx": "react"
   },
   "include": ["./**/*.ts", "./**/*.tsx"],
+  "exclude": ["./dev"],
   "references": [{ "path": "../common" }]
 }

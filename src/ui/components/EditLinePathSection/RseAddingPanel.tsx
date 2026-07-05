@@ -130,37 +130,36 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
     pendingList.every(e => !!e.selectedNodeId && e.selectedSectionIdx !== '');
 
   return (
-    <div style={{ padding: '12px', background: '#f5f5f5', borderRadius: '4px', border: '2px solid #18a0fb', marginTop: '8px' }}>
-      <p style={{ fontSize: '11px', color: '#666', margin: '0 0 8px 0' }}>
+    <div className="mt-2 rounded border-2 border-[#18a0fb] bg-neutral-100 p-3">
+      <p className="mb-2 text-[11px] text-neutral-500">
         <strong>Adding roads</strong><br />
         Click roads on the canvas. Click the same road to add a U-turn.
       </p>
 
       {error && (
-        <div style={{ fontSize: '11px', color: '#c00', background: '#fff0f0', border: '1px solid #f00', borderRadius: '3px', padding: '6px 8px', marginBottom: '8px' }}>
+        <div className="mb-2 rounded border border-red-500 bg-red-50 px-2 py-1.5 text-[11px] text-red-700">
           {error}
         </div>
       )}
 
       {pendingList.map((entry, i) => (
-        <div key={i} style={{ marginBottom: '8px', padding: '8px', background: '#fff', borderRadius: '4px', border: '1px solid #ddd' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-            <span style={{ fontSize: '12px', fontWeight: 600, flex: 1 }}>
+        <div key={i} className="mb-2 rounded border border-neutral-300 bg-white p-2">
+          <div className="mb-1.5 flex items-center gap-1.5">
+            <span className="flex-1 text-xs font-semibold">
               {entry.isUturn ? '↩' : '↪'} {entry.destRoadName ?? entry.destRoadId}
             </span>
-            <button className="button button--secondary small-btn" onClick={() => removeEntry(i)}>X</button>
+            <button className="rounded border border-neutral-300 bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200" onClick={() => removeEntry(i)}>X</button>
           </div>
 
           {entry.nodeOptions.length > 1 && (
-            <div style={{ marginBottom: '6px' }}>
-              <label style={{ fontSize: '11px', color: '#555', display: 'block', marginBottom: '2px' }}>
+            <div className="mb-1.5">
+              <label className="mb-0.5 block text-[11px] text-neutral-600">
                 {entry.isUturn ? 'Endpoint node:' : 'Junction node:'}
               </label>
               <select
-                className="input"
+                className="w-full rounded border border-neutral-300 px-2 py-1 text-[11px]"
                 value={entry.selectedNodeId}
                 onChange={e => updateEntry(i, { selectedNodeId: e.target.value })}
-                style={{ fontSize: '11px', width: '100%' }}
               >
                 <option value="">— select node —</option>
                 {entry.nodeOptions.map(opt => (
@@ -171,15 +170,15 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
           )}
 
           <div>
-            <label style={{ fontSize: '11px', color: '#555', display: 'block', marginBottom: '2px' }}>
+            <label className="mb-0.5 block text-[11px] text-neutral-600">
               {entry.isUturn ? 'Re-entering on section:' : 'Entering on section:'}
             </label>
             {entry.sections.length === 0 ? (
-              <p style={{ fontSize: '11px', color: '#c00', margin: 0 }}>Road has no sections.</p>
+              <p className="text-[11px] text-red-700">Road has no sections.</p>
             ) : entry.selectedSectionIdx === '' ? (
-              <p style={{ fontSize: '11px', color: '#c00', margin: 0 }}>Click the section on the canvas.</p>
+              <p className="text-[11px] text-red-700">Click the section on the canvas.</p>
             ) : (
-              <p style={{ fontSize: '11px', margin: 0 }}>
+              <p className="text-[11px]">
                 {entry.sections[parseInt(entry.selectedSectionIdx, 10)]?.name
                   ?? `Section ${entry.sections[parseInt(entry.selectedSectionIdx, 10)]?.index + 1}`}
               </p>
@@ -188,18 +187,17 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
         </div>
       ))}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      <div className="flex flex-col gap-1">
         {pendingList.length > 0 && (
           <button
-            className="button button--primary"
+            className="w-full rounded bg-[#18a0fb] px-3 py-2 font-medium text-white hover:bg-[#0d8ee0] disabled:cursor-not-allowed disabled:opacity-50"
             disabled={!canCommit}
-            style={{ width: '100%' }}
             onClick={handleCommit}
           >
             Add {pendingList.length === 1 ? 'road' : `${pendingList.length} roads`}
           </button>
         )}
-        <button className="button button--secondary" style={{ width: '100%' }} onClick={onCancel}>Cancel</button>
+        <button className="w-full rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium hover:bg-neutral-200" onClick={onCancel}>Cancel</button>
       </div>
     </div>
   );

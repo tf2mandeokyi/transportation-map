@@ -31,7 +31,7 @@ function DraggableLineList<T>({
       {displayItems.map((item, index) => (
         <div
           key={getKey(item)}
-          className="station-path-item"
+          className="flex cursor-grab items-center justify-between rounded border border-neutral-200 bg-white px-2 hover:bg-neutral-100"
           draggable
           onDragStart={() => { draggedIndexRef.current = index; }}
           onDragEnd={() => {
@@ -50,16 +50,15 @@ function DraggableLineList<T>({
             setDisplayItems(next);
           }}
           onDrop={e => e.preventDefault()}
-          style={{ cursor: 'grab' }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-            {showRank && <span style={{ color: '#aaa', fontSize: '11px', minWidth: '14px', textAlign: 'right' }}>{getRank ? getRank(item) : index}</span>}
-            <span style={{ color: '#999', fontSize: '12px' }}>⋮⋮</span>
-            <div style={{ width: '12px', height: '12px', backgroundColor: getLineColor(item), borderRadius: '2px', border: '1px solid rgba(0,0,0,0.1)', flexShrink: 0, opacity: getColorOpacity?.(item) ?? 1 }} />
-            <span style={{ color: getDimName?.(item) ? '#999' : 'inherit', fontStyle: getDimName?.(item) ? 'italic' : 'normal' }}>{getLineName(item)}</span>
+          <div className="flex flex-1 items-center gap-2">
+            {showRank && <span className="min-w-[14px] text-right text-[11px] text-neutral-400">{getRank ? getRank(item) : index}</span>}
+            <span className="text-xs text-neutral-400">⋮⋮</span>
+            <div className="h-3 w-3 shrink-0 rounded-sm border border-black/10" style={{ backgroundColor: getLineColor(item), opacity: getColorOpacity?.(item) ?? 1 }} />
+            <span className={getDimName?.(item) ? 'italic text-neutral-400' : ''}>{getLineName(item)}</span>
           </div>
           {right && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+            <div className="flex shrink-0 items-center gap-1.5">
               {right(item)}
             </div>
           )}
