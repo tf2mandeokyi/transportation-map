@@ -1,12 +1,32 @@
-import { Line, LinePath, MapState, RoadSectionChange, StationStop } from "../../models/structures";
+import { Line, MapState, RoadSectionChange, StationStop } from "../../models/structures";
 import { StationRenderer } from "../station";
 import { hexToRgb } from "@/common/utils/color";
 import { SegmentResult } from "./segment-path";
 import { isInvalidJump, buildSegmentPath } from "./path-builder";
 import { createDashedLine, bezierPathToSegments } from "./segment-nodes";
 
-function collectStops(line: Line): LinePath[] {
-  return line.paths.filter(p => p instanceof StationStop);
+type IndexedStop = { stop: StationStop; groupIndex: number; stopIndex: number };
+
+function collectStops(line: Line): IndexedStop[] {
+  const result: IndexedStop[] = [];
+  line.paths.forEach((group, groupIndex) => {
+    group.stationStops.forEach((stop, stopIndex) => {
+      result.push({ stop, groupIndex, stopIndex });
+    });
+  });
+  return result;
+}
+
+// RSCs strictly between two stops, in order — every group's RSC from just after
+// the start stop's group through the end stop's group (inclusive) always sits
+// before that group's own stops, so it lies between the two addressed stops.
+function collectRseBetween(line: Line, startGroupIndex: number, endGroupIndex: number): RoadSectionChange[] {
+  const result: RoadSectionChange[] = [];
+  for (let gi = startGroupIndex + 1; gi <= endGroupIndex; gi++) {
+    const rsc = line.paths[gi]?.fromRoadSectionChange;
+    if (rsc) result.push(rsc);
+  }
+  return result;
 }
 
 async function cleanupOldLineGroup(line: Line): Promise<void> {
@@ -29,7 +49,7 @@ export class LineRenderer {
 
     const segmentNodes: SceneNode[] = [];
     const color = hexToRgb(line.color);
-    const stops: LinePath[] = collectStops(line);
+    const stops = collectStops(line);
 
     for (let si = 0; si < stops.length - 1; si++) {
       const result = this.renderLineSegment(line, stops[si], stops[si + 1], color);
@@ -54,28 +74,31 @@ export class LineRenderer {
 
   private renderLineSegment(
     line: Line,
-    startStop: LinePath,
-    endStop: LinePath,
+    startStop: IndexedStop,
+    endStop: IndexedStop,
     color: RGB,
   ): SegmentResult | null {
-    const startStation = startStop.renderStop()!;
-    const endStation   = endStop.renderStop()!;
-    const startPoint = this.stationRenderer.getConnectionPoint(startStation, line, startStop.index);
-    const endPoint   = this.stationRenderer.getConnectionPoint(endStation,   line, endStop.index);
+    const startStation = startStop.stop.station;
+    const endStation   = endStop.stop.station;
+    const startPoint = this.stationRenderer.getConnectionPoint(startStation, line, startStop.groupIndex, startStop.stopIndex);
+    const endPoint   = this.stationRenderer.getConnectionPoint(endStation,   line, endStop.groupIndex,   endStop.stopIndex);
     if (!startPoint || !endPoint) {
       console.warn(`Missing connection points for line ${line.id}`);
       return null;
     }
 
-    const rseBetween = line.paths
-      .slice(startStop.index + 1, endStop.index)
-      .filter(p => p instanceof RoadSectionChange) as unknown as RoadSectionChange[];
+    const rseBetween = collectRseBetween(line, startStop.groupIndex, endStop.groupIndex);
 
     if (isInvalidJump(startStation, endStation, rseBetween)) {
       return { kind: 'dashed', node: createDashedLine(startPoint, endPoint, color) };
     }
 
-    const pathData = buildSegmentPath(line, startStop, endStop, rseBetween, startPoint, endPoint);
+    const pathData = buildSegmentPath(
+      line,
+      startStop.stop, startStop.groupIndex, startStop.stopIndex,
+      endStop.stop,   endStop.groupIndex,   endStop.stopIndex,
+      rseBetween, startPoint, endPoint,
+    );
     return { ...bezierPathToSegments(pathData, color), kind: 'normal' };
   }
 

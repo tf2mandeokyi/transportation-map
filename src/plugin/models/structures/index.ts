@@ -3,5 +3,5 @@ export { RoadSection, SerializedRoadSection, RoadSectionProps } from './road-sec
 export { Road, SerializedRoad, RoadProps } from './road';
 export { Station, SerializedStation, StationProps } from './station';
 export { Line, SerializedLine, SerializedLinePath, LineProps } from './line';
-export { LinePath, StationStop, RoadSectionChange } from './line-path';
+export { LinePath, StationStop, RoadSectionChange, linePathsToData, flattenLinePaths, regroupLinePaths } from './line-path';
 export { MapState } from './map-state';

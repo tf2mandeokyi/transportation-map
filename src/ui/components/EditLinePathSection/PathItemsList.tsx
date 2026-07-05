@@ -1,57 +1,54 @@
 import React from 'react';
 import { StationId } from '@/common/types';
-import { DisplayEntry } from '@/common/messages';
+import { DisplayEntry, LinePathData } from '@/common/messages';
+import { LinePathAddress, START_ADDRESS, flattenLinePathData } from '../../utils/linePathGroups';
 import StationPathItem from './StationPathItem';
 
 interface PathItemsListProps {
   displayEntries: DisplayEntry[];
+  linePaths: LinePathData[];
   inactive: boolean;
-  onRemoveStop: (pathIndex: number) => void;
-  onRemoveRse: (pathIndex: number) => void;
+  onRemoveStop: (groupIndex: number, stopIndex: number) => void;
+  onRemoveRse: (groupIndex: number) => void;
   onSelectStation: (stationId: StationId) => void;
-  onToggleStops: (pathIndex: number, stops: boolean) => void;
-  onAddSectionStation: (stationId: StationId, afterPathIndex: number) => void;
-  onStartAddingRse: (afterPathIndex: number) => void;
+  onToggleStops: (groupIndex: number, stopIndex: number, stops: boolean) => void;
+  onAddSectionStation: (stationId: StationId, after: LinePathAddress, direction: 'ascending' | 'descending') => void;
+  onStartAddingRse: (after: LinePathAddress) => void;
 }
 
 const PathItemsList: React.FC<PathItemsListProps> = ({
-  displayEntries, inactive,
+  displayEntries, linePaths, inactive,
   onRemoveStop, onRemoveRse, onSelectStation, onToggleStops,
   onAddSectionStation, onStartAddingRse,
 }) => {
   const elements: React.ReactNode[] = [];
 
-  // Track the last in-path pathIndex seen so far — used to compute insertion point
-  // for greyed-out station "+" buttons and for the ↪ Road button.
-  let lastInPathIdx = -1;
+  // linePaths is the grouped path list backing displayEntries. Flattening it
+  // recovers the same ordered sequence as before grouping — both the 'rse'
+  // entries and the real (non-greyed) traversal stops appear in displayEntries
+  // in that same relative order, so a single walk in lockstep recovers each
+  // one's (groupIndex, stopIndex) address.
+  const flat = flattenLinePathData(linePaths);
+  const rscItems = flat.filter(item => item.kind === 'rsc');
+  const stopItems = flat.filter(item => item.kind === 'station-stop');
+  let rscCursor = 0;
+  let stopCursor = 0;
+
+  // lastAddress: updated by both in-path stations AND RSC entries.
+  // Used as insertAfter for grey station "+" buttons so that post-U-turn grey
+  // stations (which appear before the first in-path station in display order)
+  // correctly insert after the U-turn RSC, not before it.
+  let lastAddress: LinePathAddress = START_ADDRESS;
 
   for (let ei = 0; ei < displayEntries.length; ei++) {
     const entry = displayEntries[ei];
 
     if (entry.kind === 'rse') {
       const { isUturn, nodeId, nodeName, exitRoadName, enterRoadName } = entry;
+      const item = rscItems[rscCursor++];
+      const address: LinePathAddress = { groupIndex: item.groupIndex, stopIndex: item.stopIndex };
 
-      // ↪ Road insertion button before this RSE (uses last in-path position)
-      if (inactive) {
-        const afterIdx = lastInPathIdx;
-        // Only show if there is at least one traversal with in-path stops after this point
-        const hasStopAfter = displayEntries.slice(ei).some(
-          e => e.kind === 'traversal' && e.stations.some(s => s.inPath)
-        );
-        if (hasStopAfter) {
-          elements.push(
-            <div key={`rse-btn-${ei}`} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '2px 0' }}>
-              <div style={{ flex: 1, height: '1px', background: '#d0d0d0' }} />
-              <button
-                className="button button--secondary"
-                style={{ fontSize: '10px', padding: '2px 6px', lineHeight: '14px' }}
-                onClick={() => onStartAddingRse(afterIdx)}
-              >↪ Road</button>
-              <div style={{ flex: 1, height: '1px', background: '#d0d0d0' }} />
-            </div>
-          );
-        }
-      }
+      lastAddress = address;
 
       if (isUturn) {
         elements.push(
@@ -66,7 +63,7 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
               U-turn at <strong>{nodeName ?? nodeId}</strong>
               {exitRoadName && <span style={{ fontWeight: 400, color: '#888' }}> — {exitRoadName}</span>}
             </span>
-            {inactive && <button className="button button--secondary small-btn" onClick={() => onRemoveRse(entry.pathIndex)}>X</button>}
+            {inactive && <button className="button button--secondary small-btn" onClick={() => onRemoveRse(item.groupIndex)}>X</button>}
           </div>
         );
       } else {
@@ -85,7 +82,22 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
               {' → '}
               <span style={{ color: '#444' }}>{enterRoadName ?? '—'}</span>
             </span>
-            {inactive && <button className="button button--secondary small-btn" onClick={() => onRemoveRse(entry.pathIndex)}>X</button>}
+            {inactive && <button className="button button--secondary small-btn" onClick={() => onRemoveRse(item.groupIndex)}>X</button>}
+          </div>
+        );
+      }
+
+      // ↪ Road insertion button after each RSC/U-turn
+      if (inactive) {
+        elements.push(
+          <div key={`rse-btn-after-${ei}`} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '2px 0' }}>
+            <div style={{ flex: 1, height: '1px', background: '#d0d0d0' }} />
+            <button
+              className="button button--secondary"
+              style={{ fontSize: '10px', padding: '2px 6px', lineHeight: '14px' }}
+              onClick={() => onStartAddingRse(address)}
+            >↪ Road</button>
+            <div style={{ flex: 1, height: '1px', background: '#d0d0d0' }} />
           </div>
         );
       }
@@ -102,31 +114,40 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
         </div>
       );
     } else {
-      // Traversal: render each station in the order the plugin computed
+      // Traversal: render each station in the order the plugin computed.
+      // A station is "real" (backed by an explicit linePaths entry, stopping or
+      // not) iff it's next in stopItems order; anything else is a synthesized
+      // greyed pass-through with no linePaths entry at all.
+      const dir = entry.direction;
       for (const s of entry.stations) {
-        if (s.inPath) {
-          lastInPathIdx = s.pathIndex;
+        const nextItem = stopCursor < stopItems.length ? stopItems[stopCursor] : undefined;
+        const isReal = nextItem?.stop?.stationId === s.stationId;
+
+        if (isReal) {
+          const item = stopItems[stopCursor++];
+          const { groupIndex, stopIndex } = item;
+          lastAddress = { groupIndex, stopIndex };
           elements.push(
-            <div key={`stop-${s.pathIndex}`} style={{ paddingLeft: '12px' }}>
+            <div key={`stop-${item.flatIndex}`} style={{ paddingLeft: '12px' }}>
               <StationPathItem
                 name={s.name}
-                index={s.pathIndex}
+                index={item.flatIndex}
                 stops={s.stops}
-                onRemove={() => onRemoveStop(s.pathIndex)}
+                onRemove={() => onRemoveStop(groupIndex, stopIndex)}
                 onSelect={() => onSelectStation(s.stationId)}
-                onToggleStops={stops => onToggleStops(s.pathIndex, stops)}
+                onToggleStops={stops => onToggleStops(groupIndex, stopIndex, stops)}
               />
             </div>
           );
         } else {
-          const insertAfter = lastInPathIdx;
+          const insertAfter = lastAddress;
           elements.push(
             <div key={`grey-${ei}-${s.stationId}`} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '2px 8px 2px 20px' }}>
               <span style={{ flex: 1, fontSize: '11px', color: '#aaa', fontStyle: 'italic' }}>{s.name}</span>
               {inactive && (
                 <button
                   className="button button--secondary small-btn"
-                  onClick={() => onAddSectionStation(s.stationId, insertAfter)}
+                  onClick={() => onAddSectionStation(s.stationId, insertAfter, dir)}
                   title="Add to path"
                 >+</button>
               )}

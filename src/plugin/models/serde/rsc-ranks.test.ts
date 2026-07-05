@@ -1,16 +1,17 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as fs from 'fs';
 import { MapState } from '../structures/map-state';
-import { DATA_PATH, initState, collectRscRanks } from './test-helpers';
+import { DATA_PATH, fixtureExists, initState, collectRscRanks } from './test-helpers';
 
 let state: MapState;
 
 beforeAll(() => {
+  if (!fixtureExists) return;
   const json = fs.readFileSync(DATA_PATH, 'utf-8');
   state = initState(json);
 });
 
-describe('RSC enter ranks per section+side', () => {
+describe.skipIf(!fixtureExists)('RSC enter ranks per section+side', () => {
   it('are unique', () => {
     const rscMap = collectRscRanks(state);
     for (const [key, { enterRanks }] of rscMap) {
@@ -21,7 +22,7 @@ describe('RSC enter ranks per section+side', () => {
   });
 });
 
-describe('RSC exit ranks per section+side', () => {
+describe.skipIf(!fixtureExists)('RSC exit ranks per section+side', () => {
   it('are unique', () => {
     const rscMap = collectRscRanks(state);
     for (const [key, { exitRanks }] of rscMap) {
@@ -34,7 +35,7 @@ describe('RSC exit ranks per section+side', () => {
 
 // Enter and exit ranks at the same endpoint are rendered in the same stacking
 // band, so together they must also form a compact sequence.
-describe('RSC combined enter+exit ranks per section+side', () => {
+describe.skipIf(!fixtureExists)('RSC combined enter+exit ranks per section+side', () => {
   it('form a compact 0..n-1 sequence', () => {
     const rscMap = collectRscRanks(state);
     for (const [key, { enterRanks, exitRanks }] of rscMap) {

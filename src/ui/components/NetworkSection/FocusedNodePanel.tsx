@@ -88,7 +88,7 @@ const NodeArmList: React.FC<NodeArmListProps> = ({ label, nodeId, items }) => (
     <div style={{ marginTop: '4px' }}>
       <DraggableLineList
         items={items}
-        getKey={item => `${item.line.lineId}-${item.line.pathIndex}-${item.role}`}
+        getKey={item => `${item.line.lineId}-${item.line.groupIndex}-${item.role}`}
         getLineColor={item => item.line.lineColor}
         getLineName={item => item.line.lineName}
         showRank
@@ -100,7 +100,7 @@ const NodeArmList: React.FC<NodeArmListProps> = ({ label, nodeId, items }) => (
         onCommit={items => {
           const changes = items.map((it, i) => ({
             lineId: it.line.lineId,
-            pathIndex: it.line.pathIndex,
+            groupIndex: it.line.groupIndex,
             exitRank: it.role === 'exit' ? i : it.line.exitRank,
             enterRank: it.role === 'enter' ? i : it.line.enterRank,
           }));

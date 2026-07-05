@@ -6,15 +6,12 @@ import { LineAtNodeData, NodeData, RoadData, NetworkFocusedElement } from "./net
 export type DisplayStation = {
   stationId: StationId;
   name: string;
-  inPath: boolean;   // true = actual stop in this traversal segment
-  pathIndex: number; // flat path index; -1 if not in path
-  stops: boolean;    // whether the line stops here (vs pass-through); only meaningful when inPath
+  stops: boolean;    // whether the line stops here (vs pass-through)
 };
 
 export type DisplayEntry =
   | {
       kind: 'rse';
-      pathIndex: number;
       isUturn: boolean;
       nodeId: NodeId;
       nodeName: string | null;
@@ -42,6 +39,6 @@ export type PluginToUIMessage =
   | { type: 'network-selection-cleared' }
   | { type: 'road-creation-snap-update'; startSnap: { nodeId: NodeId; name?: string } | null; endSnap: { nodeId: NodeId; name?: string } | null }
   | { type: 'road-creation-exited' }
-  | { type: 'road-clicked'; roadId: RoadId }
+  | { type: 'road-clicked'; roadId: RoadId; sectionId: RoadSectionId | null }
   | { type: 'node-lines-data'; nodeId: NodeId; lines: LineAtNodeData[] }
   | { type: 'map-data'; data: string };

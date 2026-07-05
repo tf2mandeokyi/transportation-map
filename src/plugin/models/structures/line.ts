@@ -1,12 +1,11 @@
 import { LineId } from "@/common/types";
-import { LinePathData } from "@/common/messages";
+import { LinePathData, LinePathStationStopData } from "@/common/messages";
 import { MapState } from './map-state';
-import { LinePath, RoadSectionChange, SerializedLinePath, StationStop, linePathFromData, linePathDeserialize } from './line-path';
+import { RoadSectionChange, SerializedLinePath, StationStop, linePathsFromData, linePathsSerialize, linePathsDeserialize, LinePath } from './line-path';
 import { validateLinePaths } from '../../utils/line-validator';
 import { TransportationMapObject } from "./types";
-import { Owned } from "@/common/utils/ownership";
+import { Owned, own } from "@/common/utils/ownership";
 import { RoadSection } from "./road-section";
-import { PathEntry } from "@/plugin/utils/path-entry";
 
 export type { SerializedLinePath } from './line-path';
 
@@ -30,14 +29,22 @@ export class Line extends TransportationMapObject<LineId> {
   name!: string;
   color!: string;
   isCircular!: boolean;
-  paths!: Owned<LinePath>[];
+  private _paths!: Owned<LinePath>[];
   figmaGroupId!: string | null;
+
+  get paths(): LinePath[] {
+    return this._paths;
+  }
+
+  set paths(paths: LinePath[]) {
+    this._paths = paths.map(p => own(p));
+  }
 
   applyProps(props: LineProps): this {
     this.name = props.name;
     this.color = props.color;
     this.isCircular = props.isCircular;
-    this.paths = props.paths ?? [];
+    this._paths = props.paths ?? [];
     this.figmaGroupId = props.figmaGroupId ?? null;
     return this;
   }
@@ -46,7 +53,7 @@ export class Line extends TransportationMapObject<LineId> {
     this.name = ser.n;
     this.color = ser.c;
     this.isCircular = ser.l;
-    this.paths = (ser.p ?? []).map(p => linePathDeserialize(this.mapState, p));
+    this._paths = linePathsDeserialize(this.mapState, ser.p ?? []);
     this.figmaGroupId = ser.g ?? null;
     return this;
   }
@@ -56,45 +63,71 @@ export class Line extends TransportationMapObject<LineId> {
       n: this.name,
       c: this.color,
       l: this.isCircular,
-      p: this.paths.map(path => path.serialize()),
+      p: linePathsSerialize(this.paths),
       g: this.figmaGroupId,
     };
   }
-  
-  computeEntry(path: LinePath): PathEntry<LinePath> {
-    return path.computeEntry(this);
-  }
-
-  addPath(path: LinePathData): void {
-    this.paths.push(linePathFromData(this.mapState, path));
-    this.paths = validateLinePaths(this);
-  }
 
   replacePaths(paths: LinePathData[]): void {
-    const newPaths: Owned<LinePath>[] = [];
-    for (let i = 0; i < paths.length; i++) {
-      const p = paths[i];
-      const linePath = linePathFromData(this.mapState, p);
-      linePath.index = i;
-      newPaths.push(linePath);
+    this._paths = linePathsFromData(this.mapState, paths);
+    this._paths = validateLinePaths(this);
+  }
+
+  // Appends a single station stop to the end of the path. Used by
+  // programmatic line-building code that has no need for the grouped wire format.
+  appendStationStop(data: LinePathStationStopData): void {
+    const entry = StationStop.fromData(this.mapState, data);
+    const lastGroup = this.paths[this.paths.length - 1];
+    if (lastGroup) {
+      lastGroup.stationStops.push(entry);
+    } else {
+      const bare = new LinePath();
+      bare.stationStops = [entry];
+      this._paths = [own(bare)];
     }
-    this.paths = newPaths;
-    this.paths = validateLinePaths(this);
+    this._paths = validateLinePaths(this);
   }
 
-  removePath(pathIndex: number): void {
-    this.paths = this.paths.filter(p => p.index !== pathIndex);
-    this.paths.forEach((p, i) => { p.index = i; });
-    this.paths = validateLinePaths(this);
+  // Inserts a station stop right after the given address. stopIndex === -1 means
+  // "at the group's RSC" (i.e. becomes the group's first stop); groupIndex < 0 means
+  // "before everything".
+  insertStationStopAt(groupIndex: number, stopIndex: number, data: LinePathStationStopData): void {
+    const entry = StationStop.fromData(this.mapState, data);
+    if (groupIndex < 0) {
+      const first = this.paths[0];
+      if (first && !first.fromRoadSectionChange) {
+        first.stationStops.unshift(entry);
+      } else {
+        const bare = new LinePath();
+        bare.stationStops = [entry];
+        this._paths = [own(bare), ...this._paths];
+      }
+    } else {
+      const group = this.paths[groupIndex];
+      if (group) group.stationStops.splice(stopIndex + 1, 0, entry);
+    }
+    this._paths = validateLinePaths(this);
   }
 
-  setStopFlag(pathIndex: number, stops: boolean): void {
-    const path = this.paths.find(p => p.index === pathIndex);
-    if (!path || !(path instanceof StationStop)) return;
-    path.stops = stops;
-    this.paths = validateLinePaths(this);
+  // Removes an entry addressed by (groupIndex, stopIndex): stopIndex === -1 removes
+  // the group's RSC (its trailing stops merge into the preceding group once
+  // re-validated); stopIndex >= 0 removes that station stop.
+  removePath(groupIndex: number, stopIndex: number): void {
+    const group = this.paths[groupIndex];
+    if (!group) return;
+    if (stopIndex === -1) {
+      group.fromRoadSectionChange = undefined;
+    } else {
+      group.stationStops.splice(stopIndex, 1);
+    }
+    this._paths = validateLinePaths(this);
   }
-  
+
+  setStopFlag(groupIndex: number, stopIndex: number, stops: boolean): void {
+    const stop = this.paths[groupIndex]?.stationStops[stopIndex];
+    if (stop) stop.stops = stops;
+  }
+
   // Counts the number of directed runs a line makes on a section.
   // Also counts runs that enter the section via RSE but have no station-stops on it
   // (pure through-passes between two junctions).
@@ -104,35 +137,49 @@ export class Line extends TransportationMapObject<LineId> {
     let onSection = false;
     let enteredViaRse = false;
 
-    for (const p of this.paths) {
-      if (p instanceof RoadSectionChange) {
-        if (enteredViaRse) {
-          passes++;
-          enteredViaRse = false;
-        }
-        onSection = false;
-        if (p.entering?.section === section) enteredViaRse = true;
-        continue;
+    const processRsc = (p: RoadSectionChange): void => {
+      if (enteredViaRse) {
+        passes++;
+        enteredViaRse = false;
       }
-      if (!(p instanceof StationStop) || !sectionStationSet.has(p.station)) {
-        if (enteredViaRse) {
-          passes++;
-          enteredViaRse = false;
-        }
-        onSection = false;
-        continue;
-      }
+      onSection = false;
+      if (p.entering?.section === section) enteredViaRse = true;
+    };
 
+    const processStop = (p: StationStop): void => {
+      if (!sectionStationSet.has(p.station)) {
+        if (enteredViaRse) {
+          passes++;
+          enteredViaRse = false;
+        }
+        onSection = false;
+        return;
+      }
       enteredViaRse = false;
       if (!onSection) {
         passes++;
         onSection = true;
       }
+    };
+
+    for (const group of this.paths) {
+      if (group.fromRoadSectionChange) processRsc(group.fromRoadSectionChange);
+      for (const stop of group.stationStops) processStop(stop);
     }
 
     if (enteredViaRse) passes++;
 
     return passes;
+  }
+
+  // Rotates the path's groups by `steps` — used to change a circular line's start point.
+  rotateGroups(steps: number): void {
+    const n = this.paths.length;
+    if (n === 0) return;
+    const normalized = ((steps % n) + n) % n;
+    if (normalized === 0) return;
+    this._paths = [...this._paths.slice(normalized), ...this._paths.slice(0, normalized)];
+    this._paths = validateLinePaths(this);
   }
 
   static deserialize(mapState: Readonly<MapState>, id: LineId, ser: SerializedLine): Line {

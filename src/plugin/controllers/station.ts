@@ -2,7 +2,7 @@ import { LineAtStationData, StationParams, StationPatch } from "@/common/message
 import { LineId, RoadSectionId, StationId } from "@/common/types";
 import { PlacingStationPluginSession } from "../sessions/placing-station";
 import { postMessageToUI } from "../figma";
-import { RoadSection, StationStop } from "../models/structures";
+import { RoadSection } from "../models/structures";
 import { BaseController } from "./base";
 import { ListenerHandle } from "./listener";
 import { UIMessageRouter } from "./router";
@@ -161,10 +161,11 @@ export class StationController extends BaseController {
     }
 
     const lines: Array<LineAtStationData> = [];
-    for (const { line, path } of station.getStopsAcrossLines()) {
+    for (const { line, path, groupIndex, stopIndex } of station.getStopsAcrossLines()) {
       const facing: 'left' | 'right' = path.direction === 'ascending' ? 'right' : 'left';
-      lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing, stops: path.stops });
+      lines.push({ id: line.id, name: line.name, color: line.color, groupIndex, stopIndex, rank: path.rank, facing, stops: path.stops });
     }
+    lines.sort((a, b) => a.rank - b.rank);
 
     postMessageToUI({
       type: 'station-clicked',
@@ -176,13 +177,13 @@ export class StationController extends BaseController {
 
   private async handleUpdateStationStopRanks(
     stationId: StationId,
-    stops: Array<{ lineId: LineId; pathIndex: number; rank: number }>
+    stops: Array<{ lineId: LineId; groupIndex: number; stopIndex: number; rank: number }>
   ): Promise<void> {
     const station = this.model.state.getStation(stationId);
     if (!station) return;
-    const resolvedStops = stops.flatMap(({ lineId, pathIndex, rank }) => {
+    const resolvedStops = stops.flatMap(({ lineId, groupIndex, stopIndex, rank }) => {
       const line = this.model.state.getLine(lineId);
-      return line ? [{ line, pathIndex, rank }] : [];
+      return line ? [{ line, groupIndex, stopIndex, rank }] : [];
     });
     station.updateStopRanks(resolvedStops);
     await this.render();
@@ -245,9 +246,9 @@ export class StationController extends BaseController {
     }
 
     for (const line of this.model.state.getLines()) {
-      for (const path of line.paths) {
-        if (path instanceof StationStop && path.station === sourceStation) {
-          path.station = targetStation;
+      for (const group of line.paths) {
+        for (const stop of group.stationStops) {
+          if (stop.station === sourceStation) stop.station = targetStation;
         }
       }
     }

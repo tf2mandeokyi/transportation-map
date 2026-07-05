@@ -13,7 +13,8 @@ export type SegmentResult =
 export function computeTotalOffset(
   line: Line, section: RoadSection,
   referenceStation?: Station,
-  pathSegmentIndex?: number,
+  pathGroupIndex?: number,
+  pathStopIndex?: number,
   forceRank?: number,
 ): number {
   const sectionOffset = section.computeOffset();
@@ -22,9 +23,9 @@ export function computeTotalOffset(
   let effectiveIdx: number;
   if (forceRank === undefined) {
     const passes = section.getLines(referenceStation);
-    const passIndex = pathSegmentIndex === undefined
+    const passIndex = pathGroupIndex === undefined
       ? passes.findIndex(lp => lp.line === line)
-      : passes.findIndex(lp => lp.line === line && lp.segmentIndex === pathSegmentIndex);
+      : passes.findIndex(lp => lp.line === line && lp.groupIndex === pathGroupIndex && lp.stopIndex === pathStopIndex);
     effectiveIdx = passIndex >= 0 ? passIndex : totalSlots;
   } else {
     effectiveIdx = forceRank;

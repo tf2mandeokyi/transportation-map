@@ -1,19 +1,19 @@
-import { NodeId, RoadId } from "@/common/types";
+import { NodeId, RoadId, RoadSectionId, SectionId } from "@/common/types";
 import { LineAtNodeData, NetworkFocusedElement, NodeData, NodePatch, RoadData, RoadPatch, RoadSectionData } from "@/common/messages";
 import { PluginSessionManager } from "../../sessions/manager";
 import { postMessageToUI } from "../../figma";
 import { Node, RoadSectionChange } from "../../models/structures";
 import { Model } from "../../models";
 import { View } from "../../views";
-import { own } from "@/common/utils/ownership";
 import { BaseController } from "../base";
 import { NodeChangeListener } from "../listener";
 import { UIMessageRouter } from "../router";
-import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_NODE_ID, FIGMA_KEY_IS_NODE_MARKER, FIGMA_KEY_ROAD_ID, FIGMA_KEY_JUNCTION_OFFSET_X, FIGMA_KEY_JUNCTION_OFFSET_Y } from "../../views/road";
+import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_NODE_ID, FIGMA_KEY_IS_NODE_MARKER, FIGMA_KEY_ROAD_ID, FIGMA_KEY_SECTION_ID, FIGMA_KEY_JUNCTION_OFFSET_X, FIGMA_KEY_JUNCTION_OFFSET_Y } from "../../views/road";
 import { RoadControlManager, FIGMA_KEY_BEZIER_HANDLE, FIGMA_KEY_ENDPOINT_HANDLE } from "./road-control";
 import { RoadPlacingState } from "./road-placing";
 import { AddingRsePluginSession } from "../../sessions/adding-rse";
 import { AddingRoadPluginSession } from "../../sessions/adding-road";
+import { own } from "@/common/utils/ownership";
 
 
 export class NetworkController extends BaseController {
@@ -143,7 +143,9 @@ export class NetworkController extends BaseController {
 
     if (this.isAddingRseMode) {
       const roadId = first.getPluginData(FIGMA_KEY_ROAD_ID) as RoadId;
-      if (roadId) postMessageToUI({ type: 'road-clicked', roadId });
+      const sectionIdPart = first.getPluginData(FIGMA_KEY_SECTION_ID) as SectionId;
+      const sectionId: RoadSectionId | null = sectionIdPart ? [roadId, sectionIdPart] : null;
+      if (roadId) postMessageToUI({ type: 'road-clicked', roadId, sectionId });
       return;
     }
 
@@ -296,19 +298,19 @@ export class NetworkController extends BaseController {
   public async emitNodeLinesData(node: Node): Promise<void> {
     const entries = node.getRscEntries();
 
-    type ArmEntry = { rsc: RoadSectionChange; role: 'exit' | 'enter'; rank: number; lineId: string; pathIndex: number };
+    type ArmEntry = { rsc: RoadSectionChange; role: 'exit' | 'enter'; rank: number; lineId: string; groupIndex: number };
     const sectionGroups = new Map<string, ArmEntry[]>();
-    for (const { line, path: rsc } of entries) {
+    for (const { line, path: rsc, groupIndex } of entries) {
       if (rsc.exiting) {
         const key = rsc.exiting.section.id;
         const g = sectionGroups.get(key) ?? [];
-        g.push({ rsc, role: 'exit', rank: rsc.exitRank, lineId: line.id, pathIndex: rsc.index });
+        g.push({ rsc, role: 'exit', rank: rsc.exitRank, lineId: line.id, groupIndex });
         sectionGroups.set(key, g);
       }
       if (rsc.entering) {
         const key = rsc.entering.section.id;
         const g = sectionGroups.get(key) ?? [];
-        g.push({ rsc, role: 'enter', rank: rsc.enterRank, lineId: line.id, pathIndex: rsc.index });
+        g.push({ rsc, role: 'enter', rank: rsc.enterRank, lineId: line.id, groupIndex });
         sectionGroups.set(key, g);
       }
     }
@@ -318,7 +320,7 @@ export class NetworkController extends BaseController {
       group.sort((a, b) => {
         if (a.rank !== b.rank) return a.rank - b.rank;
         if (a.lineId !== b.lineId) return a.lineId < b.lineId ? -1 : 1;
-        return a.pathIndex - b.pathIndex;
+        return a.groupIndex - b.groupIndex;
       });
       group.forEach((item, i) => {
         if (item.role === 'exit' && item.rsc.exitRank !== i) { item.rsc.exitRank = i; changed = true; }
@@ -328,8 +330,8 @@ export class NetworkController extends BaseController {
 
     if (changed) await this.save();
 
-    const lines: LineAtNodeData[] = entries.map(({ line, path: p }) => ({
-      lineId: line.id, lineName: line.name, lineColor: line.color, pathIndex: p.index,
+    const lines: LineAtNodeData[] = entries.map(({ line, path: p, groupIndex }) => ({
+      lineId: line.id, lineName: line.name, lineColor: line.color, groupIndex,
       exitingSectionId: p.exiting?.section.getRoadSectionId() ?? null,
       enteringSectionId: p.entering?.section.getRoadSectionId() ?? null,
       exitRank: p.exitRank, enterRank: p.enterRank,

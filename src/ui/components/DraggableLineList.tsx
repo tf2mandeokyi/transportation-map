@@ -9,11 +9,12 @@ interface Props<T> {
   getDimName?: (item: T) => boolean;
   right?: (item: T) => React.ReactNode;
   showRank?: boolean;
+  getRank?: (item: T) => number;
   onCommit: (items: T[]) => void;
 }
 
 function DraggableLineList<T>({
-  items, getKey, getLineColor, getLineName, getColorOpacity, getDimName, right, showRank, onCommit,
+  items, getKey, getLineColor, getLineName, getColorOpacity, getDimName, right, showRank, getRank, onCommit,
 }: Props<T>) {
   const [displayItems, setDisplayItems] = useState(items);
   const itemsRef = useRef(items);
@@ -52,7 +53,7 @@ function DraggableLineList<T>({
           style={{ cursor: 'grab' }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-            {showRank && <span style={{ color: '#aaa', fontSize: '11px', minWidth: '14px', textAlign: 'right' }}>{index}</span>}
+            {showRank && <span style={{ color: '#aaa', fontSize: '11px', minWidth: '14px', textAlign: 'right' }}>{getRank ? getRank(item) : index}</span>}
             <span style={{ color: '#999', fontSize: '12px' }}>⋮⋮</span>
             <div style={{ width: '12px', height: '12px', backgroundColor: getLineColor(item), borderRadius: '2px', border: '1px solid rgba(0,0,0,0.1)', flexShrink: 0, opacity: getColorOpacity?.(item) ?? 1 }} />
             <span style={{ color: getDimName?.(item) ? '#999' : 'inherit', fontStyle: getDimName?.(item) ? 'italic' : 'normal' }}>{getLineName(item)}</span>

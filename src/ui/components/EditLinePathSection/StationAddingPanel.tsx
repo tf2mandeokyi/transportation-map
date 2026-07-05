@@ -7,6 +7,7 @@ interface StationAddingPanelProps {
   stationRoadIds: Record<string, RoadId | null>;
   onFinish: (stations: Array<{ id: StationId; name: string }>) => void;
   onCancel: () => void;
+  onSwitchToRse?: () => void;
 }
 
 const StationAddingPanel: React.FC<StationAddingPanelProps> = ({
@@ -14,11 +15,10 @@ const StationAddingPanel: React.FC<StationAddingPanelProps> = ({
   stationRoadIds,
   onFinish,
   onCancel,
+  onSwitchToRse,
 }) => {
   const manager = useMessageManager();
   const [pendingStations, setPendingStations] = useState<Array<{ id: StationId; name: string }>>([]);
-  const [error, setError] = useState<string | null>(null);
-
   const pendingRef = useRef(pendingStations);
   useEffect(() => { pendingRef.current = pendingStations; }, [pendingStations]);
 
@@ -26,10 +26,9 @@ const StationAddingPanel: React.FC<StationAddingPanelProps> = ({
     return manager.onMessage('station-clicked', msg => {
       const stationRoadId = stationRoadIds[msg.stationId] ?? null;
       if (currentRoadId !== null && stationRoadId !== currentRoadId) {
-        setError(`"${msg.station.name}" is on a different road. Add a road section entry first.`);
+        onSwitchToRse?.();
         return;
       }
-      setError(null);
       setPendingStations(prev => [...prev, { id: msg.stationId, name: msg.station.name }]);
     });
   }, [manager, currentRoadId, stationRoadIds]);
@@ -40,11 +39,6 @@ const StationAddingPanel: React.FC<StationAddingPanelProps> = ({
         <strong>Adding stations mode</strong><br />
         Click stations on the canvas to add them to the path.
       </p>
-      {error && (
-        <div style={{ fontSize: '11px', color: '#c00', background: '#fff0f0', border: '1px solid #f00', borderRadius: '3px', padding: '6px 8px', marginBottom: '8px' }}>
-          {error}
-        </div>
-      )}
       {pendingStations.length > 0 && (
         <div style={{ marginBottom: '8px' }}>
           {pendingStations.map((s, i) => (

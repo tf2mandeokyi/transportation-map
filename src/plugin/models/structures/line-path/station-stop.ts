@@ -1,108 +1,101 @@
-import { Owned, own } from "@/common/utils/ownership";
-import { PathEntry } from "@/plugin/utils/path-entry";
-import { SerializedLinePath } from "./base";
-import { Line } from "../line";
+import { RoadSectionPos, SerializedStationStop } from "./base";
 import { MapState } from "../map-state";
-import { Node } from "../node";
-import { Road } from "../road";
-import { RoadSection } from "../road-section";
 import { Station } from "../station";
-import { LinePath } from "./base";
 import { RoadSectionChange } from "./rsc";
-import { LinePathData } from "@/common/messages";
+import { LinePathStationStopData } from "@/common/messages";
+import { applyLateralOffset } from "@/plugin/utils/math";
+import { lineOffsetInSection } from "@/plugin/utils/constants";
 
-function findSharedNode(roadA: Road, roadB: Road): Node | null {
-  if (roadA.endpoints[1].node === roadB.endpoints[0].node || roadA.endpoints[1].node === roadB.endpoints[1].node) return roadA.endpoints[1].node;
-  if (roadA.endpoints[0].node === roadB.endpoints[0].node || roadA.endpoints[0].node === roadB.endpoints[1].node) return roadA.endpoints[0].node;
-  return null;
-}
-
-export class StationStop extends LinePath {
-  mapState: Readonly<MapState>;
+export class StationStop {
   station!: Station;
   rank!: number;
-  stops!: boolean; // false = passes through without stopping
+  stops!: boolean;
   direction!: 'ascending' | 'descending'; // direction of travel along the line (for sorting)
 
-  constructor(mapState: Readonly<MapState>) {
-    super();
-    this.mapState = mapState;
+  static fromData(mapState: Readonly<MapState>, data: LinePathStationStopData): StationStop {
+    const stop = new StationStop();
+    stop.station = mapState.getStationHarsh(data.stationId);
+    stop.rank = data.rank ?? 0;
+    stop.direction = data.direction;
+    stop.stops = data.stops ?? true;
+    return stop;
   }
 
-  applySerialized(ser: Extract<SerializedLinePath, { k: 'ss' }>): this {
-    if (!ser.i) throw new Error(`Serialized StationStop is missing stationId: ${JSON.stringify(ser)}`);
-    this.station = this.mapState.getStationHarsh(ser.i);
-    this.rank = ser.r ?? 0;
-    this.stops = ser.t !== false;
-    this.direction = ser.d === 'd' ? 'descending' : 'ascending';
-    return this;
+  static fromSerialized(mapState: Readonly<MapState>, ser: SerializedStationStop): StationStop {
+    const stop = new StationStop();
+    stop.station = mapState.getStationHarsh(ser.s);
+    stop.rank = ser.r ?? 0;
+    stop.direction = ser.d === 'd' ? 'descending' : 'ascending';
+    stop.stops = ser.t !== false;
+    return stop;
   }
 
-  serialize(): SerializedLinePath {
+  serialize(): SerializedStationStop {
     return {
-      k: 'ss',
-      i: this.station.id,
-      r: this.rank || undefined,
+      s: this.station.id,
       d: this.direction === 'descending' ? 'd' : 'a',
+      r: this.rank,
       t: this.stops ? undefined : false,
     };
   }
 
-  applyData(data: Extract<LinePathData, { kind: 'station-stop' }>): this {
-    this.station = this.mapState.getStationHarsh(data.stationId);
-    this.rank = data.rank ?? 0;
-    this.stops = data.stops ?? true;
-    this.direction = data.direction;
-    return this;
-  }
-
-  toData(): LinePathData {
+  toData(): LinePathStationStopData {
     return {
-      kind: 'station-stop',
-      index: this.index,
       stationId: this.station.id,
       direction: this.direction,
+      rank: this.rank,
       stops: this.stops,
-      rank: this.rank
     };
   }
 
-  start() {
+  start(): RoadSectionPos {
     return {
       section: this.station.parentRoadSection,
       offset: this.station.interpT.withBias(this.direction === 'ascending' ? 'negative' : 'positive'),
     };
   }
 
-  end() {
+  end(): RoadSectionPos {
     return {
       section: this.station.parentRoadSection,
       offset: this.station.interpT.withBias(this.direction === 'ascending' ? 'positive' : 'negative'),
     };
   }
 
-  renderStop() { return this.station; }
+  computePosition(): Vector | undefined {
+    const section = this.station.parentRoadSection;
+    const road = section.parentRoad;
+    if (!road || !section) return undefined;
 
-  computeEntry(line: Line): PathEntry<this> {
-    const section = (this.station.parentRoadSection as RoadSection | undefined) ?? null;
-    const road = section?.parentRoad ?? null;
-    return new PathEntry(line, this, this.rank, road, section);
+    const bezier = road.computeBezier();
+    if (!bezier) return undefined;
+
+    const numLines = section.getMaxStationStopCount();
+
+    // A single directed pass can stop at the same station more than once (loop lines).
+    // Mirror computeTotalOffset: effectiveCount = max(numLines, rank + 1) so that a rank
+    // which exceeds the directed-pass count still maps to a valid slot.
+    const effectiveCount = Math.max(numLines, this.rank + 1);
+    const totalOffset = section.computeOffset() + lineOffsetInSection(this.rank, effectiveCount);
+    const pos = this.station.interpT.evalBezier(bezier);
+    if (totalOffset === 0) return pos;
+    return applyLateralOffset(pos, this.station.interpT.evalBezierTangent(bezier), totalOffset);
   }
 
-  autoInsertRSCTo(currStop: StationStop): Owned<RoadSectionChange> | null {
+  autoInsertRSCTo(currStop: StationStop): RoadSectionChange | null {
     const prevStation = this.station;
     const currStation = currStop.station;
     const prevRoad = prevStation.parentRoadSection.parentRoad;
     const currRoad = currStation.parentRoadSection.parentRoad;
     if (prevRoad === currRoad) return null;
-    const node = findSharedNode(prevRoad, currRoad);
+    const node = prevRoad.findSharedNode(currRoad);
     if (!node) return null;
-    const rsc = new RoadSectionChange(this.mapState);
+    const rsc = new RoadSectionChange();
     rsc.node = node;
     rsc.exiting = { section: prevStation.parentRoadSection, side: node === prevRoad.endpoints[0].node ? 0 : 1 };
     rsc.entering = { section: currStation.parentRoadSection, side: node === currRoad.endpoints[0].node ? 0 : 1 };
     rsc.exitRank = this.rank;
     rsc.enterRank = currStop.rank;
-    return own(rsc);
+    return rsc;
   }
 }

@@ -1,7 +1,6 @@
 import { LineId, RoadId, RoadSectionId, StationId } from "@/common/types";
-import { LinePathData } from "@/common/messages";
 import { AddingStationsPluginSession } from "../sessions/adding-stations";
-import { Station, StationStop } from "../models/structures";
+import { Station, linePathsToData } from "../models/structures";
 import { postMessageToUI } from "../figma";
 import { buildDisplayEntries } from "../utils/display-entries";
 import { BaseController } from "./base";
@@ -28,9 +27,9 @@ export class ConnectionController extends BaseController {
     const stationRoadIds: Record<StationId, RoadId | null> = {};
     const stationSectionIds: Record<StationId, RoadSectionId | null> = {};
 
-    for (const path of line.paths) {
-      if (path instanceof StationStop) {
-        const station = path.station;
+    for (const group of line.paths) {
+      for (const stop of group.stationStops) {
+        const station = stop.station;
         stationNames[station.id] = station.name;
         stationRoadIds[station.id] = station.parentRoadSection?.parentRoad?.id ?? null;
         stationSectionIds[station.id] = station.parentRoadSection?.getRoadSectionId() ?? null;
@@ -39,22 +38,27 @@ export class ConnectionController extends BaseController {
 
     const displayEntries = buildDisplayEntries(line.paths);
 
-    postMessageToUI({ type: 'line-path-data', lineId, paths: line.paths.map(p => p.toData()), stationNames, stationRoadIds, stationSectionIds, displayEntries });
+    postMessageToUI({ type: 'line-path-data', lineId, paths: linePathsToData(line.paths), stationNames, stationRoadIds, stationSectionIds, displayEntries });
   }
 
   public insertStationIntoLine(lineId: LineId, newStation: Station, relativeToStation: Station, insertAfter: boolean): boolean {
     const line = this.model.state.getLine(lineId);
     if (!line) return false;
 
-    const refIndex = line.paths.findIndex(p => p instanceof StationStop && p.station === relativeToStation);
-    if (refIndex === -1) return false;
+    let found: { groupIndex: number; stopIndex: number } | null = null;
+    for (const [groupIndex, group] of line.paths.entries()) {
+      const stopIndex = group.stationStops.findIndex(s => s.station === relativeToStation);
+      if (stopIndex !== -1) { found = { groupIndex, stopIndex }; break; }
+    }
+    if (!found) return false;
 
-    const insertAt = insertAfter ? refIndex + 1 : refIndex;
-    const newStop: LinePathData = { kind: 'station-stop', stationId: newStation.id, direction: 'ascending' };
-
-    const before = line.paths.slice(0, insertAt).map(p => p.toData());
-    const after  = line.paths.slice(insertAt).map(p => p.toData());
-    line.replacePaths([...before, newStop, ...after]);
+    // insertStationStopAt inserts right after the given address, so inserting
+    // "before" addresses the entry immediately preceding the reference stop.
+    if (insertAfter) {
+      line.insertStationStopAt(found.groupIndex, found.stopIndex, { stationId: newStation.id, direction: 'ascending' });
+    } else {
+      line.insertStationStopAt(found.groupIndex, found.stopIndex - 1, { stationId: newStation.id, direction: 'ascending' });
+    }
 
     return true;
   }
@@ -63,11 +67,11 @@ export class ConnectionController extends BaseController {
     const line = this.model.state.getLine(lineId);
     if (!line) return;
 
-    const hasStart = line.paths.some(p => p instanceof StationStop && p.station === startStation);
+    const hasStart = line.paths.some(group => group.stationStops.some(s => s.station === startStation));
     if (!hasStart) {
-      line.addPath({ kind: 'station-stop', stationId: startStation.id, direction: 'ascending' });
+      line.appendStationStop({ stationId: startStation.id, direction: 'ascending' });
     }
-    line.addPath({ kind: 'station-stop', stationId: endStation.id, direction: 'ascending' });
+    line.appendStationStop({ stationId: endStation.id, direction: 'ascending' });
   }
 
   public handleSelectionChange(): void {
@@ -77,9 +81,9 @@ export class ConnectionController extends BaseController {
     const station = this.model.findStationFromNode(selection[0]);
     if (station) {
       const lines = [];
-      for (const { line, path } of station.getStopsAcrossLines()) {
+      for (const { line, path, groupIndex, stopIndex } of station.getStopsAcrossLines()) {
         const facing: 'left' | 'right' = path.direction === 'ascending' ? 'right' : 'left';
-        lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing, stops: path.stops });
+        lines.push({ id: line.id, name: line.name, color: line.color, groupIndex, stopIndex, rank: path.rank, facing, stops: path.stops });
       }
       postMessageToUI({
         type: 'station-clicked',

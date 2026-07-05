@@ -1,71 +1,68 @@
+import { NodeId, RoadSectionId } from "@/common/types";
 import { OffsetT } from "@/plugin/utils/offset-t";
-import { PathEntry } from "@/plugin/utils/path-entry";
-import { SerializedLinePath } from "./base";
-import { Line } from "../line";
-import { MapState } from "../map-state";
+import { RoadSectionPos } from "./base";
 import { Node } from "../node";
 import { RoadSection } from "../road-section";
-import { LinePath } from "./base";
 import { LinePathData } from "@/common/messages";
+import { MapState } from "../map-state";
 
-export class RoadSectionChange extends LinePath {
-  mapState: Readonly<MapState>;
+type LinePathRscFields = Pick<LinePathData, 'fromNodeId' | 'entering' | 'exiting'>;
+import { applyLateralOffset } from "@/plugin/utils/math";
+import { lineOffsetInSection } from "@/plugin/utils/constants";
+
+export class RoadSectionChange {
   node!: Node;
   exiting!: { section: RoadSection, side: 0 | 1 } | null;
   entering!: { section: RoadSection, side: 0 | 1 } | null;
   exitRank!: number;
   enterRank!: number;
 
-  constructor(mapState: Readonly<MapState>) {
-    super();
-    this.mapState = mapState;
+  static fromData(mapState: Readonly<MapState>, data: LinePathRscFields): RoadSectionChange {
+    const rsc = new RoadSectionChange();
+    rsc.node = mapState.getNodeHarsh(data.fromNodeId);
+    rsc.exiting = data.exiting
+      ? { section: mapState.getRoadSectionHarsh(data.exiting.sectionId), side: data.exiting.side }
+      : null;
+    rsc.entering = data.entering
+      ? { section: mapState.getRoadSectionHarsh(data.entering.sectionId), side: data.entering.side }
+      : null;
+    rsc.exitRank = data.exiting?.rank ?? 0;
+    rsc.enterRank = data.entering?.rank ?? 0;
+    return rsc;
   }
 
-  applySerialized(ser: Extract<SerializedLinePath, { k: 'sc' }>): this {
-    if (!ser.n) throw new Error(`Serialized RoadSectionChange is missing nodeId: ${JSON.stringify(ser)}`);
-    this.node = this.mapState.getNodeHarsh(ser.n);
-    this.exiting = ser.e ? { section: this.mapState.getRoadSectionHarsh(ser.e[0]), side: ser.e[1] } : null;
-    this.entering = ser.a ? { section: this.mapState.getRoadSectionHarsh(ser.a[0]), side: ser.a[1] } : null;
-    this.exitRank = ser.f ?? 0;
-    this.enterRank = ser.g ?? 0;
-    return this;
-  }
-  
-  applyData(data: Extract<LinePathData, { kind: 'road-section-change' }>): this {
-    this.node = this.mapState.getNodeHarsh(data.nodeId);
-    this.exiting = data.exiting
-      ? { section: this.mapState.getRoadSectionHarsh(data.exiting.sectionId), side: data.exiting.side }
-      : null;
-    this.entering = data.entering
-      ? { section: this.mapState.getRoadSectionHarsh(data.entering.sectionId), side: data.entering.side }
-      : null;
-    this.exitRank = 0;
-    this.enterRank = 0;
-    return this;
+  static fromSerialized(
+    mapState: Readonly<MapState>,
+    nodeId: NodeId,
+    e?: [RoadSectionId, 0 | 1, number],
+    x?: [RoadSectionId, 0 | 1, number],
+  ): RoadSectionChange {
+    const rsc = new RoadSectionChange();
+    rsc.node = mapState.getNodeHarsh(nodeId);
+    rsc.entering = e ? { section: mapState.getRoadSectionHarsh(e[0]), side: e[1] } : null;
+    rsc.exiting = x ? { section: mapState.getRoadSectionHarsh(x[0]), side: x[1] } : null;
+    rsc.enterRank = e?.[2] ?? 0;
+    rsc.exitRank = x?.[2] ?? 0;
+    return rsc;
   }
 
-  toData(): LinePathData {
+  toData(): LinePathRscFields {
     return {
-      kind: 'road-section-change',
-      index: this.index,
-      nodeId: this.node.id,
-      exiting: this.exiting ? { sectionId: this.exiting.section.getRoadSectionId(), side: this.exiting.side } : null,
-      entering: this.entering ? { sectionId: this.entering.section.getRoadSectionId(), side: this.entering.side } : null,
+      fromNodeId: this.node.id,
+      exiting: this.exiting ? { sectionId: this.exiting.section.getRoadSectionId(), side: this.exiting.side, rank: this.exitRank } : null,
+      entering: this.entering ? { sectionId: this.entering.section.getRoadSectionId(), side: this.entering.side, rank: this.enterRank } : null,
     };
   }
 
-  serialize(): SerializedLinePath {
-    return {
-      k: 'sc',
-      n: this.node.id,
-      e: this.exiting ? [this.exiting.section.getRoadSectionId(), this.exiting.side] : undefined,
-      a: this.entering ? [this.entering.section.getRoadSectionId(), this.entering.side] : undefined,
-      f: this.exitRank,
-      g: this.enterRank,
-    };
+  serializeEntering(): [RoadSectionId, 0 | 1, number] | undefined {
+    return this.entering ? [this.entering.section.getRoadSectionId(), this.entering.side, this.enterRank] : undefined;
   }
 
-  start() {
+  serializeExiting(): [RoadSectionId, 0 | 1, number] | undefined {
+    return this.exiting ? [this.exiting.section.getRoadSectionId(), this.exiting.side, this.exitRank] : undefined;
+  }
+
+  start(): RoadSectionPos | undefined {
     if (!this.exiting) return undefined;
     return {
       section: this.exiting.section,
@@ -73,7 +70,7 @@ export class RoadSectionChange extends LinePath {
     }
   }
 
-  end() {
+  end(): RoadSectionPos | undefined {
     if (!this.entering) return undefined;
     return {
       section: this.entering.section,
@@ -81,13 +78,29 @@ export class RoadSectionChange extends LinePath {
     }
   }
 
-  renderStop() { return null; }
+  computeStartPosition(): Vector | undefined {
+    const section = this.entering?.section;
+    if (!section) return undefined;
+    return this.computePosition(section, this.enterRank);
+  }
 
-  computeEntry(line: Line): PathEntry<this> {
-    const entry = this?.exiting ?? this?.entering;
-    const section = entry?.section ?? null;
-    const road = section?.parentRoad ?? null;
-    const rank = this?.exiting === null ? (this?.enterRank ?? 0) : (this?.exitRank ?? 0);
-    return new PathEntry(line, this, rank, road, section);
+  computeEndPosition(): Vector | undefined {
+    const section = this.exiting?.section;
+    if (!section) return undefined;
+    return this.computePosition(section, this.exitRank);
+  }
+
+  private computePosition(section: RoadSection, rank: number): Vector | undefined {
+    const road = section.parentRoad;
+    const bezier = road.computeBezier();
+    if (!bezier) return undefined;
+
+    const numLines = section.getMaxStationStopCount();
+
+    const totalOffset = section.computeOffset() + lineOffsetInSection(rank, numLines);
+    const isStart = road.endpoints[0].node === this.node;
+    const ep = road.endpoints[isStart ? 0 : 1].endpointPos;
+    if (totalOffset === 0) return ep;
+    return applyLateralOffset(ep, bezier.evalTangent(isStart ? 0 : 1), totalOffset * (isStart ? 1 : -1));
   }
 }

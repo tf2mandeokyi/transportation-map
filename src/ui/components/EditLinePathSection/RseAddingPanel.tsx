@@ -1,65 +1,79 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { NodeId, RoadId, RoadSectionId } from '@/common/types';
 import { RoadSectionData } from '@/common/messages';
+import { LinePathAddress } from '../../utils/linePathGroups';
 import { useMessageManager } from '../../contexts/MessageContext';
 import { useNetworkContext } from '../../contexts/NetworkContext';
 
 interface RseAddingPanelProps {
-  afterPathIndex: number;
+  afterPathIndex: LinePathAddress;
   sourceRoadId: RoadId | null;
   exitingSectionId: RoadSectionId | null;
-  onCommitRse: (afterPathIndex: number, exitingSectionId: RoadSectionId | null, nodeId: NodeId, enteringSectionId: RoadSectionId | null) => void;
+  onCommitRses: (
+    afterPathIndex: LinePathAddress,
+    entries: Array<{ nodeId: NodeId; exitingSectionId: RoadSectionId | null; enteringSectionId: RoadSectionId | null }>
+  ) => void;
   onCancel: () => void;
 }
 
-type PendingConfig = {
+type PendingRse = {
+  destRoadId: RoadId;
+  destRoadName: string | undefined;
   isUturn: boolean;
   nodeOptions: Array<{ nodeId: NodeId; nodeName: string }>;
   sections: RoadSectionData[];
-  preselectedNodeId: NodeId | null;
-  preselectedSectionIndex: number;
+  selectedNodeId: string;
+  selectedSectionIdx: string;
 };
 
 const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
-  afterPathIndex, sourceRoadId, exitingSectionId, onCommitRse, onCancel,
+  afterPathIndex, sourceRoadId, exitingSectionId, onCommitRses, onCancel,
 }) => {
   const manager = useMessageManager();
   const { roads, nodes } = useNetworkContext();
 
-  const [error, setError]                       = useState<string | null>(null);
-  const [pending, setPending]                   = useState<PendingConfig | null>(null);
-  const [selectedNodeId, setSelectedNodeId]     = useState<string>('');
-  const [selectedSectionIdx, setSelectedSectionIdx] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
+  const [pendingList, setPendingList] = useState<PendingRse[]>([]);
 
-  const handleRef = useRef<(destRoadId: RoadId) => void>(() => {});
-  handleRef.current = (destRoadId: RoadId) => {
+  const pendingListRef = useRef<PendingRse[]>([]);
+  useEffect(() => { pendingListRef.current = pendingList; }, [pendingList]);
+
+  const handleRef = useRef<(destRoadId: RoadId, sectionId: RoadSectionId | null) => void>(() => {});
+  handleRef.current = (destRoadId: RoadId, sectionId: RoadSectionId | null) => {
+    const list = pendingListRef.current;
+    const currentRoadId = list.length > 0 ? list[list.length - 1].destRoadId : sourceRoadId;
     const destRoad = roads.find(r => r.id === destRoadId);
     if (!destRoad) return;
 
     setError(null);
 
-    if (sourceRoadId === destRoadId) {
-      // U-turn: same road — pick endpoint node + section to re-enter
+    const sectionIdx = sectionId ? destRoad.sections.findIndex(s => s.id[1] === sectionId[1]) : -1;
+    const selectedSectionIdx = sectionIdx >= 0 ? String(sectionIdx) : '';
+
+    if (currentRoadId === destRoadId) {
+      // U-turn on same road
       const nodeOptions = ([destRoad.startNodeId, destRoad.endNodeId] as NodeId[]).map(nodeId => ({
         nodeId,
         nodeName: nodes.find(n => n.id === nodeId)?.name ?? nodeId,
       }));
-      const exitingIdx = exitingSectionId
-        ? destRoad.sections.findIndex(s => s.id[1] === exitingSectionId[1])
-        : 0;
-      const preselectedSectionIndex = exitingIdx >= 0 ? exitingIdx : 0;
-      setPending({ isUturn: true, nodeOptions, sections: destRoad.sections, preselectedNodeId: null, preselectedSectionIndex });
-      setSelectedNodeId('');
-      setSelectedSectionIdx(String(preselectedSectionIndex));
+      setPendingList(prev => [...prev, {
+        destRoadId,
+        destRoadName: destRoad.name,
+        isUturn: true,
+        nodeOptions,
+        sections: destRoad.sections,
+        selectedNodeId: nodeOptions.length === 1 ? nodeOptions[0].nodeId : '',
+        selectedSectionIdx,
+      }]);
       return;
     }
 
-    if (!sourceRoadId) {
+    if (!currentRoadId) {
       setError('No road context at this position.');
       return;
     }
 
-    const sourceRoad = roads.find(r => r.id === sourceRoadId);
+    const sourceRoad = roads.find(r => r.id === currentRoadId);
     if (!sourceRoad) return;
 
     const sourceNodeIds = new Set([sourceRoad.startNodeId, sourceRoad.endNodeId]);
@@ -72,31 +86,54 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
       return;
     }
 
-    const preselectedNodeId = sharedNodes.length === 1 ? sharedNodes[0].nodeId : null;
-    setPending({ isUturn: false, nodeOptions: sharedNodes, sections: destRoad.sections, preselectedNodeId, preselectedSectionIndex: 0 });
-    setSelectedNodeId(preselectedNodeId ?? '');
-    setSelectedSectionIdx(destRoad.sections.length > 0 ? '0' : '');
+    setPendingList(prev => [...prev, {
+      destRoadId,
+      destRoadName: destRoad.name,
+      isUturn: false,
+      nodeOptions: sharedNodes,
+      sections: destRoad.sections,
+      selectedNodeId: sharedNodes.length === 1 ? sharedNodes[0].nodeId : '',
+      selectedSectionIdx,
+    }]);
   };
 
   useEffect(() => {
-    return manager.onMessage('road-clicked', msg => handleRef.current(msg.roadId));
+    return manager.onMessage('road-clicked', msg => handleRef.current(msg.roadId, msg.sectionId));
   }, [manager]);
 
-  const handleCommit = () => {
-    if (!pending) return;
-    const nodeId = selectedNodeId as NodeId;
-    const idx = parseInt(selectedSectionIdx, 10);
-    const enteringSectionId = pending.sections[idx]?.id ?? null;
-    onCommitRse(afterPathIndex, exitingSectionId, nodeId, enteringSectionId);
+  const updateEntry = (index: number, patch: Partial<Pick<PendingRse, 'selectedNodeId' | 'selectedSectionIdx'>>) => {
+    setPendingList(prev => prev.map((e, i) => i === index ? { ...e, ...patch } : e));
   };
 
-  const canCommit = !!selectedNodeId && selectedSectionIdx !== '';
+  // Removing entry n also removes all entries after it since the road chain is invalidated.
+  const removeEntry = (index: number) => {
+    setPendingList(prev => prev.slice(0, index));
+  };
+
+  const handleCommit = () => {
+    const list = pendingListRef.current;
+    const entries = list.map((entry, i) => {
+      const nodeId = entry.selectedNodeId as NodeId;
+      const idx = parseInt(entry.selectedSectionIdx, 10);
+      const enteringSectionId = entry.sections[idx]?.id ?? null;
+      const prevEntry = list[i - 1];
+      const prevIdx = prevEntry ? parseInt(prevEntry.selectedSectionIdx, 10) : -1;
+      const exiting = i === 0
+        ? exitingSectionId
+        : (prevEntry?.sections[prevIdx]?.id ?? null);
+      return { nodeId, exitingSectionId: exiting, enteringSectionId };
+    });
+    onCommitRses(afterPathIndex, entries);
+  };
+
+  const canCommit = pendingList.length > 0 &&
+    pendingList.every(e => !!e.selectedNodeId && e.selectedSectionIdx !== '');
 
   return (
     <div style={{ padding: '12px', background: '#f5f5f5', borderRadius: '4px', border: '2px solid #18a0fb', marginTop: '8px' }}>
       <p style={{ fontSize: '11px', color: '#666', margin: '0 0 8px 0' }}>
-        <strong>Adding road junction</strong><br />
-        Click a road on the canvas. Click the same road to create a U-turn.
+        <strong>Adding roads</strong><br />
+        Click roads on the canvas. Click the same road to add a U-turn.
       </p>
 
       {error && (
@@ -105,66 +142,65 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
         </div>
       )}
 
-      {pending && (
-        <div style={{ marginBottom: '8px' }}>
-          <p style={{ fontSize: '11px', fontWeight: 600, color: '#333', margin: '0 0 6px 0' }}>
-            {pending.isUturn ? '↩ U-turn — configure:' : '↪ Junction — configure:'}
-          </p>
+      {pendingList.map((entry, i) => (
+        <div key={i} style={{ marginBottom: '8px', padding: '8px', background: '#fff', borderRadius: '4px', border: '1px solid #ddd' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 600, flex: 1 }}>
+              {entry.isUturn ? '↩' : '↪'} {entry.destRoadName ?? entry.destRoadId}
+            </span>
+            <button className="button button--secondary small-btn" onClick={() => removeEntry(i)}>X</button>
+          </div>
 
-          {pending.nodeOptions.length > 1 && (
+          {entry.nodeOptions.length > 1 && (
             <div style={{ marginBottom: '6px' }}>
               <label style={{ fontSize: '11px', color: '#555', display: 'block', marginBottom: '2px' }}>
-                {pending.isUturn ? 'Endpoint node:' : 'Junction node:'}
+                {entry.isUturn ? 'Endpoint node:' : 'Junction node:'}
               </label>
               <select
                 className="input"
-                value={selectedNodeId}
-                onChange={e => setSelectedNodeId(e.target.value)}
+                value={entry.selectedNodeId}
+                onChange={e => updateEntry(i, { selectedNodeId: e.target.value })}
                 style={{ fontSize: '11px', width: '100%' }}
               >
                 <option value="">— select node —</option>
-                {pending.nodeOptions.map(opt => (
+                {entry.nodeOptions.map(opt => (
                   <option key={opt.nodeId} value={opt.nodeId}>{opt.nodeName}</option>
                 ))}
               </select>
             </div>
           )}
 
-          <div style={{ marginBottom: '8px' }}>
+          <div>
             <label style={{ fontSize: '11px', color: '#555', display: 'block', marginBottom: '2px' }}>
-              {pending.isUturn ? 'Re-enter on section:' : 'Enter on section:'}
+              {entry.isUturn ? 'Re-entering on section:' : 'Entering on section:'}
             </label>
-            {pending.sections.length === 0 ? (
+            {entry.sections.length === 0 ? (
               <p style={{ fontSize: '11px', color: '#c00', margin: 0 }}>Road has no sections.</p>
+            ) : entry.selectedSectionIdx === '' ? (
+              <p style={{ fontSize: '11px', color: '#c00', margin: 0 }}>Click the section on the canvas.</p>
             ) : (
-              <select
-                className="input"
-                value={selectedSectionIdx}
-                onChange={e => setSelectedSectionIdx(e.target.value)}
-                style={{ fontSize: '11px', width: '100%' }}
-              >
-                <option value="">— select section —</option>
-                {pending.sections.map((s, idx) => (
-                  <option key={idx} value={String(idx)}>
-                    {s.name ?? `Section ${s.index + 1}`}
-                  </option>
-                ))}
-              </select>
+              <p style={{ fontSize: '11px', margin: 0 }}>
+                {entry.sections[parseInt(entry.selectedSectionIdx, 10)]?.name
+                  ?? `Section ${entry.sections[parseInt(entry.selectedSectionIdx, 10)]?.index + 1}`}
+              </p>
             )}
           </div>
+        </div>
+      ))}
 
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        {pendingList.length > 0 && (
           <button
             className="button button--primary"
             disabled={!canCommit}
-            style={{ width: '100%', marginBottom: '4px' }}
+            style={{ width: '100%' }}
             onClick={handleCommit}
           >
-            {pending.isUturn ? 'Add U-turn' : 'Add Junction'}
+            Add {pendingList.length === 1 ? 'road' : `${pendingList.length} roads`}
           </button>
-        </div>
-      )}
-
-      <button className="button button--secondary" style={{ width: '100%' }} onClick={onCancel}>Cancel</button>
+        )}
+        <button className="button button--secondary" style={{ width: '100%' }} onClick={onCancel}>Cancel</button>
+      </div>
     </div>
   );
 };

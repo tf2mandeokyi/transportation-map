@@ -4,6 +4,7 @@ import { TransportationMapObject } from './types';
 import { RoadSection, SerializedRoadSection } from './road-section';
 import { own, Owned } from "@/common/utils/ownership";
 import { Connection, deserializeConnection, serializeConnection, SerializedConnection } from "./connection";
+import { Node } from "./node";
 
 export interface SerializedRoad {
   n?: string;                                         // name
@@ -21,13 +22,17 @@ export interface RoadProps {
 export class Road extends TransportationMapObject<RoadId> {
   name?: string;
   bezierMidPoint!: Vector;
-  endpoints!: [Owned<Connection>, Owned<Connection>];
+  private _endpoints!: [Owned<Connection>, Owned<Connection>];
   private readonly sections: Map<SectionId, Owned<RoadSection>> = new Map();
+
+  get endpoints(): [Connection, Connection] {
+    return [this._endpoints[0], this._endpoints[1]];
+  }
 
   applyProps(props: RoadProps): this {
     this.name = props.name;
     this.bezierMidPoint = props.bezierMidPoint;
-    this.endpoints = props.endpoints;
+    this._endpoints = [own(props.endpoints[0]), own(props.endpoints[1])];
     return this;
   }
 
@@ -39,7 +44,7 @@ export class Road extends TransportationMapObject<RoadId> {
     const endpoint1 = deserializeConnection(this.mapState, ser.p[1]);
     endpoint0.node.addRoadConnection(this, 0);
     endpoint1.node.addRoadConnection(this, 1);
-    this.endpoints = [own(endpoint0), own(endpoint1)];
+    this._endpoints = [own(endpoint0), own(endpoint1)];
 
     for (const secId in ser.c) {
       const secSer = ser.c[secId as SectionId];
@@ -57,12 +62,12 @@ export class Road extends TransportationMapObject<RoadId> {
     };
   }
 
-  getSections(): IterableIterator<RoadSection> {
-    return this.sections.values();
+  *getSections(): IterableIterator<RoadSection> {
+    for (const section of this.sections.values()) yield section;
   }
 
   getSectionsByIndex(): Array<RoadSection> {
-    return [...this.sections.values()].sort((a, b) => a.index - b.index);
+    return [...this.getSections()].sort((a, b) => a.index - b.index);
   }
 
   getSectionHarsh(sectionId: SectionId | undefined): RoadSection {
@@ -73,7 +78,7 @@ export class Road extends TransportationMapObject<RoadId> {
   }
 
   getSectionByIndex(index: number): RoadSection | undefined {
-    for (const section of this.sections.values()) {
+    for (const section of this.getSections()) {
       if (section.index === index) {
         return section;
       }
@@ -83,8 +88,8 @@ export class Road extends TransportationMapObject<RoadId> {
 
   hasSection(id: SectionId): boolean { return this.sections.has(id); }
 
-  addSection(section: Owned<RoadSection>): void {
-    this.sections.set(section.id, section);
+  addSection(section: RoadSection): void {
+    this.sections.set(section.id, own(section));
   }
 
   removeSection(section: RoadSection): void {
@@ -98,5 +103,11 @@ export class Road extends TransportationMapObject<RoadId> {
       this.bezierMidPoint,
       this.endpoints[1].endpointPos,
     );
+  }
+
+  findSharedNode(roadB: Road): Node | null {
+    if (this.endpoints[1].node === roadB.endpoints[0].node || this.endpoints[1].node === roadB.endpoints[1].node) return this.endpoints[1].node;
+    if (this.endpoints[0].node === roadB.endpoints[0].node || this.endpoints[0].node === roadB.endpoints[1].node) return this.endpoints[0].node;
+    return null;
   }
 }

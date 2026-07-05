@@ -1,8 +1,7 @@
 import { RoadId } from "@/common/types";
 import { Node } from "../../models/structures/node";
 import { Model } from "../../models";
-import { own } from "@/common/utils/ownership";
-import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_ROAD_ID } from "../../views/road";
+import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_ROAD_ID, FIGMA_KEY_SECTION_ID } from "../../views/road";
 import { renderEditHandle } from "../../figmls";
 import { bezierPathData, CubicBezierPoints, QuadBezierPoints } from "../../utils/bezier";
 
@@ -24,7 +23,7 @@ export class RoadControlManager {
   private controlledRoadId: RoadId | null = null;
   private controlElementIds: string[] = [];
   private stemLineIds: StemLineIds | null = null;
-  private lockedRoadNodeId: string | null = null;
+  private lockedRoadNodeIds: string[] = [];
   public suppressNextControlChanges = false;
 
   constructor(private readonly model: Model) {}
@@ -50,13 +49,9 @@ export class RoadControlManager {
     const mid = road.bezierMidPoint;
     const p2  = road.endpoints[1].endpointPos;
 
-    const roadGroup = figma.currentPage.children.find(n =>
-      n.getPluginData(FIGMA_KEY_ROAD_ID) === roadId && n.getPluginData(FIGMA_KEY_IS_ROAD_CONTROL) !== 'true'
-    );
-    if (roadGroup && !roadGroup.removed) {
-      (roadGroup as SceneNode).locked = true;
-      this.lockedRoadNodeId = roadGroup.id;
-    }
+    const roadVisualNodes = this.findRoadVisualNodes(roadId);
+    for (const n of roadVisualNodes) n.locked = true;
+    this.lockedRoadNodeIds = roadVisualNodes.map(n => n.id);
 
     const startCenter = this.computeNodeCenter(startNode);
     const endCenter   = this.computeNodeCenter(endNode);
@@ -93,11 +88,11 @@ export class RoadControlManager {
   }
 
   async remove(): Promise<void> {
-    if (this.lockedRoadNodeId) {
-      const roadNode = await figma.getNodeByIdAsync(this.lockedRoadNodeId);
+    for (const id of this.lockedRoadNodeIds) {
+      const roadNode = await figma.getNodeByIdAsync(id);
       if (roadNode && !roadNode.removed) (roadNode as SceneNode).locked = false;
-      this.lockedRoadNodeId = null;
     }
+    this.lockedRoadNodeIds = [];
     for (const id of this.controlElementIds) {
       const node = await figma.getNodeByIdAsync(id);
       if (node && !node.removed) node.remove();
@@ -108,17 +103,23 @@ export class RoadControlManager {
   }
 
   cleanup(): void {
-    if (this.lockedRoadNodeId) {
-      const roadNode = figma.currentPage.children.find(n => n.id === this.lockedRoadNodeId);
+    for (const id of this.lockedRoadNodeIds) {
+      const roadNode = figma.currentPage.children.find(n => n.id === id);
       if (roadNode && !roadNode.removed) (roadNode as SceneNode).locked = false;
-      this.lockedRoadNodeId = null;
     }
+    this.lockedRoadNodeIds = [];
     figma.currentPage
       .findAll(n => n.getPluginData(FIGMA_KEY_IS_ROAD_CONTROL) === 'true')
       .forEach(n => { if (!n.removed) n.remove(); });
     this.controlElementIds = [];
     this.stemLineIds = null;
     this.controlledRoadId = null;
+  }
+
+  private findRoadVisualNodes(roadId: RoadId): SceneNode[] {
+    return figma.currentPage.children.filter(n =>
+      n.getPluginData(FIGMA_KEY_ROAD_ID) === roadId && n.getPluginData(FIGMA_KEY_IS_ROAD_CONTROL) !== 'true'
+    );
   }
 
   async onEndpointHandleMoved(roadId: RoadId, side: 'start' | 'end', handle: FrameNode): Promise<void> {
@@ -128,9 +129,9 @@ export class RoadControlManager {
     if (!road) return;
 
     if (side === 'start') {
-      road.endpoints = [own({ ...road.endpoints[0], endpointPos: handlePos }), road.endpoints[1]];
+      road.endpoints[0].endpointPos = handlePos;
     } else {
-      road.endpoints = [road.endpoints[0], own({ ...road.endpoints[1], endpointPos: handlePos })];
+      road.endpoints[1].endpointPos = handlePos;
     }
 
     await this.updateRoadAndStems(roadId);
@@ -174,14 +175,8 @@ export class RoadControlManager {
       await updateStem(ids.endToMid,     p2,  mid);
     }
 
-    const roadGroup = figma.currentPage.children.find(n =>
-      n.getPluginData(FIGMA_KEY_ROAD_ID) === roadId && n.getPluginData(FIGMA_KEY_IS_ROAD_CONTROL) !== 'true'
-    );
-    if (!roadGroup || roadGroup.removed || !('children' in roadGroup)) return;
-
-    const group = roadGroup as GroupNode;
+    const roadVisualNodes = this.findRoadVisualNodes(roadId) as VectorNode[];
     const sections = road.getSectionsByIndex();
-    const children = group.children;
 
     const toLocalBezier = (child: VectorNode, pts: { p0: Vector; p1: Vector; p2: Vector; p3: Vector }) => {
       const tx = child.absoluteTransform[0][2];
@@ -191,7 +186,7 @@ export class RoadControlManager {
     };
 
     if (sections.length === 0) {
-      const child = children[0] as VectorNode | undefined;
+      const child = roadVisualNodes.find(n => !n.getPluginData(FIGMA_KEY_SECTION_ID));
       if (child) {
         child.vectorPaths = [{
           windingRule: 'NONZERO',
@@ -199,17 +194,16 @@ export class RoadControlManager {
         }];
       }
     } else {
-      sections.forEach((section, i) => {
+      for (const section of sections) {
+        const child = roadVisualNodes.find(n => n.getPluginData(FIGMA_KEY_SECTION_ID) === section.id);
+        if (!child) continue;
         const offset = section.computeOffset();
         const o = cubic.offset(offset);
-        const child = children[i] as VectorNode | undefined;
-        if (child) {
-          child.vectorPaths = [{
-            windingRule: 'NONZERO',
-            data: bezierPathData(toLocalBezier(child, o)),
-          }];
-        }
-      });
+        child.vectorPaths = [{
+          windingRule: 'NONZERO',
+          data: bezierPathData(toLocalBezier(child, o)),
+        }];
+      }
     }
   }
 

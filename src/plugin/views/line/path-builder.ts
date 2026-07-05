@@ -1,4 +1,4 @@
-import { Line, LinePath, Road, RoadSection, RoadSectionChange, Station, StationStop } from "../../models/structures";
+import { Line, Road, RoadSection, RoadSectionChange, Station, StationStop } from "../../models/structures";
 import { CubicBezierPoints } from "../../utils/bezier";
 import { PathBuilder } from "../../utils/path";
 import { OffsetT } from "../../utils/offset-t";
@@ -29,16 +29,20 @@ type RoadTraversal = {
 function buildTraversals(
   line: Line,
   rseBetween: RoadSectionChange[],
-  startStop: LinePath,
-  endStop: LinePath,
+  startStop: StationStop,
+  startGroupIndex: number,
+  startStopIndex: number,
+  endStop: StationStop,
+  endGroupIndex: number,
+  endStopIndex: number,
 ): RoadTraversal[] {
-  const startStation = startStop.renderStop()!;
-  const endStation   = endStop.renderStop()!;
+  const startStation = startStop.station;
+  const endStation   = endStop.station;
   const startSection = startStation.parentRoadSection;
   const endSection   = endStation.parentRoadSection;
   const startRoad    = startSection.parentRoad;
-  const startT       = startStop.end()!.offset;
-  const endT         = endStop.start()!.offset;
+  const startT       = startStop.end().offset;
+  const endT         = endStop.start().offset;
 
   const traversals: RoadTraversal[] = [];
 
@@ -48,8 +52,8 @@ function buildTraversals(
     section: startSection,
     entryT: startT,
     exitT: firstRsc.node === startRoad.endpoints[1].node ? new OffsetT(1, 'negative') : new OffsetT(0, 'positive'),
-    offsetDep: computeTotalOffset(line, startSection, startStation, startStop.index),
-    offsetArr: computeTotalOffset(line, startSection, undefined, undefined, firstRsc.exitRank),
+    offsetDep: computeTotalOffset(line, startSection, startStation, startGroupIndex, startStopIndex),
+    offsetArr: computeTotalOffset(line, startSection, undefined, undefined, undefined, firstRsc.exitRank),
   });
 
   for (let k = 0; k < rseBetween.length - 1; k++) {
@@ -63,8 +67,8 @@ function buildTraversals(
       section,
       entryT: rsc.node === road.endpoints[0].node ? new OffsetT(0, 'positive') : new OffsetT(1, 'negative'),
       exitT:  nextRsc.node === road.endpoints[1].node ? new OffsetT(1, 'negative') : new OffsetT(0, 'positive'),
-      offsetDep: computeTotalOffset(line, section, undefined, undefined, rsc.enterRank),
-      offsetArr: computeTotalOffset(line, section, undefined, undefined, nextRsc.exitRank),
+      offsetDep: computeTotalOffset(line, section, undefined, undefined, undefined, rsc.enterRank),
+      offsetArr: computeTotalOffset(line, section, undefined, undefined, undefined, nextRsc.exitRank),
     });
   }
 
@@ -79,8 +83,8 @@ function buildTraversals(
     section: endSection,
     entryT: lastRsc.node === lastRoad.endpoints[0].node ? new OffsetT(0, 'positive') : new OffsetT(1, 'negative'),
     exitT: endT,
-    offsetDep: computeTotalOffset(line, endSection, undefined, undefined, isUTurnRsc ? (endStop as StationStop).rank : lastRsc.enterRank),
-    offsetArr: computeTotalOffset(line, endSection, endStation, endStop.index),
+    offsetDep: computeTotalOffset(line, endSection, undefined, undefined, undefined, isUTurnRsc ? endStop.rank : lastRsc.enterRank),
+    offsetArr: computeTotalOffset(line, endSection, endStation, endGroupIndex, endStopIndex),
   });
 
   return traversals;
@@ -99,25 +103,29 @@ function chainBezierEntries(entries: CubicBezierPoints[][]): string {
 
 export function buildSegmentPath(
   line: Line,
-  startStop: LinePath,
-  endStop: LinePath,
+  startStop: StationStop,
+  startGroupIndex: number,
+  startStopIndex: number,
+  endStop: StationStop,
+  endGroupIndex: number,
+  endStopIndex: number,
   rseBetween: RoadSectionChange[],
   headCanvas: Vector,
   tailCanvas: Vector,
 ): string {
-  const startStation = startStop.renderStop()!;
-  const endStation   = endStop.renderStop()!;
+  const startStation = startStop.station;
+  const endStation   = endStop.station;
   const startSection = startStation.parentRoadSection;
   const endSection   = endStation.parentRoadSection;
   const startRoad    = startSection.parentRoad;
-  const startT       = startStop.end()!.offset;
-  const endT         = endStop.start()!.offset;
+  const startT       = startStop.end().offset;
+  const endT         = endStop.start().offset;
   const fallback = new PathBuilder().moveTo(headCanvas).lineTo(tailCanvas).build();
 
   if (startStation === endStation) {
     const centerline = startRoad.computeBezier();
     if (!centerline) return fallback;
-    const tangent = centerline.evalTangent(startStop.start()!.offset);
+    const tangent = centerline.evalTangent(startStop.start().offset);
     const tlen = Math.hypot(tangent.x, tangent.y);
     if (tlen < 0.001) return fallback;
     const chord = Math.hypot(tailCanvas.x - headCanvas.x, tailCanvas.y - headCanvas.y);
@@ -128,29 +136,27 @@ export function buildSegmentPath(
     return new PathBuilder().moveTo(headCanvas).cubicTo(p1, p2, tailCanvas).build();
   }
 
-  const startSS = startStop instanceof StationStop ? startStop : null;
-  const endSS   = endStop   instanceof StationStop ? endStop   : null;
-  const depRankOverride = startSS && !startSS.stops ? startSS.rank : undefined;
-  const arrRankOverride = endSS   && !endSS.stops   ? endSS.rank   : undefined;
+  const depRankOverride = !startStop.stops ? startStop.rank : undefined;
+  const arrRankOverride = !endStop.stops   ? endStop.rank   : undefined;
 
   if (rseBetween.length === 0) {
     if (startSection === endSection) {
-      const offsetDep = computeTotalOffset(line, startSection, startStation, startStop.index, depRankOverride);
-      const offsetArr = computeTotalOffset(line, endSection,   endStation,   endStop.index,   arrRankOverride);
+      const offsetDep = computeTotalOffset(line, startSection, startStation, startGroupIndex, startStopIndex, depRankOverride);
+      const offsetArr = computeTotalOffset(line, endSection,   endStation,   endGroupIndex,   endStopIndex,   arrRankOverride);
       const segs = computeSectionSegs(startRoad, startT, endT, offsetDep, offsetArr);
       return segs.length === 0 ? fallback : new PathBuilder().beziers(segs).build();
     }
     // Different sections on the same road — single crossing segment.
     const centerline = startRoad.computeBezier();
     if (!centerline) return fallback;
-    const offsetDep = computeTotalOffset(line, startSection, startStation, startStop.index, depRankOverride);
-    const offsetArr = computeTotalOffset(line, endSection,   endStation,   endStop.index,   arrRankOverride);
+    const offsetDep = computeTotalOffset(line, startSection, startStation, startGroupIndex, startStopIndex, depRankOverride);
+    const offsetArr = computeTotalOffset(line, endSection,   endStation,   endGroupIndex,   endStopIndex,   arrRankOverride);
     const seg = computeCrossingSeg(centerline, startT, endT, offsetDep, offsetArr);
     return new PathBuilder().beziers([seg]).build();
   }
 
   // Multi-road path.
-  const traversals = buildTraversals(line, rseBetween, startStop, endStop);
+  const traversals = buildTraversals(line, rseBetween, startStop, startGroupIndex, startStopIndex, endStop, endGroupIndex, endStopIndex);
   const entries: CubicBezierPoints[][] = [];
   for (const tr of traversals) {
     if (tr.section === null) continue;

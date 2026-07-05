@@ -1,4 +1,3 @@
-import { StationId } from "@/common/types";
 import { DisplayEntry, DisplayStation } from "@/common/messages";
 import { LinePath, RoadSectionChange, StationStop } from "../models/structures/line-path";
 import { RoadSection } from "../models/structures/road-section";
@@ -17,7 +16,7 @@ export function buildDisplayEntries(paths: readonly LinePath[]): DisplayEntry[] 
   let prevLastSortedIdx: number | null = null;
 
   // Current traversal accumulator — all stops share one direction and section.
-  let travStops: Array<{ stop: StationStop; pathIndex: number }> = [];
+  let travStops: StationStop[] = [];
   let travSection: RoadSection | null = null;
   let travDir: 'ascending' | 'descending' | null = null;
 
@@ -32,8 +31,8 @@ export function buildDisplayEntries(paths: readonly LinePath[]): DisplayEntry[] 
     const dir = travDir;
     const sorted = getSorted(section);
 
-    const stopsWithIdx = travStops.map(({ stop, pathIndex }) => ({
-      stop, pathIndex,
+    const stopsWithIdx = travStops.map(stop => ({
+      stop,
       si: sortedIdx(stop.station, sorted),
     }));
     stopsWithIdx.sort((a, b) => dir === 'ascending' ? a.si - b.si : b.si - a.si);
@@ -54,10 +53,8 @@ export function buildDisplayEntries(paths: readonly LinePath[]): DisplayEntry[] 
       if (extendToSi !== null) lo = Math.min(lo, extendToSi);
     }
 
-    const inPathMap = new Map<StationId, { pathIndex: number; stops: boolean }>();
-    for (const { stop, pathIndex } of travStops) {
-      inPathMap.set(stop.station.id, { pathIndex, stops: stop.stops });
-    }
+    const stopMap = new Map<Station, boolean>();
+    for (const stop of travStops) stopMap.set(stop.station, stop.stops);
 
     const indices = dir === 'ascending'
       ? Array.from({ length: hi - lo + 1 }, (_, k) => lo + k)
@@ -67,13 +64,10 @@ export function buildDisplayEntries(paths: readonly LinePath[]): DisplayEntry[] 
     for (const i of indices) {
       const st = sorted[i];
       if (!st) continue;
-      const entry = inPathMap.get(st.id);
       stations.push({
         stationId: st.id,
         name: st.name,
-        inPath: entry !== undefined,
-        pathIndex: entry?.pathIndex ?? -1,
-        stops: entry?.stops ?? false,
+        stops: stopMap.get(st) ?? false,
       });
     }
 
@@ -85,45 +79,47 @@ export function buildDisplayEntries(paths: readonly LinePath[]): DisplayEntry[] 
     travDir     = null;
   };
 
-  for (const p of paths) {
-    if (p instanceof RoadSectionChange) {
-      const rse = p;
-      emitTraversal(); // no look-ahead extension at explicit RSE boundaries
+  const processRse = (rse: RoadSectionChange) => {
+    emitTraversal(); // no look-ahead extension at explicit RSE boundaries
 
-      const isUturn = !!(rse.exiting && rse.entering && rse.exiting.section === rse.entering.section);
-      displayEntries.push({
-        kind: 'rse',
-        pathIndex: p.index,
-        isUturn,
-        nodeId: rse.node.id,
-        nodeName: rse.node.name ?? null,
-        exitRoadName:  rse.exiting?.section.parentRoad.name  ?? null,
-        enterRoadName: rse.entering?.section.parentRoad.name ?? null,
-      });
-      if (!isUturn) prevLastSortedIdx = null;
-    } else if (p instanceof StationStop) {
-      const stop    = p;
-      const section = stop.station.parentRoadSection;
-      const dir     = stop.direction;
+    const isUturn = !!(rse.exiting && rse.entering && rse.exiting.section === rse.entering.section);
+    displayEntries.push({
+      kind: 'rse',
+      isUturn,
+      nodeId: rse.node.id,
+      nodeName: rse.node.name ?? null,
+      exitRoadName:  rse.exiting?.section.parentRoad.name  ?? null,
+      enterRoadName: rse.entering?.section.parentRoad.name ?? null,
+    });
+    if (!isUturn) prevLastSortedIdx = null;
+  };
 
-      if (travDir !== null && travSection === section && travDir !== dir) {
-        // Direction reversal on the same section without an RSC = virtual U-turn.
-        // Extend the current segment's range to include the next stop as a greyed
-        // pass-through, showing the line physically passing through it on the way down.
-        const sorted    = getSorted(section);
-        const nextSi    = sortedIdx(stop.station, sorted);
-        emitTraversal(nextSi);
-        displayEntries.push({ kind: 'virtual-uturn' });
-        // prevLastSortedIdx is preserved through the virtual U-turn (set by emitTraversal).
-      } else if (travSection !== null && travSection !== section) {
-        // Section changed without RSC — shouldn't happen in valid data; just flush.
-        emitTraversal();
-      }
+  const processStop = (stop: StationStop) => {
+    const section = stop.station.parentRoadSection;
+    const dir     = stop.direction;
 
-      travSection = section;
-      travDir     = dir;
-      travStops.push({ stop, pathIndex: p.index });
+    if (travDir !== null && travSection === section && travDir !== dir) {
+      // Direction reversal on the same section without an RSC = virtual U-turn.
+      // Extend the current segment's range to include the next stop as a greyed
+      // pass-through, showing the line physically passing through it on the way down.
+      const sorted    = getSorted(section);
+      const nextSi    = sortedIdx(stop.station, sorted);
+      emitTraversal(nextSi);
+      displayEntries.push({ kind: 'virtual-uturn' });
+      // prevLastSortedIdx is preserved through the virtual U-turn (set by emitTraversal).
+    } else if (travSection !== null && travSection !== section) {
+      // Section changed without RSC — shouldn't happen in valid data; just flush.
+      emitTraversal();
     }
+
+    travSection = section;
+    travDir     = dir;
+    travStops.push(stop);
+  };
+
+  for (const group of paths) {
+    if (group.fromRoadSectionChange) processRse(group.fromRoadSectionChange);
+    for (const stop of group.stationStops) processStop(stop);
   }
 
   emitTraversal();

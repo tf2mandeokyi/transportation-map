@@ -1,7 +1,7 @@
+import { own } from "@/common/utils/ownership";
 import { Controller } from "./controllers";
 import { Model } from "./models";
 import { View } from "./views";
-import { own } from "@/common/utils/ownership";
 
 async function main() {
   figma.skipInvisibleInstanceChildren = true;

@@ -3,13 +3,14 @@ import type { Road } from './road';
 import type { Station } from './station';
 import { TransportationMapObject } from "./types";
 import { Line } from "./line";
-import { RoadSectionChange, StationStop } from "./line-path";
+import { RoadSectionChange } from "./line-path";
 import { SECTION_GAP, sectionBandWidth } from "@/plugin/utils/constants";
 
 // A single directed pass of a line through a section.
 export type LinePass = {
   line: Line;
-  segmentIndex: number;    // path index of the station-stop entry at the reference station
+  groupIndex: number;    // group index of the station-stop entry at the reference station (-1 if none)
+  stopIndex: number;     // stop index within that group (-1 if none)
   stops: boolean;
 };
 
@@ -70,6 +71,14 @@ export class RoadSection extends TransportationMapObject<SectionId> {
     return sectionBandWidth(this.getMaxStationStopCount());
   }
 
+  getStationsSorted(direction: 'ascending' | 'descending'): Station[] {
+    if (direction === 'ascending') {
+      return [...this.stations].sort((a, b) => a.interpT.compare(b.interpT));
+    } else {
+      return [...this.stations].sort((a, b) => b.interpT.compare(a.interpT));
+    }
+  }
+
   computeOffset(): number {
     const sections = this.parentRoad.getSectionsByIndex();
     const widths = sections.map(s => s.getWidth());
@@ -93,9 +102,11 @@ export class RoadSection extends TransportationMapObject<SectionId> {
     if (referenceStation) {
       const passes: Array<LinePass & { rank: number }> = [];
       for (const line of this.mapState.getLines()) {
-        for (const p of line.paths) {
-          if (p instanceof StationStop && p.station === referenceStation) {
-            passes.push({ line, segmentIndex: p.index, rank: p.rank, stops: p.stops });
+        for (const [groupIndex, group] of line.paths.entries()) {
+          for (const [stopIndex, p] of group.stationStops.entries()) {
+            if (p.station === referenceStation) {
+              passes.push({ line, groupIndex, stopIndex, rank: p.rank, stops: p.stops });
+            }
           }
         }
       }
@@ -111,30 +122,31 @@ export class RoadSection extends TransportationMapObject<SectionId> {
     for (const line of this.mapState.getLines()) {
       const count = line.countPassesOnSection(this);
       for (let i = 0; i < count; i++) {
-        allPasses.push({ line, segmentIndex: -1, stops: true });
+        allPasses.push({ line, groupIndex: -1, stopIndex: -1, stops: true });
       }
     }
     return allPasses;
   }
 
 
-  getLineStackingRanks(side: 0 | 1): Array<{ line: Line; pathIndex: number; rank: number }> {
-    const rscs: Array<{ rsc: RoadSectionChange; line: Line; pathIndex: number; rank: number }> = [];
+  getLineStackingRanks(side: 0 | 1): Array<{ line: Line; groupIndex: number; rank: number }> {
+    const rscs: Array<{ rsc: RoadSectionChange; line: Line; groupIndex: number; rank: number }> = [];
     for (const line of this.mapState.getLines()) {
-      for (const [index, p] of line.paths.entries()) {
-        if (!(p instanceof RoadSectionChange)) continue;
+      for (const [groupIndex, group] of line.paths.entries()) {
+        const p = group.fromRoadSectionChange;
+        if (!p) continue;
         if (p.entering?.section === this && p.entering.side === side) {
-          rscs.push({ rsc: p, line, pathIndex: index, rank: p.enterRank });
+          rscs.push({ rsc: p, line, groupIndex, rank: p.enterRank });
         }
         if (p.exiting?.section === this && p.exiting.side === side) {
-          rscs.push({ rsc: p, line, pathIndex: index, rank: p.exitRank });
+          rscs.push({ rsc: p, line, groupIndex, rank: p.exitRank });
         }
       }
     }
     rscs.sort((a, b) => {
       if (a.rank !== b.rank) return a.rank - b.rank;
       if (a.line.id !== b.line.id) return a.line.id < b.line.id ? -1 : 1;
-      return a.pathIndex - b.pathIndex;
+      return a.groupIndex - b.groupIndex;
     });
     rscs.forEach((entry, index) => {
       if (entry.rsc.entering?.section === this && entry.rsc.entering.side === side) {
@@ -144,6 +156,6 @@ export class RoadSection extends TransportationMapObject<SectionId> {
         entry.rsc.exitRank = index;
       }
     });
-    return rscs.map(({ line, pathIndex, rank }) => ({ line, pathIndex, rank }));
+    return rscs.map(({ line, groupIndex, rank }) => ({ line, groupIndex, rank }));
   }
 }

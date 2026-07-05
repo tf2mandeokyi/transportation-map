@@ -12,7 +12,7 @@ export type LineAtNodeData = {
   lineId: LineId;
   lineName: string;
   lineColor: string;
-  pathIndex: number;
+  groupIndex: number;
   exitingSectionId: RoadSectionId | null;
   enteringSectionId: RoadSectionId | null;
   exitRank: number;
@@ -21,7 +21,7 @@ export type LineAtNodeData = {
 
 export type NodePatch =
   | { op: 'update-name'; name: string | undefined }
-  | { op: 'update-rsc-ranks'; changes: Array<{ lineId: LineId; pathIndex: number; exitRank: number; enterRank: number }> };
+  | { op: 'update-rsc-ranks'; changes: Array<{ lineId: LineId; groupIndex: number; exitRank: number; enterRank: number }> };
 
 export type RoadPatch =
   | { op: 'add-section'; section: { name?: string; index: number } }

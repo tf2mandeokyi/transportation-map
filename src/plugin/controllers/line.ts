@@ -30,8 +30,8 @@ export class LineController extends BaseController {
       case 'update-color':   return this.handleUpdateLineColor(lineId, patch.color);
       case 'update-path':    return this.handleUpdateLinePath(lineId, patch.paths);
       case 'rotate-path':    return this.handleRotateLinePath(lineId, patch.steps);
-      case 'remove-station': return this.handleRemoveStationFromLine(lineId, patch.pathIndex);
-      case 'toggle-stops':   return this.handleToggleStops(lineId, patch.pathIndex, patch.stops);
+      case 'remove-station': return this.handleRemoveStationFromLine(lineId, patch.groupIndex, patch.stopIndex);
+      case 'toggle-stops':   return this.handleToggleStops(lineId, patch.groupIndex, patch.stopIndex, patch.stops);
     }
   }
 
@@ -59,19 +59,19 @@ export class LineController extends BaseController {
     await this.save();
   }
 
-  private async handleRemoveStationFromLine(lineId: LineId, pathIndex: number): Promise<void> {
+  private async handleRemoveStationFromLine(lineId: LineId, groupIndex: number, stopIndex: number): Promise<void> {
     const line = this.model.state.getLine(lineId);
     if (!line) { console.warn(`Line ${lineId} not found`); return; }
-    line.removePath(pathIndex);
+    line.removePath(groupIndex, stopIndex);
     await this.render();
     await this.save();
     postMessageToUI({ type: 'station-removed-from-line' });
   }
 
-  private async handleToggleStops(lineId: LineId, pathIndex: number, stops: boolean): Promise<void> {
+  private async handleToggleStops(lineId: LineId, groupIndex: number, stopIndex: number, stops: boolean): Promise<void> {
     const line = this.model.state.getLine(lineId);
     if (!line) return;
-    line.setStopFlag(pathIndex, stops);
+    line.setStopFlag(groupIndex, stopIndex, stops);
     await this.render();
     await this.save();
     postMessageToUI({ type: 'station-removed-from-line' });
@@ -82,16 +82,7 @@ export class LineController extends BaseController {
     if (!line) { console.error("Line not found:", lineId); return; }
     if (line.paths.length === 0) { console.warn("Cannot rotate empty path"); return; }
 
-    const n = line.paths.length;
-    const normalized = ((steps % n) + n) % n;
-    if (normalized === 0) return;
-
-    const rotated = [
-      ...line.paths.slice(normalized),
-      ...line.paths.slice(0, normalized),
-    ].map(p => p.toData());
-
-    line.replacePaths(rotated);
+    line.rotateGroups(steps);
     await this.render();
     await this.save();
   }

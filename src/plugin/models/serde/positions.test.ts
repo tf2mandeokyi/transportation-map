@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as fs from 'node:fs';
 import { MapState } from '../structures/map-state';
-import { StationStop, RoadSectionChange } from '../structures/line-path';
 import { RoadSection } from '../structures/road-section';
 import { computeTotalOffset } from '../../views/line/segment-path';
-import { DATA_PATH, initState, applyOffset } from './test-helpers';
+import { DATA_PATH, fixtureExists, initState, applyOffset } from './test-helpers';
 import { lineOffsetInSection } from '@/plugin/utils/constants';
 
 let state: MapState;
 
 beforeAll(() => {
+  if (!fixtureExists) return;
   const json = fs.readFileSync(DATA_PATH, 'utf-8');
   state = initState(json);
 });
@@ -20,38 +20,40 @@ beforeAll(() => {
 // getLinesForSection / computeTotalOffset. A mismatch means the station dot
 // and the line segment endpoint are visually disconnected.
 
-describe('line end positions match station/RSC positions', () => {
+describe.skipIf(!fixtureExists)('line end positions match station/RSC positions', () => {
   it('station stop: rank-based position matches pass-index-based position', () => {
     for (const line of state.getLines()) {
-      for (const p of line.paths) {
-        if (!(p instanceof StationStop)) continue;
-        const section = p.station.parentRoadSection;
-        const road = section.parentRoad;
-        const bezier = road.computeBezier();
-        if (!bezier) continue;
+      for (const [groupIndex, group] of line.paths.entries()) {
+        for (const [stopIndex, p] of group.stationStops.entries()) {
+          const section = p.station.parentRoadSection;
+          const road = section.parentRoad;
+          const bezier = road.computeBezier();
+          if (!bezier) continue;
 
-        const pos = p.station.interpT.evalBezier(bezier);
-        const tan = p.station.interpT.evalBezierTangent(bezier);
+          const pos = p.station.interpT.evalBezier(bezier);
+          const tan = p.station.interpT.evalBezierTangent(bezier);
 
-        const totalSlots = section.getMaxStationStopCount();
-        const effectiveCount = Math.max(totalSlots, p.rank + 1);
-        const offsetA = section.computeOffset() + lineOffsetInSection(p.rank, effectiveCount);
-        const posA = applyOffset(pos, tan, offsetA);
+          const totalSlots = section.getMaxStationStopCount();
+          const effectiveCount = Math.max(totalSlots, p.rank + 1);
+          const offsetA = section.computeOffset() + lineOffsetInSection(p.rank, effectiveCount);
+          const posA = applyOffset(pos, tan, offsetA);
 
-        const offsetB = computeTotalOffset(line, section, p.station, p.index);
-        const posB = applyOffset(pos, tan, offsetB);
+          const offsetB = computeTotalOffset(line, section, p.station, groupIndex, stopIndex);
+          const posB = applyOffset(pos, tan, offsetB);
 
-        const label = `line "${line.id}" stop "${p.station.id}"`;
-        expect(posA.x, `${label} x`).toBeCloseTo(posB.x, 3);
-        expect(posA.y, `${label} y`).toBeCloseTo(posB.y, 3);
+          const label = `line "${line.id}" stop "${p.station.id}"`;
+          expect(posA.x, `${label} x`).toBeCloseTo(posB.x, 3);
+          expect(posA.y, `${label} y`).toBeCloseTo(posB.y, 3);
+        }
       }
     }
   });
 
   it('RSC rank positions: rank-based and force-rank positions agree', () => {
     for (const line of state.getLines()) {
-      for (const p of line.paths) {
-        if (!(p instanceof RoadSectionChange)) continue;
+      for (const group of line.paths) {
+        const p = group.fromRoadSectionChange;
+        if (!p) continue;
 
         const sides = [
           p.exiting  ? { section: p.exiting.section,  rank: p.exitRank,  label: 'exit'  } : null,
@@ -73,7 +75,7 @@ describe('line end positions match station/RSC positions', () => {
           const offsetA = section.computeOffset() + lineOffsetInSection(rank, effectiveCount);
           const posA = applyOffset(ep, tan, offsetA * sign);
 
-          const offsetB = computeTotalOffset(line, section, undefined, undefined, rank);
+          const offsetB = computeTotalOffset(line, section, undefined, undefined, undefined, rank);
           const posB = applyOffset(ep, tan, offsetB * sign);
 
           const label = `line "${line.id}" RSC at node "${p.node.id}" ${side} rank ${rank}`;
@@ -92,7 +94,7 @@ describe('line end positions match station/RSC positions', () => {
 
 const OVERLAP_THRESHOLD = 0.01;
 
-describe('no overlapping line end positions', () => {
+describe.skipIf(!fixtureExists)('no overlapping line end positions', () => {
   it('no two lines share the same end position at a station', () => {
     for (const station of state.getStations()) {
       const entries = station.getStopsAcrossLines();

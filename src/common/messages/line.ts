@@ -1,21 +1,21 @@
 import { LineId, NodeId, RoadSectionId, StationId } from "../types"
 
-export type LinePathData =
-  | {
-      kind: 'station-stop';
-      stationId: StationId;
-      direction: 'ascending' | 'descending';
-      stops?: boolean;
-      index?: number;
-      rank?: number;
-    }
-  | {
-      kind: 'road-section-change';
-      nodeId: NodeId;
-      exiting: { sectionId: RoadSectionId; side: 0 | 1 } | null;
-      entering: { sectionId: RoadSectionId; side: 0 | 1 } | null;
-      index?: number;
-    };
+export interface LinePathStationStopData {
+  stationId: StationId;
+  direction: 'ascending' | 'descending';
+  rank?: number;
+  stops?: boolean;
+}
+
+// Groups a run of the line's path — one optional junction crossing followed by
+// the station stops that follow it — mirroring how SerializedLinePath groups
+// a RoadSectionChange with its owned stationStops.
+export interface LinePathData {
+  fromNodeId?: NodeId;
+  entering: { sectionId: RoadSectionId; side: 0 | 1, rank: number } | null;
+  exiting: { sectionId: RoadSectionId; side: 0 | 1, rank: number } | null;
+  stationStops: LinePathStationStopData[];
+}
 
 export type LineData = { id: LineId; name: string; color: string };
 
@@ -24,8 +24,8 @@ export type LinePatch =
   | { op: 'update-color'; color: string }
   | { op: 'update-path'; paths: LinePathData[] }
   | { op: 'rotate-path'; steps: number }
-  | { op: 'remove-station'; pathIndex: number }
-  | { op: 'toggle-stops'; pathIndex: number; stops: boolean };
+  | { op: 'remove-station'; groupIndex: number; stopIndex: number }
+  | { op: 'toggle-stops'; groupIndex: number; stopIndex: number; stops: boolean };
 
 export type UIToPluginLineMessage =
   | { type: 'add-line'; line: { name: string; color: string; isCircular?: boolean } }

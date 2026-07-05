@@ -1,11 +1,12 @@
 import * as path from 'path';
+import * as fs from 'fs';
 import { MapState } from '../structures/map-state';
 import { deserializeMapState } from './index';
 import { validateLinePaths } from '../../utils/line-validator';
 import { RoadSection } from '../structures/road-section';
-import { RoadSectionChange } from '../structures/line-path';
 
 export const DATA_PATH = path.resolve(__dirname, '../../../../tmp/data.json');
+export const fixtureExists = fs.existsSync(DATA_PATH);
 
 export function initState(json: string): MapState {
   const s = new MapState();
@@ -31,8 +32,9 @@ export function collectRscRanks(state: MapState): Map<SectionSideKey, { enterRan
   };
 
   for (const line of state.getLines()) {
-    for (const p of line.paths) {
-      if (!(p instanceof RoadSectionChange)) continue;
+    for (const group of line.paths) {
+      const p = group.fromRoadSectionChange;
+      if (!p) continue;
       if (p.entering) {
         getOrCreate(sideKey(p.entering.section, p.entering.side)).enterRanks.push(p.enterRank);
       }

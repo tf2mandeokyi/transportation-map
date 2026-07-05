@@ -74,7 +74,7 @@ export class Station extends TransportationMapObject<StationId> {
   }
 
   makePassThroughStop(rank: number, direction: 'ascending' | 'descending'): Owned<StationStop> {
-    const ss = new StationStop(this.mapState);
+    const ss = new StationStop();
     ss.station = this;
     ss.rank = rank;
     ss.stops = false;
@@ -94,26 +94,39 @@ export class Station extends TransportationMapObject<StationId> {
     };
   }
 
-  getLineStackingRanks(): Array<{ line: Line; pathIndex: number; rank: number, stops: boolean }> {
-    const stops: Array<{ path: StationStop; line: Line; pathIndex: number; rank: number, stops: boolean }> = [];
+  getLineStackingRanks(): Array<{ line: Line; groupIndex: number; stopIndex: number; rank: number, stops: boolean }> {
+    const stops: Array<{ path: StationStop; line: Line; groupIndex: number; stopIndex: number; rank: number, stops: boolean }> = [];
     for (const line of this.mapState.getLines()) {
-      for (const [index, p] of line.paths.entries()) {
-        if (p instanceof StationStop && p.station === this) {
-          stops.push({ path: p, line, pathIndex: index, rank: p.rank, stops: p.stops });
+      for (const [groupIndex, group] of line.paths.entries()) {
+        for (const [stopIndex, p] of group.stationStops.entries()) {
+          if (p.station === this) {
+            stops.push({ path: p, line, groupIndex, stopIndex, rank: p.rank, stops: p.stops });
+          }
         }
       }
     }
     stops.sort((a, b) => {
       if (a.rank !== b.rank) return a.rank - b.rank;
       if (a.line.id !== b.line.id) return a.line.id < b.line.id ? -1 : 1;
-      return a.pathIndex - b.pathIndex;
+      if (a.groupIndex !== b.groupIndex) return a.groupIndex - b.groupIndex;
+      return a.stopIndex - b.stopIndex;
     });
     stops.forEach(({ path }, i) => { path.rank = i; });
-    return stops.map(({ line, pathIndex, rank, stops }) => ({ line, pathIndex, rank, stops  }));
+    return stops.map(({ line, groupIndex, stopIndex, rank, stops }) => ({ line, groupIndex, stopIndex, rank, stops  }));
   }
 
-  getStopsAcrossLines(): Array<{ line: Line; path: StationStop; position: Vector }> {
-    return this.mapState.getLinePaths((p): p is StationStop => p instanceof StationStop && p.station === this);
+  getStopsAcrossLines(): Array<{ line: Line; path: StationStop; groupIndex: number; stopIndex: number; position: Vector }> {
+    const result: Array<{ line: Line; path: StationStop; groupIndex: number; stopIndex: number; position: Vector }> = [];
+    for (const line of this.mapState.getLines()) {
+      for (const [groupIndex, group] of line.paths.entries()) {
+        for (const [stopIndex, p] of group.stationStops.entries()) {
+          if (p.station !== this) continue;
+          const position = p.computePosition();
+          if (position) result.push({ line, path: p, groupIndex, stopIndex, position });
+        }
+      }
+    }
+    return result;
   }
 
   computePosition(): Vector {
@@ -135,10 +148,10 @@ export class Station extends TransportationMapObject<StationId> {
     return { x: pos.x + (-tangent.y / len) * offset, y: pos.y + (tangent.x / len) * offset };
   }
 
-  updateStopRanks(stops: Array<{ line: Line; pathIndex: number; rank: number }>): void {
-    for (const { line, pathIndex, rank } of stops) {
-      const path = line.paths[pathIndex];
-      if (path instanceof StationStop && path.station === this) {
+  updateStopRanks(stops: Array<{ line: Line; groupIndex: number; stopIndex: number; rank: number }>): void {
+    for (const { line, groupIndex, stopIndex, rank } of stops) {
+      const path = line.paths[groupIndex]?.stationStops[stopIndex];
+      if (path && path.station === this) {
         path.rank = rank;
       }
     }

@@ -4,13 +4,14 @@ import { MapState } from '../structures/map-state';
 import { Line } from '../structures/line';
 import { DisplayEntry } from '@/common/messages';
 import { buildDisplayEntries } from '../../utils/display-entries';
-import { DATA_PATH, initState } from './test-helpers';
+import { DATA_PATH, fixtureExists, initState } from './test-helpers';
 
 let state: MapState;
 let lineI: Line;  // purple — Hr → RSC(q) → Y → y → P
 let lineC: Line;  // red   — Hr → RSC(q) → Y → y → Y (in-section U-turn)
 
 beforeAll(() => {
+  if (!fixtureExists) return;
   const json = fs.readFileSync(DATA_PATH, 'utf-8');
   state = initState(json);
   lineI = state.getLineHarsh('I' as any);
@@ -30,7 +31,7 @@ function traversalStationNames(entry: DisplayEntry): string[] {
 
 // ── Line I (purple): Hr → RSC(q) → Y → y → P ─────────────────────────────────
 
-describe('line I display entries', () => {
+describe.skipIf(!fixtureExists)('line I display entries', () => {
   it('has exactly 3 entries: traversal, RSE, traversal', () => {
     const e = entries(lineI);
     expect(e).toHaveLength(3);
@@ -45,7 +46,6 @@ describe('line I display entries', () => {
     if (t.kind !== 'traversal') throw new Error();
     expect(t.direction).toBe('descending');
     expect(traversalStationNames(t)).toEqual(['North Station']);
-    expect(t.stations[0].inPath).toBe(true);
     expect(t.stations[0].stops).toBe(true);
   });
 
@@ -72,18 +72,8 @@ describe('line I display entries', () => {
     const t = e[2];
     if (t.kind !== 'traversal') throw new Error();
     for (const s of t.stations) {
-      expect(s.inPath).toBe(true);
       expect(s.stops).toBe(true);
-      expect(s.pathIndex).toBeGreaterThanOrEqual(0);
     }
-  });
-
-  it('second traversal pathIndices are in descending spatial order', () => {
-    const e = entries(lineI);
-    const t = e[2];
-    if (t.kind !== 'traversal') throw new Error();
-    // Y→y→P: pathIndex 2, 3, 4
-    expect(t.stations.map(s => s.pathIndex)).toEqual([2, 3, 4]);
   });
 });
 
@@ -98,7 +88,7 @@ describe('line I display entries', () => {
 //   virtual-uturn
 //   traversal(asc):  [y(stop), Y(stop)]   — prevLastSortedIdx=Y's si anchors lo
 
-describe('line C display entries', () => {
+describe.skipIf(!fixtureExists)('line C display entries', () => {
   it('has exactly 5 entries: traversal, RSE, traversal(desc), virtual-uturn, traversal(asc)', () => {
     const e = entries(lineC);
     expect(e).toHaveLength(5);
@@ -115,7 +105,6 @@ describe('line C display entries', () => {
     if (t.kind !== 'traversal') throw new Error();
     expect(t.direction).toBe('descending');
     expect(traversalStationNames(t)).toEqual(['North Station']);
-    expect(t.stations[0].inPath).toBe(true);
   });
 
   it('RSE is not a U-turn and crosses at Central Junction', () => {
@@ -137,12 +126,8 @@ describe('line C display entries', () => {
     expect(traversalStationNames(t)).toEqual(['City Hall West', 'Central Station']);
     const Y = t.stations[0];
     const y = t.stations[1];
-    expect(Y.inPath).toBe(true);
     expect(Y.stops).toBe(true);
-    expect(Y.pathIndex).toBe(2);
-    expect(y.inPath).toBe(false);  // greyed — not a stop in this direction
     expect(y.stops).toBe(false);
-    expect(y.pathIndex).toBe(-1);
   });
 
   // After the virtual U-turn, prevLastSortedIdx=Y's si=2. The ascending segment's
@@ -155,11 +140,7 @@ describe('line C display entries', () => {
     expect(traversalStationNames(t)).toEqual(['Central Station', 'City Hall West']);
     const y = t.stations[0];
     const Y = t.stations[1];
-    expect(y.inPath).toBe(true);
     expect(y.stops).toBe(true);
-    expect(y.pathIndex).toBe(3);
-    expect(Y.inPath).toBe(true);
     expect(Y.stops).toBe(true);
-    expect(Y.pathIndex).toBe(4);
   });
 });

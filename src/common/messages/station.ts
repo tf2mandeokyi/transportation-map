@@ -6,7 +6,8 @@ export type LineAtStationData = {
   id: LineId;
   name: string;
   color: string;
-  pathIndex: number;
+  groupIndex: number;
+  stopIndex: number;
   rank: number;
   facing: 'left' | 'right';
   stops: boolean;
@@ -17,7 +18,7 @@ export type StationPatch =
   | { op: 'delete' }
   | { op: 'copy'; direction: 'forwards' | 'backwards' }
   | { op: 'combine'; targetStationId: StationId }
-  | { op: 'update-stop-ranks'; stops: Array<{ lineId: LineId; pathIndex: number; rank: number }> };
+  | { op: 'update-stop-ranks'; stops: Array<{ lineId: LineId; groupIndex: number; stopIndex: number; rank: number }> };
 
 export type UIToPluginStationMessage =
   | { type: 'start-placing-station-mode' }

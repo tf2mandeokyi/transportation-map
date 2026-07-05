@@ -1,6 +1,5 @@
 import { LineId, NodeId, SectionId, StationId, RoadId } from "@/common/types";
 import { MapState, Node, SerializedNode, Road, SerializedRoad, RoadSection, Station, SerializedStation, Line, SerializedLine } from "../structures";
-import { own } from "@/common/utils/ownership";
 
 export function serializeMapState(state: MapState): string {
   const n: Record<string, SerializedNode> = {};
@@ -24,21 +23,21 @@ export function deserializeMapState(json: string, state: MapState): boolean {
 
     // Phase 1: create bare node instances
     for (const id of Object.keys(data.n || {})) {
-      state.addNode(own(new Node(state, id as NodeId)));
+      state.addNode(new Node(state, id as NodeId));
     }
 
     // Phase 2: create bare road + section instances
     for (const [id, ser] of Object.entries(data.r || {})) {
-      const road = own(new Road(state, id as RoadId));
+      const road = new Road(state, id as RoadId);
       for (const secId of Object.keys((ser as SerializedRoad).c || {})) {
-        road.addSection(own(new RoadSection(state, secId as SectionId)));
+        road.addSection(new RoadSection(state, secId as SectionId));
       }
       state.addRoad(road);
     }
 
     // Phase 3: create bare station instances
     for (const id of Object.keys(data.s || {})) {
-      state.addStation(own(new Station(state, id as StationId)));
+      state.addStation(new Station(state, id as StationId));
     }
 
     // Phase 4: apply serialized data in dependency order
@@ -55,7 +54,7 @@ export function deserializeMapState(json: string, state: MapState): boolean {
       station.figmaNodeId = (ser as SerializedStation).f;
     }
     for (const [id, ser] of Object.entries(data.l || {})) {
-      state.addLine(own(new Line(state, id as LineId).applySerialized(ser as SerializedLine)));
+      state.addLine(new Line(state, id as LineId).applySerialized(ser as SerializedLine));
     }
 
     return true;

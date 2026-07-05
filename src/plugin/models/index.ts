@@ -1,8 +1,7 @@
 import { LineId, NodeId, RoadId, RoadSectionId, SectionId, StationId } from "@/common/types";
-import { Line, LineProps, MapState, Node, NodeProps, Road, RoadProps, RoadSection, RoadSectionChange, RoadSectionProps, Station, StationProps, StationStop } from "./structures";
+import { Line, LineProps, MapState, Node, NodeProps, Road, RoadProps, RoadSection, RoadSectionProps, Station, StationProps } from "./structures";
 import { deserializeMapState, serializeMapState } from "./serde";
 import { validateLinePaths } from "../utils/line-validator";
-import { own } from "@/common/utils/ownership";
 
 function generateBase62(length: number): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -33,7 +32,7 @@ export class Model {
 
   public addNode(node: NodeProps): Node {
     const id = generateUniqueId<NodeId>(id => this.state.hasNode(id));
-    const obj = own(new Node(this.state, id).applyProps(node));
+    const obj = new Node(this.state, id).applyProps(node);
     this.state.addNode(obj);
     return obj;
   }
@@ -48,10 +47,7 @@ export class Model {
   public moveNodeConnections(node: Node, delta: { x: number; y: number }): void {
     for (const { road, endpointIndex } of node.roadConnections) {
       const conn = road.endpoints[endpointIndex];
-      road.endpoints[endpointIndex] = own({
-        ...conn,
-        endpointPos: { x: conn.endpointPos.x + delta.x, y: conn.endpointPos.y + delta.y },
-      });
+      conn.endpointPos = { x: conn.endpointPos.x + delta.x, y: conn.endpointPos.y + delta.y };
     }
   }
 
@@ -59,7 +55,7 @@ export class Model {
 
   public addRoad(road: RoadProps): Road {
     const id = generateUniqueId<RoadId>(id => this.state.hasRoad(id));
-    const obj = own(new Road(this.state, id).applyProps(road));
+    const obj = new Road(this.state, id).applyProps(road);
     this.state.addRoad(obj);
     road.endpoints[0].node.addRoadConnection(obj, 0);
     road.endpoints[1].node.addRoadConnection(obj, 1);
@@ -84,7 +80,7 @@ export class Model {
 
   public addRoadSection(road: Road, section: RoadSectionProps): RoadSection {
     const id = generateUniqueId<SectionId>(id => road.hasSection(id));
-    const obj = own(new RoadSection(this.state, id).applyProps(road, section));
+    const obj = new RoadSection(this.state, id).applyProps(road, section);
     road.addSection(obj);
     return obj;
   }
@@ -99,12 +95,17 @@ export class Model {
   private _removeRoadFromLines(road: Road): void {
     const sectionSet = new Set(road.getSections());
     for (const line of this.state.getLines()) {
-      line.paths = line.paths.filter(p => {
-        if (!(p instanceof RoadSectionChange)) return true;
-        return !((p.exiting !== null && sectionSet.has(p.exiting.section)) ||
-                 (p.entering !== null && sectionSet.has(p.entering.section)));
-      });
-      this._reindexLinePaths(line);
+      let changed = false;
+      for (const group of line.paths) {
+        const rsc = group.fromRoadSectionChange;
+        if (!rsc) continue;
+        if ((rsc.exiting !== null && sectionSet.has(rsc.exiting.section)) ||
+            (rsc.entering !== null && sectionSet.has(rsc.entering.section))) {
+          group.fromRoadSectionChange = undefined;
+          changed = true;
+        }
+      }
+      if (changed) line.paths = validateLinePaths(line);
     }
   }
 
@@ -112,7 +113,7 @@ export class Model {
 
   public addStation(station: StationProps): Station {
     const id = generateUniqueId<StationId>(id => this.state.hasStation(id));
-    const obj = own(new Station(this.state, id).applyProps(station));
+    const obj = new Station(this.state, id).applyProps(station);
     this.state.addStation(obj);
     if (station.roadSection) {
       obj.setParent(station.roadSection);
@@ -135,8 +136,13 @@ export class Model {
       parentSection.stations = parentSection.stations.filter(s => s !== station);
     }
     for (const line of this.state.getLines()) {
-      line.paths = line.paths.filter(p => !(p instanceof StationStop && p.station === station));
-      this._reindexLinePaths(line);
+      let changed = false;
+      for (const group of line.paths) {
+        const before = group.stationStops.length;
+        group.stationStops = group.stationStops.filter(s => s.station !== station);
+        if (group.stationStops.length !== before) changed = true;
+      }
+      if (changed) line.paths = validateLinePaths(line);
     }
     this.state.removeStation(station);
   }
@@ -162,7 +168,7 @@ export class Model {
 
   public addLine(line: Omit<LineProps, 'figmaGroupId'>): Line {
     const id = generateUniqueId<LineId>(id => this.state.hasLine(id));
-    const obj = own(new Line(this.state, id).applyProps({ ...line, figmaGroupId: null }));
+    const obj = new Line(this.state, id).applyProps({ ...line, figmaGroupId: null });
     this.state.addLine(obj);
     return obj;
   }
@@ -190,10 +196,6 @@ export class Model {
         this.addRoadSection(road, { index: 0 });
       }
     }
-  }
-
-  private _reindexLinePaths(line: Line): void {
-    line.paths.forEach((p, i) => { p.index = i; });
   }
 
   // ─── Persistence ───

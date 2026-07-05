@@ -59,18 +59,27 @@ export class Node extends TransportationMapObject<NodeId> {
     this.name = name;
   }
 
-  getRscEntries(): Array<{ line: Line; path: RoadSectionChange; position: Vector }> {
-    return this.mapState.getLinePaths((p): p is RoadSectionChange => p instanceof RoadSectionChange && p.node === this);
+  getRscEntries(): Array<{ line: Line; path: RoadSectionChange; groupIndex: number; position: Vector }> {
+    const result: Array<{ line: Line; path: RoadSectionChange; groupIndex: number; position: Vector }> = [];
+    for (const line of this.mapState.getLines()) {
+      for (const [groupIndex, group] of line.paths.entries()) {
+        const p = group.fromRoadSectionChange;
+        if (!p || p.node !== this) continue;
+        const position = p.computeEndPosition() ?? p.computeStartPosition();
+        if (position) result.push({ line, path: p, groupIndex, position });
+      }
+    }
+    return result;
   }
 
-  updateRscRanks(changes: Array<{ lineId: LineId; pathIndex: number; exitRank: number; enterRank: number }>): void {
-    for (const { lineId, pathIndex, exitRank, enterRank } of changes) {
+  updateRscRanks(changes: Array<{ lineId: LineId; groupIndex: number; exitRank: number; enterRank: number }>): void {
+    for (const { lineId, groupIndex, exitRank, enterRank } of changes) {
       const line = this.mapState.getLineHarsh(lineId);
       if (!line) continue;
-      const path = line.paths[pathIndex];
-      if (path instanceof RoadSectionChange && path.node === this) {
-        path.exitRank = exitRank;
-        path.enterRank = enterRank;
+      const rsc = line.paths[groupIndex]?.fromRoadSectionChange;
+      if (rsc && rsc.node === this) {
+        rsc.exitRank = exitRank;
+        rsc.enterRank = enterRank;
       }
     }
   }
