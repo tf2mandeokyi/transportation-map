@@ -1,3 +1,5 @@
+type RGB = { r: number; g: number; b: number };
+
 export function hexToRgb(hex: string): RGB {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   return result ? {

@@ -1,6 +1,5 @@
 import { LineId } from "@/common/types";
-import { LinePatch, LinePathInput } from "@/common/messages";
-import { LinePath } from "../models/structures";
+import { LinePatch, LinePathData } from "@/common/messages";
 import { postMessageToUI } from "../figma";
 import { BaseController } from "./base";
 import { UIMessageRouter } from "./router";
@@ -15,9 +14,9 @@ export class LineController extends BaseController {
 
   public async handleAddLine(lineData: { name: string; color: string; isCircular?: boolean }): Promise<void> {
     const { name, color, isCircular = false } = lineData;
-    const lineId = this.model.addLine({ name, color, isCircular, paths: [] });
+    const line = this.model.addLine({ name, color, isCircular, paths: [] });
     await this.save();
-    postMessageToUI({ type: 'line-added', id: lineId, name, color });
+    postMessageToUI({ type: 'line-added', id: line.id, name, color });
   }
 
   public async handleRemoveLine(lineId: LineId): Promise<void> {
@@ -31,61 +30,60 @@ export class LineController extends BaseController {
       case 'update-color':   return this.handleUpdateLineColor(lineId, patch.color);
       case 'update-path':    return this.handleUpdateLinePath(lineId, patch.paths);
       case 'rotate-path':    return this.handleRotateLinePath(lineId, patch.steps);
-      case 'remove-station': return this.handleRemoveStationFromLine(lineId, patch.pathIndex);
-      case 'toggle-stops':   return this.handleToggleStops(lineId, patch.pathIndex, patch.stops);
+      case 'remove-station': return this.handleRemoveStationFromLine(lineId, patch.groupIndex, patch.stopIndex);
+      case 'toggle-stops':   return this.handleToggleStops(lineId, patch.groupIndex, patch.stopIndex, patch.stops);
     }
   }
 
   private async handleUpdateLineName(lineId: LineId, name: string): Promise<void> {
-    this.model.updateLineName(lineId, name);
+    const line = this.model.state.getLine(lineId);
+    if (!line) return;
+    line.name = name;
     await this.save();
-    const line = this.model.getState().lines.get(lineId);
-    if (line) postMessageToUI({ type: 'line-added', id: lineId, name: line.name, color: line.color });
+    postMessageToUI({ type: 'line-added', id: lineId, name: line.name, color: line.color });
   }
 
   private async handleUpdateLineColor(lineId: LineId, color: string): Promise<void> {
-    this.model.updateLineColor(lineId, color);
+    const line = this.model.state.getLine(lineId);
+    if (!line) return;
+    line.color = color;
     await this.save();
-    const line = this.model.getState().lines.get(lineId);
-    if (line) postMessageToUI({ type: 'line-added', id: lineId, name: line.name, color: line.color });
+    postMessageToUI({ type: 'line-added', id: lineId, name: line.name, color: line.color });
   }
 
-  private async handleUpdateLinePath(lineId: LineId, paths: LinePathInput[]): Promise<void> {
-    const line = this.model.getState().lines.get(lineId);
+  private async handleUpdateLinePath(lineId: LineId, paths: LinePathData[]): Promise<void> {
+    const line = this.model.state.getLine(lineId);
     if (!line) { console.error("Line not found:", lineId); return; }
-    this.model.replaceLinePaths(lineId, paths);
+    line.replacePaths(paths);
+    await this.render();
     await this.save();
   }
 
-  private async handleRemoveStationFromLine(lineId: LineId, pathIndex: number): Promise<void> {
-    const line = this.model.getState().lines.get(lineId);
+  private async handleRemoveStationFromLine(lineId: LineId, groupIndex: number, stopIndex: number): Promise<void> {
+    const line = this.model.state.getLine(lineId);
     if (!line) { console.warn(`Line ${lineId} not found`); return; }
-    this.model.removeLinePath(lineId, pathIndex);
+    line.removePath(groupIndex, stopIndex);
+    await this.render();
     await this.save();
     postMessageToUI({ type: 'station-removed-from-line' });
   }
 
-  private async handleToggleStops(lineId: LineId, pathIndex: number, stops: boolean): Promise<void> {
-    this.model.setStationStopFlag(lineId, pathIndex, stops);
+  private async handleToggleStops(lineId: LineId, groupIndex: number, stopIndex: number, stops: boolean): Promise<void> {
+    const line = this.model.state.getLine(lineId);
+    if (!line) return;
+    line.setStopFlag(groupIndex, stopIndex, stops);
+    await this.render();
     await this.save();
     postMessageToUI({ type: 'station-removed-from-line' });
   }
 
   private async handleRotateLinePath(lineId: LineId, steps: number): Promise<void> {
-    const line = this.model.getState().lines.get(lineId);
+    const line = this.model.state.getLine(lineId);
     if (!line) { console.error("Line not found:", lineId); return; }
     if (line.paths.length === 0) { console.warn("Cannot rotate empty path"); return; }
 
-    const n = line.paths.length;
-    const normalized = ((steps % n) + n) % n;
-    if (normalized === 0) return;
-
-    const rotated = [
-      ...line.paths.slice(normalized),
-      ...line.paths.slice(0, normalized),
-    ].map(p => this.pathToInput(p));
-
-    this.model.replaceLinePaths(lineId, rotated);
+    line.rotateGroups(steps);
+    await this.render();
     await this.save();
   }
 
@@ -95,15 +93,8 @@ export class LineController extends BaseController {
   }
 
   public syncLinesToUI(): void {
-    const state = this.model.getState();
-    for (const lineId of state.lineStackingOrder) {
-      const line = state.lines.get(lineId);
-      if (line) postMessageToUI({ type: 'line-added', id: line.id, name: line.name, color: line.color });
+    for (const line of this.model.state.getLines()) {
+      postMessageToUI({ type: 'line-added', id: line.id, name: line.name, color: line.color });
     }
-  }
-
-  private pathToInput(p: LinePath): LinePathInput {
-    if (p.kind === 'station-stop') return { kind: 'station-stop', stationId: p.stationId };
-    return { kind: 'road-section-change', nodeId: p.nodeId, exiting: p.exiting, entering: p.entering };
   }
 }

@@ -1,3 +1,4 @@
+import { own } from "@/common/utils/ownership";
 import { Controller } from "./controllers";
 import { Model } from "./models";
 import { View } from "./views";
@@ -17,13 +18,12 @@ async function main() {
   }
 
   const view = new View();
-  view.setModel(model);
   const controller = new Controller(model, view);
 
   await controller.initialize();
   figma.on('close', () => controller.cleanup());
 
-  const hasExistingData = model.getState().stations.size > 0 || model.getState().lines.size > 0;
+  const hasExistingData = !model.state.getStations().next().done || !model.state.getLines().next().done;
   if (hasExistingData) {
     console.log("Existing map data found, skipping initial render");
     controller.syncLinesToUI();
@@ -43,69 +43,63 @@ async function createDemoMap(controller: Controller, model: Model) {
   const n4Pos = { x: 400, y: 100 };
 
   // Create graph nodes (intersection points)
-  const n1 = model.addNode({ name: 'West Junction',    roadConnections: [] });
-  const n2 = model.addNode({ name: 'Central Junction', roadConnections: [] });
-  const n3 = model.addNode({ name: 'East Junction',    roadConnections: [] });
-  const n4 = model.addNode({ name: 'North Junction',   roadConnections: [] });
+  const n1 = model.addNode({ name: 'West Junction'    });
+  const n2 = model.addNode({ name: 'Central Junction' });
+  const n3 = model.addNode({ name: 'East Junction'    });
+  const n4 = model.addNode({ name: 'North Junction'   });
 
   // Create roads between nodes with absolute endpoint and bezier positions
   const road1 = model.addRoad({
     name: 'West-Central',
-    startNodeId: n1, endNodeId: n2,
     bezierMidPoint: { x: (n1Pos.x + n2Pos.x) / 2, y: (n1Pos.y + n2Pos.y) / 2 },
     endpoints: [
-      { endpointPos: n1Pos, groupNumber: 0 },
-      { endpointPos: n2Pos, groupNumber: 0 },
+      own({ node: n1, endpointPos: n1Pos, groupNumber: 0 }),
+      own({ node: n2, endpointPos: n2Pos, groupNumber: 0 }),
     ],
-    sections: new Map()
   });
 
   const road2 = model.addRoad({
     name: 'Central-East',
-    startNodeId: n2, endNodeId: n3,
     bezierMidPoint: { x: (n2Pos.x + n3Pos.x) / 2, y: (n2Pos.y + n3Pos.y) / 2 },
     endpoints: [
-      { endpointPos: n2Pos, groupNumber: 0 },
-      { endpointPos: n3Pos, groupNumber: 0 },
+      own({ node: n2, endpointPos: n2Pos, groupNumber: 0 }),
+      own({ node: n3, endpointPos: n3Pos, groupNumber: 0 }),
     ],
-    sections: new Map()
   });
 
   const road3 = model.addRoad({
     name: 'Central-North',
-    startNodeId: n2, endNodeId: n4,
     bezierMidPoint: { x: (n2Pos.x + n4Pos.x) / 2, y: (n2Pos.y + n4Pos.y) / 2 },
     endpoints: [
-      { endpointPos: n2Pos, groupNumber: 0 },
-      { endpointPos: n4Pos, groupNumber: 0 },
+      own({ node: n2, endpointPos: n2Pos, groupNumber: 0 }),
+      own({ node: n4, endpointPos: n4Pos, groupNumber: 0 }),
     ],
-    sections: new Map()
   });
 
   // Create road sections (parallel tracks)
-  const sec1 = model.addRoadSection(road1, { name: 'Track A', index: 0, stationIds: [] });
-  const sec2 = model.addRoadSection(road2, { name: 'Track A', index: 0, stationIds: [] });
-  const sec3 = model.addRoadSection(road3, { name: 'Track A', index: 0, stationIds: [] });
+  const sec1 = model.addRoadSection(road1, { name: 'Track A', index: 0 });
+  const sec2 = model.addRoadSection(road2, { name: 'Track A', index: 0 });
+  const sec3 = model.addRoadSection(road3, { name: 'Track A', index: 0 });
 
   // Create stations on sections
-  const sWest   = model.addStation({ name: 'West Station',    textAlign: 'right',  textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.2,  roadSectionId: sec1 });
-  const sCentral = model.addStation({ name: 'Central Station', textAlign: 'bottom', textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.5,  roadSectionId: sec1 });
-  const sEast    = model.addStation({ name: 'East Station',   textAlign: 'right',  textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.8,  roadSectionId: sec2 });
-  const sNorth   = model.addStation({ name: 'North Station',  textAlign: 'right',  textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.7,  roadSectionId: sec3 });
-  const sMid     = model.addStation({ name: 'Midpoint',       textAlign: 'right',  textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.5,  roadSectionId: sec2 });
+  const sWest   = model.addStation({ name: 'West Station',    textAlign: 'right',  textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.2,  roadSection: sec1 });
+  const sCentral = model.addStation({ name: 'Central Station', textAlign: 'bottom', textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.5,  roadSection: sec1 });
+  const sEast    = model.addStation({ name: 'East Station',   textAlign: 'right',  textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.8,  roadSection: sec2 });
+  const sNorth   = model.addStation({ name: 'North Station',  textAlign: 'right',  textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.7,  roadSection: sec3 });
+  const sMid     = model.addStation({ name: 'Midpoint',       textAlign: 'right',  textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.5,  roadSection: sec2 });
 
   // Create lines
   const redLine = model.addLine({ name: 'Red Line', color: '#ff0000', isCircular: false, paths: [] });
   const blueLine = model.addLine({ name: 'Blue Line', color: '#0000ff', isCircular: false, paths: [] });
 
   // Red line: West → Central → North
-  controller.connectStationsWithLine(redLine, sWest, sCentral);
-  controller.connectStationsWithLine(redLine, sCentral, sNorth);
+  controller.connectStationsWithLine(redLine.id, sWest, sCentral);
+  controller.connectStationsWithLine(redLine.id, sCentral, sNorth);
 
   // Blue line: West → Central → Mid → East
-  controller.connectStationsWithLine(blueLine, sWest, sCentral);
-  controller.connectStationsWithLine(blueLine, sCentral, sMid);
-  controller.connectStationsWithLine(blueLine, sMid, sEast);
+  controller.connectStationsWithLine(blueLine.id, sWest, sCentral);
+  controller.connectStationsWithLine(blueLine.id, sCentral, sMid);
+  controller.connectStationsWithLine(blueLine.id, sMid, sEast);
 }
 
 main();

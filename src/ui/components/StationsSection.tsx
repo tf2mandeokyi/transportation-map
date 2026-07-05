@@ -32,10 +32,10 @@ const StationsSection: React.FC = () => {
 
   if (!isPlacing) {
     return (
-      <div className="section">
-        <h3>Stations</h3>
-        <div className="grid">
-          <button className="button button--primary" onClick={handleStartPlacing}>
+      <div className="mb-4 border-b border-neutral-200 pb-4">
+        <h3 className="mb-3 text-sm font-semibold">Stations</h3>
+        <div className="flex flex-col gap-2">
+          <button className="rounded bg-[#18a0fb] px-3 py-2 font-medium text-white hover:bg-[#0d8ee0]" onClick={handleStartPlacing}>
             Add Station
           </button>
         </div>
@@ -44,17 +44,17 @@ const StationsSection: React.FC = () => {
   }
 
   return (
-    <div className="section">
-      <h3>Stations</h3>
-      <p style={{ color: '#999', fontSize: '11px', margin: '0 0 8px' }}>
+    <div className="mb-4 border-b border-neutral-200 pb-4">
+      <h3 className="mb-3 text-sm font-semibold">Stations</h3>
+      <p className="mb-2 text-[11px] text-neutral-400">
         Drag the orange handle on the canvas to snap to a road section.
       </p>
-      <div className="grid">
-        <div className="two-column">
+      <div className="flex flex-col gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <div>
-            <label htmlFor="station-name">Station Name</label>
+            <label htmlFor="station-name" className="mb-1 block font-medium select-none">Station Name</label>
             <textarea
-              className="input"
+              className="w-full rounded border border-neutral-300 px-2 py-1 text-xs"
               id="station-name"
               placeholder="Station A"
               value={stationName}
@@ -63,9 +63,9 @@ const StationsSection: React.FC = () => {
             />
           </div>
           <div>
-            <label htmlFor="station-text-align">Text Side</label>
+            <label htmlFor="station-text-align" className="mb-1 block font-medium select-none">Text Side</label>
             <select
-              className="input"
+              className="w-full rounded border border-neutral-300 px-2 py-1 text-xs"
               id="station-text-align"
               value={textAlign}
               onChange={(e) => setTextAlign(e.target.value as HVAlign)}
@@ -75,9 +75,9 @@ const StationsSection: React.FC = () => {
               <option value="top">Top</option>
               <option value="bottom">Bottom</option>
             </select>
-            <label htmlFor="station-text-halign">Text Alignment</label>
+            <label htmlFor="station-text-halign" className="mt-2 mb-1 block font-medium select-none">Text Alignment</label>
             <select
-              className="input"
+              className="w-full rounded border border-neutral-300 px-2 py-1 text-xs"
               id="station-text-halign"
               value={textHAlign}
               onChange={(e) => setTextHAlign(e.target.value as TextHAlign)}
@@ -88,11 +88,11 @@ const StationsSection: React.FC = () => {
             </select>
           </div>
         </div>
-        <div className="two-column">
-          <button className="button button--primary" onClick={handleConfirm}>
+        <div className="grid grid-cols-2 gap-2">
+          <button className="rounded bg-[#18a0fb] px-3 py-2 font-medium text-white hover:bg-[#0d8ee0]" onClick={handleConfirm}>
             Place Here!
           </button>
-          <button className="button" onClick={handleCancel}>
+          <button className="rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium hover:bg-neutral-200" onClick={handleCancel}>
             Cancel
           </button>
         </div>

@@ -1,9 +1,7 @@
-import { Connection, Line, MapState, Node, Road, RoadSection, RoadSectionChange, Station } from "./structures";
+import { LineId, NodeId, RoadId, RoadSectionId, SectionId, StationId } from "@/common/types";
+import { Line, LineProps, MapState, Node, NodeProps, Road, RoadProps, RoadSection, RoadSectionProps, Station, StationProps } from "./structures";
 import { deserializeMapState, serializeMapState } from "./serde";
-import { LineId, NodeId, RoadId, RoadSectionId, StationId } from "@/common/types";
-import { LinePathInput } from "@/common/messages";
 import { validateLinePaths } from "../utils/line-validator";
-import { getStationStopsAcrossLines, getRscEntriesForNode } from "../utils/line-queries";
 
 function generateBase62(length: number): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -14,203 +12,143 @@ function generateBase62(length: number): string {
   return result;
 }
 
-function generateUniqueId<T extends string>(map: Map<T, unknown>): T {
+function generateUniqueId<T extends string>(hasId: (id: T) => boolean): T {
   let length = 1;
   while (true) {
     const id = generateBase62(length) as T;
-    if (!map.has(id)) return id;
+    if (!hasId(id)) return id;
     length++;
   }
 }
 
 export class Model {
-  private readonly state: MapState;
+  readonly state: MapState;
 
-  constructor(initialState?: Partial<MapState>) {
-    this.state = {
-      nodes: initialState?.nodes ?? new Map(),
-      roads: initialState?.roads ?? new Map(),
-      stations: initialState?.stations ?? new Map(),
-      lines: initialState?.lines ?? new Map(),
-      lineStackingOrder: initialState?.lineStackingOrder ?? [],
-    };
-  }
-
-  public getState(): Readonly<MapState> {
-    return this.state;
+  constructor() {
+    this.state = new MapState();
   }
 
   // ─── Node ───
 
-  public addNode(node: Omit<Node, 'id'>): NodeId {
-    const id = generateUniqueId(this.state.nodes);
-    this.state.nodes.set(id, { ...node, id });
-    return id;
+  public addNode(node: NodeProps): Node {
+    const id = generateUniqueId<NodeId>(id => this.state.hasNode(id));
+    const obj = new Node(this.state, id).applyProps(node);
+    this.state.addNode(obj);
+    return obj;
   }
 
-  public updateIsolatedNodePos(id: NodeId, pos: Vector): void {
-    const node = this.state.nodes.get(id);
-    if (node?.roadConnections.length === 0) node.isolatedPos = pos;
-  }
-
-  public updateNodeName(id: NodeId, name: string | undefined): void {
-    const node = this.state.nodes.get(id);
-    if (node) node.name = name;
-  }
-
-  public removeNode(id: NodeId): void {
-    const node = this.state.nodes.get(id);
-    if (!node) return;
-    const roadIds = node.roadConnections.map(rc => rc.roadId);
-    for (const roadId of roadIds) {
-      this.removeRoad(roadId);
+  public removeNode(node: Node): void {
+    for (const { road } of [...node.roadConnections]) {
+      this.removeRoad(road);
     }
-    this.state.nodes.delete(id);
+    this.state.removeNode(node);
   }
 
-  public moveNodeConnections(id: NodeId, delta: { x: number; y: number }): void {
-    const node = this.state.nodes.get(id);
-    if (!node) return;
-    for (const { roadId, endpointIndex } of node.roadConnections) {
-      const road = this.state.roads.get(roadId);
-      if (!road) continue;
+  public moveNodeConnections(node: Node, delta: { x: number; y: number }): void {
+    for (const { road, endpointIndex } of node.roadConnections) {
       const conn = road.endpoints[endpointIndex];
-      road.endpoints[endpointIndex] = {
-        ...conn,
-        endpointPos: { x: conn.endpointPos.x + delta.x, y: conn.endpointPos.y + delta.y },
-      };
+      conn.endpointPos = { x: conn.endpointPos.x + delta.x, y: conn.endpointPos.y + delta.y };
     }
   }
 
   // ─── Road ───
 
-  public addRoad(road: Omit<Road, 'id'>): RoadId {
-    const id = generateUniqueId(this.state.roads);
-    this.state.roads.set(id, { ...road, id });
-
-    const startNode = this.state.nodes.get(road.startNodeId);
-    if (startNode) startNode.roadConnections.push({ roadId: id, endpointIndex: 0 });
-
-    const endNode = this.state.nodes.get(road.endNodeId);
-    if (endNode) endNode.roadConnections.push({ roadId: id, endpointIndex: 1 });
-
-    return id;
+  public addRoad(road: RoadProps): Road {
+    const id = generateUniqueId<RoadId>(id => this.state.hasRoad(id));
+    const obj = new Road(this.state, id).applyProps(road);
+    this.state.addRoad(obj);
+    road.endpoints[0].node.addRoadConnection(obj, 0);
+    road.endpoints[1].node.addRoadConnection(obj, 1);
+    this.addRoadSection(obj, { index: 0 });
+    return obj;
   }
 
-  public updateRoadEndpoints(id: RoadId, endpoints: [Connection, Connection]): void {
-    const road = this.state.roads.get(id);
-    if (road) road.endpoints = endpoints;
-  }
-
-  public updateRoadBezierMidPoint(id: RoadId, midPoint: Vector): void {
-    const road = this.state.roads.get(id);
-    if (road) road.bezierMidPoint = midPoint;
-  }
-
-  public removeRoad(id: RoadId): void {
-    const road = this.state.roads.get(id);
-    if (!road) return;
-
-    for (const node of this.state.nodes.values()) {
-      node.roadConnections = node.roadConnections.filter(rc => rc.roadId !== id);
+  public removeRoad(road: Road): void {
+    for (const node of this.state.getNodes()) {
+      node.roadConnections = node.roadConnections.filter(rc => rc.road !== road);
     }
-
-    for (const section of road.sections.values()) {
-      const stationIds = [...section.stationIds];
-      for (const stationId of stationIds) {
-        this.removeStation(stationId);
+    for (const section of road.getSections()) {
+      for (const station of [...section.stations]) {
+        this.removeStation(station);
       }
     }
-
-    this._removeRoadFromLines(id);
-    this.state.roads.delete(id);
+    this._removeRoadFromLines(road);
+    this.state.removeRoad(road);
   }
 
   // ─── RoadSection ───
 
-  public addRoadSection(roadId: RoadId, section: Omit<RoadSection, 'id'>): RoadSectionId {
-    const road = this.state.roads.get(roadId);
-    if (!road) throw new Error(`Road ${roadId} not found`);
-
-    // Generate unique ID across all sections of all roads
-    const allSectionIds = new Map<RoadSectionId, true>();
-    for (const r of this.state.roads.values()) {
-      for (const sid of r.sections.keys()) allSectionIds.set(sid, true);
-    }
-    const id = generateUniqueId(allSectionIds);
-
-    road.sections.set(id, { ...section, id });
-    return id;
+  public addRoadSection(road: Road, section: RoadSectionProps): RoadSection {
+    const id = generateUniqueId<SectionId>(id => road.hasSection(id));
+    const obj = new RoadSection(this.state, id).applyProps(road, section);
+    road.addSection(obj);
+    return obj;
   }
 
-  public removeRoadSection(roadId: RoadId, sectionId: RoadSectionId): void {
-    const road = this.state.roads.get(roadId);
-    if (!road) return;
+  public removeRoadSection(section: RoadSection): void {
+    for (const station of [...section.stations]) {
+      this.removeStation(station);
+    }
+    section.parentRoad.removeSection(section);
+  }
 
-    const section = road.sections.get(sectionId);
-    if (section) {
-      const stationIds = [...section.stationIds];
-      for (const stationId of stationIds) {
-        this.removeStation(stationId);
+  private _removeRoadFromLines(road: Road): void {
+    const sectionSet = new Set(road.getSections());
+    for (const line of this.state.getLines()) {
+      let changed = false;
+      for (const group of line.paths) {
+        const rsc = group.fromRoadSectionChange;
+        if (!rsc) continue;
+        if ((rsc.exiting !== null && sectionSet.has(rsc.exiting.section)) ||
+            (rsc.entering !== null && sectionSet.has(rsc.entering.section))) {
+          group.fromRoadSectionChange = undefined;
+          changed = true;
+        }
       }
-    }
-
-    road.sections.delete(sectionId);
-  }
-
-  private _removeRoadFromLines(roadId: RoadId): void {
-    const road = this.state.roads.get(roadId);
-    const sectionIds = road ? new Set(road.sections.keys()) : new Set<RoadSectionId>();
-    for (const line of this.state.lines.values()) {
-      line.paths = line.paths.filter(p => {
-        if (p.kind !== 'road-section-change') return true;
-        return !((p.exiting !== null && sectionIds.has(p.exiting)) ||
-                 (p.entering !== null && sectionIds.has(p.entering)));
-      });
-      this._reindexLinePaths(line);
+      if (changed) line.paths = validateLinePaths(line);
     }
   }
 
   // ─── Station ───
 
-  public addStation(station: Omit<Station, 'id' | 'figmaNodeId'>): StationId {
-    const id = generateUniqueId(this.state.stations);
-    this.state.stations.set(id, { ...station, figmaNodeId: null, id });
-
-    if (station.roadSectionId) {
-      const section = this._findSection(station.roadSectionId);
-      if (section) section.stationIds.push(id);
+  public addStation(station: StationProps): Station {
+    const id = generateUniqueId<StationId>(id => this.state.hasStation(id));
+    const obj = new Station(this.state, id).applyProps(station);
+    this.state.addStation(obj);
+    if (station.roadSection) {
+      obj.setParent(station.roadSection);
+      station.roadSection.stations.push(obj);
     }
-
-    return id;
+    return obj;
   }
 
-  public removeStation(id: StationId): void {
-    const station = this.state.stations.get(id);
-    if (!station) return;
+  public findSection(sectionId: RoadSectionId): RoadSection | null {
+    try {
+      return this.state.getRoadSectionHarsh(sectionId);
+    } catch {
+      return null;
+    }
+  }
 
-    if (station.roadSectionId) {
-      const section = this._findSection(station.roadSectionId);
-      if (section) {
-        section.stationIds = section.stationIds.filter(sid => sid !== id);
+  public removeStation(station: Station): void {
+    const parentSection = station.parentRoadSection as RoadSection | undefined;
+    if (parentSection) {
+      parentSection.stations = parentSection.stations.filter(s => s !== station);
+    }
+    for (const line of this.state.getLines()) {
+      let changed = false;
+      for (const group of line.paths) {
+        const before = group.stationStops.length;
+        group.stationStops = group.stationStops.filter(s => s.station !== station);
+        if (group.stationStops.length !== before) changed = true;
       }
+      if (changed) line.paths = validateLinePaths(line);
     }
-
-    for (const line of this.state.lines.values()) {
-      line.paths = line.paths.filter(p => !(p.kind === 'station-stop' && p.stationId === id));
-      this._reindexLinePaths(line);
-    }
-
-    this.state.stations.delete(id);
-  }
-
-  public updateStationFigmaNodeId(id: StationId, figmaNodeId: string): void {
-    const station = this.state.stations.get(id);
-    if (station) station.figmaNodeId = figmaNodeId;
+    this.state.removeStation(station);
   }
 
   public findStationByFigmaId(figmaNodeId: string): Station | null {
-    for (const station of this.state.stations.values()) {
+    for (const station of this.state.getStations()) {
       if (station.figmaNodeId === figmaNodeId) return station;
     }
     return null;
@@ -228,194 +166,42 @@ export class Model {
 
   // ─── Line ───
 
-  public addLine(line: Omit<Line, 'id' | 'figmaGroupId'>): LineId {
-    const id = generateUniqueId(this.state.lines);
-    this.state.lines.set(id, { ...line, id, figmaGroupId: null });
-    if (!this.state.lineStackingOrder.includes(id)) {
-      this.state.lineStackingOrder.push(id);
-    }
-    return id;
+  public addLine(line: Omit<LineProps, 'figmaGroupId'>): Line {
+    const id = generateUniqueId<LineId>(id => this.state.hasLine(id));
+    const obj = new Line(this.state, id).applyProps({ ...line, figmaGroupId: null });
+    this.state.addLine(obj);
+    return obj;
   }
 
   public removeLine(id: LineId): void {
-    this.state.lines.delete(id);
-    const index = this.state.lineStackingOrder.indexOf(id);
-    if (index !== -1) this.state.lineStackingOrder.splice(index, 1);
+    const line = this.state.getLine(id);
+    if (line) this.state.removeLine(line);
   }
 
-  public updateLineName(id: LineId, name: string): void {
-    const line = this.state.lines.get(id);
-    if (line) line.name = name;
-  }
-
-  public updateLineColor(id: LineId, color: string): void {
-    const line = this.state.lines.get(id);
-    if (line) line.color = color;
-  }
-
-  public updateLineStackingOrder(newOrder: LineId[]): void {
-    this.state.lineStackingOrder = [...newOrder];
-  }
-
-  public updateLineFigmaGroupId(id: LineId, figmaGroupId: string): void {
-    const line = this.state.lines.get(id);
-    if (line) line.figmaGroupId = figmaGroupId;
+  public updateLineStackingOrder(_newOrder: LineId[]): void {
+    // lineStackingOrder deprecated — no-op kept for call-site compatibility
   }
 
   // ─── LinePath ───
 
-  public addLinePath(lineId: LineId, path: LinePathInput): void {
-    const line = this.state.lines.get(lineId);
-    if (!line) return;
-    const index = line.paths.length;
-    if (path.kind === 'station-stop') {
-      line.paths.push({ kind: 'station-stop', index, stationId: path.stationId, rank: this._nextRankForStation(path.stationId), stops: true });
-    } else {
-      const isUturn = path.entering !== null && path.entering === path.exiting;
-      const exitRank = this._nextRankForSection(path.nodeId, path.exiting);
-      // U-turn: both exit and enter are on the same section — take two consecutive
-      // slots from the same unified pool to guarantee they land on distinct lanes.
-      const enterRank = isUturn ? exitRank + 1 : this._nextRankForSection(path.nodeId, path.entering);
-      line.paths.push({ kind: 'road-section-change', index, nodeId: path.nodeId, exiting: path.exiting, entering: path.entering, exitRank, enterRank });
-    }
-    line.paths = validateLinePaths(line, this.state);
-  }
-
-  // Returns the next available rank in the unified pool of all exit AND enter ranks
-  // for the given section at the given junction node. This ensures that exit and
-  // enter passes on the same section never share a lateral slot.
-  private _nextRankForSection(nodeId: NodeId, sectionId: RoadSectionId | null): number {
-    let max = -1;
-    for (const { path: p } of getRscEntriesForNode(nodeId, this.state)) {
-      if (p.exiting  === sectionId) max = Math.max(max, p.exitRank);
-      if (p.entering === sectionId) max = Math.max(max, p.enterRank);
-    }
-    return max + 1;
-  }
-
-  private _nextRankForStation(stationId: StationId): number {
-    let max = -1;
-    for (const { path: p } of getStationStopsAcrossLines(stationId, this.state)) {
-      if (p.stops) max = Math.max(max, p.rank);
-    }
-    return max + 1;
-  }
-
-  public updateStationStopRanks(
-    stationId: StationId,
-    stops: Array<{ lineId: LineId; pathIndex: number; rank: number }>
-  ): void {
-    for (const { lineId, pathIndex, rank } of stops) {
-      const line = this.state.lines.get(lineId);
-      if (!line) continue;
-      const path = line.paths.find(p => p.index === pathIndex);
-      if (path?.kind === 'station-stop' && path.stationId === stationId) {
-        path.rank = rank;
-      }
-    }
-  }
-
-  public updateRscRanks(
-    nodeId: NodeId,
-    changes: Array<{ lineId: LineId; pathIndex: number; exitRank: number; enterRank: number }>
-  ): void {
-    for (const { lineId, pathIndex, exitRank, enterRank } of changes) {
-      const line = this.state.lines.get(lineId);
-      if (!line) continue;
-      const path = line.paths.find(p => p.index === pathIndex);
-      if (path?.kind === 'road-section-change' && path.nodeId === nodeId) {
-        path.exitRank = exitRank;
-        path.enterRank = enterRank;
-      }
-    }
-  }
-
-  public fixStationRankConflicts(stationId: StationId): void {
-    const stops = getStationStopsAcrossLines(stationId, this.state)
-      .filter(({ path }) => path.stops)
-      .map(({ line, path }) => ({ path, lineId: line.id }));
-    stops.sort((a, b) => {
-      if (a.path.rank !== b.path.rank) return a.path.rank - b.path.rank;
-      if (a.lineId !== b.lineId) return a.lineId < b.lineId ? -1 : 1;
-      return a.path.index - b.path.index;
-    });
-    stops.forEach(({ path }, i) => { path.rank = i; });
-  }
-
-  public setStationStopFlag(lineId: LineId, pathIndex: number, stops: boolean): void {
-    const line = this.state.lines.get(lineId);
-    if (!line) return;
-    const path = line.paths.find(p => p.index === pathIndex);
-    if (!path || path.kind !== 'station-stop') return;
-    if (stops) {
-      // Promote pass-through to explicit stop; keep its existing rank.
-      path.stops = true;
-      line.paths = validateLinePaths(line, this.state);
-    } else {
-      // Remove explicit stop; validator will re-insert as pass-through if bracketed.
-      line.paths = line.paths.filter(p => p.index !== pathIndex);
-      this._reindexLinePaths(line);
-      line.paths = validateLinePaths(line, this.state);
-    }
-  }
-
-  public removeLinePath(lineId: LineId, pathIndex: number): void {
-    const line = this.state.lines.get(lineId);
-    if (!line) return;
-    line.paths = line.paths.filter(p => p.index !== pathIndex);
-    this._reindexLinePaths(line);
-    line.paths = validateLinePaths(line, this.state);
-  }
-
-  public replaceLinePaths(lineId: LineId, paths: LinePathInput[]): void {
-    const line = this.state.lines.get(lineId);
-    if (!line) return;
-    const existingStationRanks = new Map<StationId, number>();
-    const existingRscRanks = new Map<string, { exitRank: number; enterRank: number }>();
-    for (const p of line.paths) {
-      if (p.kind === 'station-stop') existingStationRanks.set(p.stationId, p.rank);
-      if (p.kind === 'road-section-change') {
-        existingRscRanks.set(`${p.nodeId}:${p.exiting}:${p.entering}`, { exitRank: p.exitRank, enterRank: p.enterRank });
-      }
-    }
-    line.paths = paths.map((p, i) => {
-      if (p.kind === 'station-stop') {
-        return { kind: 'station-stop', index: i, stationId: p.stationId, rank: existingStationRanks.get(p.stationId) ?? 0, stops: true };
-      }
-      const existing = existingRscRanks.get(`${p.nodeId}:${p.exiting}:${p.entering}`);
-      return { kind: 'road-section-change', index: i, nodeId: p.nodeId, exiting: p.exiting, entering: p.entering, exitRank: existing?.exitRank ?? 0, enterRank: existing?.enterRank ?? 0 } as RoadSectionChange;
-    });
-    line.paths = validateLinePaths(line, this.state);
-  }
-
   public validateAllLinePaths(): void {
-    for (const line of this.state.lines.values()) {
-      line.paths = validateLinePaths(line, this.state);
+    for (const line of this.state.getLines()) {
+      line.paths = validateLinePaths(line);
     }
   }
 
-  private _reindexLinePaths(line: Line): void {
-    line.paths.forEach((p, i) => { p.index = i; });
-  }
-
-  // ─── Helpers ───
-
-  private _findSection(sectionId: RoadSectionId): RoadSection | null {
-    for (const road of this.state.roads.values()) {
-      const section = road.sections.get(sectionId);
-      if (section) return section;
+  public validateRoadSections(): void {
+    for (const road of this.state.getRoads()) {
+      if ([...road.getSections()].length === 0) {
+        this.addRoadSection(road, { index: 0 });
+      }
     }
-    return null;
-  }
-
-  public getLineStackingOrderForStation(stationId: StationId): LineId[] {
-    const lineIds = new Set(getStationStopsAcrossLines(stationId, this.state).map(e => e.line.id));
-    return this.state.lineStackingOrder.filter(id => lineIds.has(id));
   }
 
   // ─── Persistence ───
 
   public async save(): Promise<void> {
+    this.state.normalize();
     const serialized = serializeMapState(this.state);
     figma.root.setPluginData('mapState', serialized);
   }
@@ -424,11 +210,13 @@ export class Model {
     const data = figma.root.getPluginData('mapState');
     if (!data) return null;
 
-    const state = deserializeMapState(data);
-    if (!state) return null;
+    const model = new Model();
+    const success = deserializeMapState(data, model.state);
+    if (!success) return null;
 
-    const model = new Model(state);
+    model.validateRoadSections();
     model.validateAllLinePaths();
+    model.state.normalize();
     return model;
   }
 }

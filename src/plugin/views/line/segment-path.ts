@@ -1,66 +1,36 @@
-import { Line, MapState, Road } from "../../models/structures";
-import { RoadSectionId, StationId } from "@/common/types";
-import {
-  elevateToCubic,
-  evalQuadraticBezier,
-  evalQuadraticBezierTangent,
-  offsetBezierAdaptive,
-  subQuadBezier,
-  QuadBezierPoints,
-  CubicBezierPoints,
-} from "../../utils/bezier";
+import { lineOffsetInSection } from "@/plugin/utils/constants";
+import { Line, Road, RoadSection, Station } from "../../models/structures";
+import { QuadBezierPoints, CubicBezierPoints } from "../../utils/bezier";
 import { appendGapCurve } from "../../utils/curves";
 import { PathBuilder } from "../../utils/path";
-import {
-  computeRoadBezier,
-  getLinesForSection,
-  getLineDirectionAtStop,
-  getLineDepartureAtStop,
-} from "../../utils/section";
-import { computeSectionOffset, lineOffsetInSection } from "../../utils/line-queries";
+import { OffsetT } from "../../utils/offset-t";
 
 export type SegmentResult =
   | { kind: 'normal'; outline: VectorNode; main: VectorNode }
   | { kind: 'dashed'; node: VectorNode };
 
 // Total lateral offset from the road centerline for this line on this section.
-// referenceStationId: which station's stop ranks to use for lane ordering.
-// pathSegmentIndex: the path entry index of the station-stop; when the same line
-//   visits the reference station more than once (U-turn) this selects the right pass.
-// isUturnDeparture: true when computing the offset for the U-turn departure direction
-//   at a station where arrival and departure directions differ — selects the departure
-//   slot rather than the arrival slot for the same pathSegmentIndex.
 export function computeTotalOffset(
-  line: Line, road: Road, sectionId: RoadSectionId,
-  state: Readonly<MapState>,
-  referenceStationId?: StationId,
-  pathSegmentIndex?: number,
-  isUturnDeparture?: boolean,
+  line: Line, section: RoadSection,
+  referenceStation?: Station,
+  pathGroupIndex?: number,
+  pathStopIndex?: number,
   forceRank?: number,
 ): number {
-  const section = road.sections.get(sectionId);
-  if (!section) return 0;
+  const sectionOffset = section.computeOffset();
 
-  const sectionOffset = computeSectionOffset(section, road, state);
-
-  const totalPasses = getLinesForSection(section, state);
+  const totalSlots = section.getMaxStationStopCount();
   let effectiveIdx: number;
-  if (forceRank !== undefined) {
-    effectiveIdx = forceRank;
+  if (forceRank === undefined) {
+    const passes = referenceStation ? referenceStation.getLinePasses() : section.getLines();
+    const passIndex = pathGroupIndex === undefined
+      ? passes.findIndex(lp => lp.line === line)
+      : passes.findIndex(lp => lp.line === line && lp.groupIndex === pathGroupIndex && lp.stopIndex === pathStopIndex);
+    effectiveIdx = passIndex >= 0 ? passIndex : totalSlots;
   } else {
-    const passes = getLinesForSection(section, state, referenceStationId);
-    let passIndex: number;
-    if (pathSegmentIndex !== undefined) {
-      const wantDep = isUturnDeparture ?? false;
-      passIndex = passes.findIndex(lp =>
-        lp.line.id === line.id && lp.segmentIndex === pathSegmentIndex && lp.departureRole === wantDep
-      );
-    } else {
-      passIndex = passes.findIndex(lp => lp.line.id === line.id && !lp.departureRole);
-    }
-    effectiveIdx = passIndex >= 0 ? passIndex : totalPasses.length;
+    effectiveIdx = forceRank;
   }
-  const effectiveCount = Math.max(totalPasses.length, effectiveIdx + 1);
+  const effectiveCount = Math.max(totalSlots, effectiveIdx + 1);
   const lineOffset = lineOffsetInSection(effectiveIdx, effectiveCount);
 
   return sectionOffset + lineOffset;
@@ -68,23 +38,21 @@ export function computeTotalOffset(
 
 // Builds a single cubic bezier that starts at offsetAtT1 from the centerline at t1
 // and ends at offsetAtT2 from the centerline at t2, following the road tangents.
-// Used for crossing segments where the line changes lateral lane between stations.
 export function computeCrossingSeg(
   centerline: QuadBezierPoints,
-  t1: number, t2: number,
+  t1: OffsetT, t2: OffsetT,
   offsetAtT1: number, offsetAtT2: number,
 ): CubicBezierPoints {
-  const sign = t1 > t2 ? -1 : 1;
+  const sign = t1.compare(t2) > 0 ? -1 : 1;
 
-  const pos1 = evalQuadraticBezier(centerline, t1);
-  const pos2 = evalQuadraticBezier(centerline, t2);
-  const tan1 = evalQuadraticBezierTangent(centerline, t1);
-  const tan2 = evalQuadraticBezierTangent(centerline, t2);
+  const pos1 = t1.evalBezier(centerline);
+  const pos2 = t2.evalBezier(centerline);
+  const tan1 = t1.geometricTangent(centerline);
+  const tan2 = t2.geometricTangent(centerline);
 
   const len1 = Math.hypot(tan1.x, tan1.y) || 1;
   const len2 = Math.hypot(tan2.x, tan2.y) || 1;
 
-  // Perpendicular (90° CCW from centerline tangent), direction-independent.
   const perp1x = -tan1.y / len1;
   const perp1y =  tan1.x / len1;
   const perp2x = -tan2.y / len2;
@@ -93,72 +61,40 @@ export function computeCrossingSeg(
   const p0 = { x: pos1.x + perp1x * offsetAtT1, y: pos1.y + perp1y * offsetAtT1 };
   const p3 = { x: pos2.x + perp2x * offsetAtT2, y: pos2.y + perp2y * offsetAtT2 };
 
-  // Control points follow the road tangent direction so the curve stays on-road.
   const chord = Math.hypot(p3.x - p0.x, p3.y - p0.y);
   const ctrlLen = Math.max(chord / 3, 1);
   const p1 = { x: p0.x + tan1.x / len1 * sign * ctrlLen, y: p0.y + tan1.y / len1 * sign * ctrlLen };
   const p2 = { x: p3.x - tan2.x / len2 * sign * ctrlLen, y: p3.y - tan2.y / len2 * sign * ctrlLen };
 
-  return { p0, p1, p2, p3 };
+  return new CubicBezierPoints(p0, p1, p2, p3);
 }
 
-// Returns the offset bezier segments for one road-section sub-range.
-// departureStationId / arrivalStationId: the stations at t1 and t2 respectively.
-// depPathSegIdx / arrPathSegIdx: path entry indices for the stations; disambiguates
-//   which pass to use when the same line visits a station more than once (U-turn).
-// When both offsets differ, a crossing cubic is returned for a smooth lane change.
 export function computeSectionSegs(
-  line: Line, road: Road, sectionId: RoadSectionId,
-  t1: number, t2: number,
-  state: Readonly<MapState>,
-  departureStationId?: StationId,
-  arrivalStationId?: StationId,
-  depPathSegIdx?: number,
-  arrPathSegIdx?: number,
-  depRank?: number,
-  arrRank?: number,
+  road: Road,
+  t1: OffsetT, t2: OffsetT,
+  offsetDep: number, offsetArr: number,
 ): CubicBezierPoints[] {
-  const centerline = computeRoadBezier(road, state);
+  const centerline = road.computeBezier();
   if (!centerline) return [];
 
-  // Detect whether we're leaving from the departure station on its U-turn departure slot.
-  // This happens when the line arrives at the departure station from one direction and
-  // the current traversal (t1→t2) leaves in the opposite direction.
-  let isDepUturn = false;
-  if (departureStationId !== undefined && depPathSegIdx !== undefined) {
-    const arrDir = getLineDirectionAtStop(line, depPathSegIdx, state);
-    const depDir = getLineDepartureAtStop(line, depPathSegIdx, state);
-    isDepUturn = depDir !== null && depDir !== arrDir;
-  }
-
-  const offsetDep = computeTotalOffset(line, road, sectionId, state, departureStationId, depPathSegIdx, isDepUturn, departureStationId === undefined ? depRank : undefined);
-  const offsetArr = arrivalStationId === undefined
-    ? (arrRank !== undefined ? computeTotalOffset(line, road, sectionId, state, undefined, undefined, false, arrRank) : offsetDep)
-    : computeTotalOffset(line, road, sectionId, state, arrivalStationId, arrPathSegIdx);
-
-  // Negate offset for reverse traversal so the backward-parameterized bezier's
-  // flipped perpendicular lands on the correct physical side of the road.
-  const directedDep = t1 > t2 ? -offsetDep : offsetDep;
-  const directedArr = t1 > t2 ? -offsetArr : offsetArr;
+  const backward = t1.compare(t2) > 0;
+  const directedDep = backward ? -offsetDep : offsetDep;
+  const directedArr = backward ? -offsetArr : offsetArr;
 
   if (directedDep === directedArr) {
-    // Non-crossing: adaptive offset for best accuracy.
-    const sub = elevateToCubic(subQuadBezier(centerline, t1, t2));
-    return directedDep === 0 ? [sub] : offsetBezierAdaptive(sub, directedDep);
+    const sub = centerline.sub(t1, t2).elevateToCubic();
+    return directedDep === 0 ? [sub] : sub.offsetAdaptive(directedDep);
   }
 
-  // Crossing: single cubic that transitions from departure lane to arrival lane.
-  return [computeCrossingSeg(centerline, t1, t2, directedDep, directedArr)];
+  return [computeCrossingSeg(centerline, t1, t2, offsetDep, offsetArr)];
 }
 
 export function appendJunctionCurve(pb: PathBuilder, prev: CubicBezierPoints, next: CubicBezierPoints): void {
-  // Tangent at t=1 of cubic: p3 - p2
   const exitLen = Math.hypot(prev.p3.x - prev.p2.x, prev.p3.y - prev.p2.y);
   const exitDir: Vector = exitLen < 0.001
     ? { x: 1, y: 0 }
     : { x: (prev.p3.x - prev.p2.x) / exitLen, y: (prev.p3.y - prev.p2.y) / exitLen };
 
-  // Tangent at t=0 of cubic: p1 - p0 (negated for "into junction" direction)
   const entryLen = Math.hypot(next.p1.x - next.p0.x, next.p1.y - next.p0.y);
   const entryDir: Vector = entryLen < 0.001
     ? { x: -1, y: 0 }

@@ -1,5 +1,4 @@
 import { MapState } from "../../models/structures";
-import { Model } from "../../models";
 import { renderRoad } from "./road-visuals";
 import { buildAndAppendJunction, buildNodeMarker } from "./node-visuals";
 import { FIGMA_KEY_NODE_ID, FIGMA_KEY_IS_NODE_MARKER, FIGMA_KEY_ROAD_ID, FIGMA_KEY_IS_ROAD_CONTROL } from "./constants";
@@ -14,28 +13,25 @@ function pushToBack(children: readonly SceneNode[], predicate: (c: SceneNode) =>
 }
 
 export class RoadRenderer {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  public setModel(_model: Model): void {}
-
   public static async renderAll(state: Readonly<MapState>): Promise<void> {
     await RoadRenderer.clearPrevious();
-    for (const road of state.roads.values()) renderRoad(road, state);
+    for (const road of state.getRoads()) renderRoad(road);
     const nodesWithJunction = await RoadRenderer.renderJunctions(state);
     await RoadRenderer.renderNodeMarkers(state, nodesWithJunction);
   }
 
   private static async renderJunctions(state: Readonly<MapState>): Promise<Set<string>> {
     const nodesWithJunction = new Set<string>();
-    for (const node of state.nodes.values()) {
-      if (await buildAndAppendJunction(node, state)) nodesWithJunction.add(node.id);
+    for (const node of state.getNodes()) {
+      if (await buildAndAppendJunction(node)) nodesWithJunction.add(node.id);
     }
     return nodesWithJunction;
   }
 
   private static async renderNodeMarkers(state: Readonly<MapState>, nodesWithJunction: Set<string>): Promise<void> {
-    for (const node of state.nodes.values()) {
+    for (const node of state.getNodes()) {
       if (nodesWithJunction.has(node.id)) continue;
-      const marker = await buildNodeMarker(node, state);
+      const marker = await buildNodeMarker(node);
       if (marker) {
         figma.currentPage.appendChild(marker);
         console.log(`[renderAll] appended marker for node ${node.id} at (${marker.x}, ${marker.y})`);

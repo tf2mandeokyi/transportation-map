@@ -1,4 +1,5 @@
-import { HVAlign, LineId, StationId } from "@/common/types";
+import { LineId } from "@/common/types";
+import { Station } from "../models/structures";
 import { setUIMessageHandler } from "../figma";
 import { Model } from "../models";
 import { View } from "../views";
@@ -38,7 +39,7 @@ export class Controller {
   }
 
   public async render(): Promise<void> {
-    await this.view.render(this.model.getState());
+    await this.view.render(this.model.state);
   }
 
   public async save(): Promise<void> {
@@ -61,9 +62,10 @@ export class Controller {
     this.connectionController.registerMessages(router);
     this.renderController.registerMessages(router);
     this.networkController.registerMessages(router);
-    router.register('validate-line-paths', () => this.handleValidateLinePaths());
-    router.register('clear-plugin-data',   () => this.handleClearPluginData());
+    router.register('validate-line-paths',  () => this.handleValidateLinePaths());
+    router.register('clear-plugin-data',    () => this.handleClearPluginData());
     router.register('request-initial-data', () => this.handleRequestInitialData());
+    router.register('get-map-data',         () => this.handleGetMapData());
 
     setUIMessageHandler(async (payload) => {
       try {
@@ -111,13 +113,13 @@ export class Controller {
     this.networkController.syncNetworkToUI();
   }
 
-  // Public API for demo map / external use
-  public createStation(name: string, textAlign: HVAlign = 'right'): StationId {
-    return this.stationController.createStation(name, textAlign);
+  private async handleGetMapData(): Promise<void> {
+    const data = figma.root.getPluginData('mapState') || '';
+    figma.ui.postMessage({ type: 'map-data', data });
   }
 
-  public connectStationsWithLine(lineId: LineId, startStationId: StationId, endStationId: StationId): void {
-    this.connectionController.connectStationsWithLine(lineId, startStationId, endStationId);
+  public connectStationsWithLine(lineId: LineId, startStation: Station, endStation: Station): void {
+    this.connectionController.connectStationsWithLine(lineId, startStation, endStation);
   }
 
   public syncLinesToUI(): void {

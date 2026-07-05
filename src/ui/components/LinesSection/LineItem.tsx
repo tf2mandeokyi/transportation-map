@@ -14,22 +14,21 @@ export interface LineItemProps {
 
 const LineItem: React.FC<LineItemProps> = ({ line, index, onRemove, onEdit, onDragStart, onDragOver, onDrop }) => (
   <div
-    className="line-item"
+    className="flex cursor-grab items-center justify-between rounded border border-neutral-200 px-2"
     draggable
     onDragStart={(e) => onDragStart(e, index)}
     onDragOver={(e) => onDragOver(e, index)}
     onDrop={onDrop}
     onClick={() => onEdit(line.id)}
-    style={{ cursor: 'grab' }}
   >
-    <div style={{ display: 'flex', alignItems: 'center', flex: 1, cursor: 'pointer' }} title="Click to edit line path">
-      <span style={{ marginRight: '8px', color: '#999', fontSize: '12px' }}>⋮⋮</span>
-      <div className="line-color" style={{ backgroundColor: line.color }}></div>
-      <span className="line-info">{line.name}</span>
+    <div className="flex flex-1 cursor-pointer items-center" title="Click to edit line path">
+      <span className="mr-2 text-xs text-neutral-400">⋮⋮</span>
+      <div className="mr-2 h-5 w-5 rounded-full" style={{ backgroundColor: line.color }}></div>
+      <span className="flex-1 font-medium">{line.name}</span>
     </div>
-    <div className="line-controls">
+    <div className="flex gap-1">
       <button
-        className="button button--secondary small-btn"
+        className="rounded border border-neutral-300 bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200"
         onClick={(e) => { e.stopPropagation(); onRemove(line.id); }}
       >
         Remove

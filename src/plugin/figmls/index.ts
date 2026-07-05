@@ -5,10 +5,10 @@ import stationLineFigml from "./station-line.figml";
 import stationLineDotFigml from "./station-line-dot.figml";
 import stationLineTextFigml from "./station-line-text.figml";
 import editHandleFigml from "./edit-handle.figml";
-import { RenderResult } from "../figml-parser/result";
+import { RenderResult } from "@/figml-parser/result";
 
-import { FigmlParser } from "../figml-parser";
-import { FigmlAlignment } from "../figml-parser/types";
+import { FigmlParser } from "@/figml-parser";
+import { FigmlAlignment } from "@/figml-parser/types";
 import { hexToRgb } from "@/common/utils/color";
 
 const FIGML_IMPORTS = {

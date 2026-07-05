@@ -26,7 +26,7 @@ const StationFormFields: React.FC<Props> = ({
   const [textRotation, setTextRotation] = useState(stationTextRotation);
   const [flipped, setFlipped]         = useState(stationFlipped);
 
-  const nameUpdateTimerRef = useRef<number | null>(null);
+  const nameUpdateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const onUpdateStation = (name: string, textAlign: HVAlign, textHAlign: TextHAlign, textRotation: number, flipped: boolean) => {
     postMessageToPlugin({ type: 'patch-station', stationId, patch: { op: 'update', station: { name, textAlign, textHAlign, textRotation, flipped } } });
@@ -66,11 +66,11 @@ const StationFormFields: React.FC<Props> = ({
   }, [flipped]);
 
   return (
-    <div style={{ marginBottom: '16px' }}>
-      <div style={{ marginBottom: '8px' }}>
-        <label htmlFor="edit-station-name">Station Name</label>
+    <div className="mb-4">
+      <div className="mb-2">
+        <label htmlFor="edit-station-name" className="mb-1 block font-medium select-none">Station Name</label>
         <textarea
-          className="input"
+          className="w-full rounded border border-neutral-300 px-2 py-1 text-xs"
           id="edit-station-name"
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -78,10 +78,10 @@ const StationFormFields: React.FC<Props> = ({
           rows={2}
         />
       </div>
-      <div style={{ marginBottom: '8px' }}>
-        <label htmlFor="edit-station-text-align">Text Side</label>
+      <div className="mb-2">
+        <label htmlFor="edit-station-text-align" className="mb-1 block font-medium select-none">Text Side</label>
         <select
-          className="input"
+          className="w-full rounded border border-neutral-300 px-2 py-1 text-xs"
           id="edit-station-text-align"
           value={textAlign}
           onChange={(e) => setTextAlign(e.target.value as HVAlign)}
@@ -92,10 +92,10 @@ const StationFormFields: React.FC<Props> = ({
           <option value="bottom">Bottom</option>
         </select>
       </div>
-      <div style={{ marginBottom: '8px' }}>
-        <label htmlFor="edit-station-text-halign">Text Alignment</label>
+      <div className="mb-2">
+        <label htmlFor="edit-station-text-halign" className="mb-1 block font-medium select-none">Text Alignment</label>
         <select
-          className="input"
+          className="w-full rounded border border-neutral-300 px-2 py-1 text-xs"
           id="edit-station-text-halign"
           value={textHAlign}
           onChange={(e) => setTextHAlign(e.target.value as TextHAlign)}
@@ -105,47 +105,47 @@ const StationFormFields: React.FC<Props> = ({
           <option value="right">Right</option>
         </select>
       </div>
-      <div style={{ marginBottom: '8px' }}>
-        <label htmlFor="edit-station-text-rotation">Text Rotation (°)</label>
+      <div className="mb-2">
+        <label htmlFor="edit-station-text-rotation" className="mb-1 block font-medium select-none">Text Rotation (°)</label>
         <input
-          className="input"
+          className="w-full rounded border border-neutral-300 px-2 py-1 text-xs"
           id="edit-station-text-rotation"
           type="number"
           value={textRotation}
           onChange={(e) => setTextRotation(Number(e.target.value))}
         />
       </div>
-      <div style={{ marginBottom: '8px' }}>
+      <div className="mb-2">
         <button
-          className={`button full-width${flipped ? '' : ' button--secondary'}`}
+          className={`w-full rounded px-3 py-2 font-medium ${flipped ? 'bg-[#18a0fb] text-white hover:bg-[#0d8ee0]' : 'border border-neutral-300 bg-neutral-100 hover:bg-neutral-200'}`}
           onClick={() => setFlipped(f => !f)}
         >
           {flipped ? 'Flipped (180°)' : 'Flip 180°'}
         </button>
       </div>
-      <div className="two-column" style={{ marginBottom: '8px' }}>
-        <button className="button button--secondary" onClick={() => postMessageToPlugin({ type: 'patch-station', stationId, patch: { op: 'copy', direction: 'forwards' } })}>
+      <div className="mb-2 grid grid-cols-2 gap-2">
+        <button className="rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium hover:bg-neutral-200" onClick={() => postMessageToPlugin({ type: 'patch-station', stationId, patch: { op: 'copy', direction: 'forwards' } })}>
           Copy Forwards
         </button>
-        <button className="button button--secondary" onClick={() => postMessageToPlugin({ type: 'patch-station', stationId, patch: { op: 'copy', direction: 'backwards' } })}>
+        <button className="rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium hover:bg-neutral-200" onClick={() => postMessageToPlugin({ type: 'patch-station', stationId, patch: { op: 'copy', direction: 'backwards' } })}>
           Copy Backwards
         </button>
       </div>
       {isCombiningMode ? (
-        <div style={{ padding: '12px', background: '#fff3cd', borderRadius: '4px', marginBottom: '8px', border: '1px solid #ffc107' }}>
-          <p style={{ fontSize: '11px', color: '#856404', margin: '0 0 8px 0', fontWeight: 'bold' }}>Combining mode active</p>
-          <p style={{ fontSize: '11px', color: '#856404', margin: '0 0 8px 0' }}>
+        <div className="mb-2 rounded border border-amber-400 bg-amber-50 p-3">
+          <p className="mb-2 text-[11px] font-bold text-amber-800">Combining mode active</p>
+          <p className="mb-2 text-[11px] text-amber-800">
             Click another station on the canvas to combine this station with it. All line stops will be transferred.
           </p>
-          <button className="button button--secondary full-width" onClick={() => setIsCombiningMode(false)}>Cancel</button>
+          <button className="w-full rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium hover:bg-neutral-200" onClick={() => setIsCombiningMode(false)}>Cancel</button>
         </div>
       ) : (
-        <button className="button button--secondary full-width" onClick={() => setIsCombiningMode(true)} style={{ marginBottom: '8px' }}>
+        <button className="mb-2 w-full rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium hover:bg-neutral-200" onClick={() => setIsCombiningMode(true)}>
           Combine with Another Station
         </button>
       )}
       <button
-        className="button button--secondary full-width"
+        className="w-full rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium text-[#F24822] hover:bg-neutral-200"
         onClick={() => {
           const displayName = stationName || '(unnamed station)';
           if (confirm(`Are you sure you want to delete "${displayName}"? This action cannot be undone.`)) {
@@ -153,7 +153,6 @@ const StationFormFields: React.FC<Props> = ({
             onClose();
           }
         }}
-        style={{ color: '#F24822' }}
       >
         Delete Station
       </button>

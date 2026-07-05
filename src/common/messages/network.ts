@@ -12,7 +12,7 @@ export type LineAtNodeData = {
   lineId: LineId;
   lineName: string;
   lineColor: string;
-  pathIndex: number;
+  groupIndex: number;
   exitingSectionId: RoadSectionId | null;
   enteringSectionId: RoadSectionId | null;
   exitRank: number;
@@ -21,14 +21,13 @@ export type LineAtNodeData = {
 
 export type NodePatch =
   | { op: 'update-name'; name: string | undefined }
-  | { op: 'update-rsc-ranks'; changes: Array<{ lineId: LineId; pathIndex: number; exitRank: number; enterRank: number }> };
+  | { op: 'update-rsc-ranks'; changes: Array<{ lineId: LineId; groupIndex: number; exitRank: number; enterRank: number }> };
 
 export type RoadPatch =
   | { op: 'add-section'; section: { name?: string; index: number } }
   | { op: 'remove-section'; sectionId: RoadSectionId };
 
 export type UIToPluginNetworkMessage =
-  | { type: 'add-node'; node: { name?: string; pos?: { x: number; y: number } } }
   | { type: 'remove-node'; nodeId: NodeId }
   | { type: 'patch-node'; nodeId: NodeId; patch: NodePatch }
   | { type: 'start-adding-road-mode' }

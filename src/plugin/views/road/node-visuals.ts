@@ -1,4 +1,4 @@
-import { MapState, Node } from "../../models/structures";
+import { Node } from "../../models/structures";
 import { JunctionShape } from "../../utils/junction-shape";
 import { PathBuilder } from "../../utils/path";
 import { NODE_RADIUS, FIGMA_KEY_NODE_ID, FIGMA_KEY_IS_NODE_MARKER, FIGMA_KEY_JUNCTION_OFFSET_X, FIGMA_KEY_JUNCTION_OFFSET_Y } from "./constants";
@@ -6,8 +6,8 @@ import { renderEditHandle } from "../../figmls";
 
 const JUNCTION_FILL: RGB = { r: 0.82, g: 0.82, b: 0.82 };
 
-export function buildNodePolygon(node: Node, state: Readonly<MapState>): VectorNode | null {
-  const shape = new JunctionShape(node, state);
+export function buildNodePolygon(node: Node): VectorNode | null {
+  const shape = new JunctionShape(node);
   if (!shape.isValid) return null;
 
   const pb = new PathBuilder();
@@ -22,11 +22,9 @@ export function buildNodePolygon(node: Node, state: Readonly<MapState>): VectorN
   return vn;
 }
 
-function computeJunctionCenter(node: Node, bounds: Rect, state: Readonly<MapState>): Vector {
+function computeJunctionCenter(node: Node, bounds: Rect): Vector {
   let jx = 0, jy = 0, jc = 0;
-  for (const { roadId, endpointIndex } of node.roadConnections) {
-    const road = state.roads.get(roadId);
-    if (!road) continue;
+  for (const { road, endpointIndex } of node.roadConnections) {
     jx += road.endpoints[endpointIndex].endpointPos.x;
     jy += road.endpoints[endpointIndex].endpointPos.y;
     jc++;
@@ -35,8 +33,8 @@ function computeJunctionCenter(node: Node, bounds: Rect, state: Readonly<MapStat
 }
 
 // Returns true if a junction frame was appended (so the caller can skip the node marker).
-export async function buildAndAppendJunction(node: Node, state: Readonly<MapState>): Promise<boolean> {
-  const polygon = buildNodePolygon(node, state);
+export async function buildAndAppendJunction(node: Node): Promise<boolean> {
+  const polygon = buildNodePolygon(node);
   if (!polygon) return false;
 
   // Temporarily place on page to read absolute bounds, then reparent into a frame.
@@ -53,7 +51,7 @@ export async function buildAndAppendJunction(node: Node, state: Readonly<MapStat
   frame.name = `Junction: ${node.name ?? node.id}`;
   frame.setPluginData(FIGMA_KEY_NODE_ID, node.id);
 
-  const center = computeJunctionCenter(node, bounds, state);
+  const center = computeJunctionCenter(node, bounds);
   frame.setPluginData(FIGMA_KEY_JUNCTION_OFFSET_X, String(center.x - bounds.x));
   frame.setPluginData(FIGMA_KEY_JUNCTION_OFFSET_Y, String(center.y - bounds.y));
 
@@ -65,26 +63,19 @@ export async function buildAndAppendJunction(node: Node, state: Readonly<MapStat
   return true;
 }
 
-function resolveNodePosition(node: Node, state: Readonly<MapState>): Vector | null {
+function resolveNodePosition(node: Node): Vector | null {
   let x = 0, y = 0, count = 0;
-  for (const { roadId, endpointIndex } of node.roadConnections) {
-    const road = state.roads.get(roadId);
-    if (!road) continue;
+  for (const { road, endpointIndex } of node.roadConnections) {
     x += road.endpoints[endpointIndex].endpointPos.x;
     y += road.endpoints[endpointIndex].endpointPos.y;
     count++;
   }
   if (count > 0) return { x: x / count, y: y / count };
-  if (!node.isolatedPos) {
-    console.warn(`[buildNodeMarker] isolated node ${node.id} has no isolatedPos — skipping`);
-    return null;
-  }
-  console.log(`[buildNodeMarker] isolated node ${node.id} at isolatedPos`, node.isolatedPos);
-  return node.isolatedPos;
+  return null;
 }
 
-export async function buildNodeMarker(node: Node, state: Readonly<MapState>): Promise<FrameNode | null> {
-  const pos = resolveNodePosition(node, state);
+export async function buildNodeMarker(node: Node): Promise<FrameNode | null> {
+  const pos = resolveNodePosition(node);
   if (!pos) return null;
 
   const frame = await renderEditHandle({ fill: '#333333', size: NODE_RADIUS * 2 }).intoNode() as FrameNode;

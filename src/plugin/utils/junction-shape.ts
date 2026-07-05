@@ -1,8 +1,5 @@
-import { Node, MapState } from '../models/structures';
-import { RoadId } from '@/common/types';
+import { Node, Road } from '../models/structures';
 import { ROAD_MIN_WIDTH } from './constants';
-import { getLinesForSection } from './section';
-import { sectionBandWidth, computeSectionOffset } from './line-queries';
 import { PathBuilder } from './path';
 import { appendGapCurve } from './curves';
 
@@ -13,10 +10,7 @@ interface Arm {
   negEdge: Vector;   // endpoint displaced to the -n (CCW) side
 }
 
-function buildArm(roadId: RoadId, endpointIndex: 0 | 1, state: Readonly<MapState>): Arm | null {
-  const road = state.roads.get(roadId);
-  if (!road) return null;
-
+function buildArm(road: Road, endpointIndex: 0 | 1): Arm | null {
   const conn = road.endpoints[endpointIndex];
   const ep: Vector = conn.endpointPos;
 
@@ -30,7 +24,7 @@ function buildArm(roadId: RoadId, endpointIndex: 0 | 1, state: Readonly<MapState
   // perp(dir) rotates 90° CW in screen coords (Y-down)
   const n: Vector = { x: -dir.y, y: dir.x };
 
-  const sections = Array.from(road.sections.values()).sort((a, b) => a.index - b.index);
+  const sections = road.getSectionsByIndex();
   let posOff: number;
   let negOff: number;
 
@@ -41,9 +35,8 @@ function buildArm(roadId: RoadId, endpointIndex: 0 | 1, state: Readonly<MapState
     posOff = -Infinity;
     negOff =  Infinity;
     for (const sec of sections) {
-      const sc = computeSectionOffset(sec, road, state);
-      const numLines = getLinesForSection(sec, state).length;
-      const hb = sectionBandWidth(numLines) / 2;
+      const sc = sec.computeOffset();
+      const hb = sec.getWidth() / 2;
       if (sc + hb > posOff) posOff = sc + hb;
       if (sc - hb < negOff) negOff = sc - hb;
     }
@@ -60,11 +53,11 @@ function buildArm(roadId: RoadId, endpointIndex: 0 | 1, state: Readonly<MapState
 export class JunctionShape {
   private readonly arms: Arm[];
 
-  constructor(node: Node, state: Readonly<MapState>) {
+  constructor(node: Node) {
     const arms: Arm[] = [];
 
-    for (const { roadId, endpointIndex } of node.roadConnections) {
-      const arm = buildArm(roadId, endpointIndex, state);
+    for (const { road, endpointIndex } of node.roadConnections) {
+      const arm = buildArm(road, endpointIndex);
       if (arm) arms.push(arm);
     }
 

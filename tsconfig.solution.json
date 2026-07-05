@@ -1,0 +1,8 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./src/common" },
+    { "path": "./src/plugin" },
+    { "path": "./src/ui" }
+  ]
+}

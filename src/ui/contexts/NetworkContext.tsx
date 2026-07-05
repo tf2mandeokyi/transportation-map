@@ -5,17 +5,21 @@ import { useMessageManager } from './MessageContext';
 import { AddingRoadUISession } from '../sessions/adding-road';
 import { useUISession } from '../sessions/useUISession';
 
-type RoadCreationStep = 'idle' | 'first' | 'second';
+type RoadSnapState = {
+  startSnap: { nodeId: NodeId; name?: string } | null;
+  endSnap:   { nodeId: NodeId; name?: string } | null;
+} | null;
 
 interface NetworkContextValue {
   nodes: NodeData[];
   roads: RoadData[];
   networkFocus: NetworkFocusedElement | null;
   nodeLinesData: LineAtNodeData[];
-  roadCreationStep: RoadCreationStep;
-  roadCreationFirstNode: { id: NodeId; name?: string } | null;
-  handleStartRoadCreation: () => void;
-  handleCancelRoadCreation: () => void;
+  isAddingRoad: boolean;
+  roadSnapState: RoadSnapState;
+  handleStartRoadCreation:   () => void;
+  handleConfirmRoadCreation: () => void;
+  handleCancelRoadCreation:  () => void;
 }
 
 const NetworkContext = createContext<NetworkContextValue | null>(null);
@@ -28,8 +32,8 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [roads, setRoads] = useState<RoadData[]>([]);
   const [networkFocus, setNetworkFocus] = useState<NetworkFocusedElement | null>(null);
   const [nodeLinesData, setNodeLinesData] = useState<LineAtNodeData[]>([]);
-  const [roadCreationStep, setRoadCreationStep] = useState<RoadCreationStep>('idle');
-  const [roadCreationFirstNode, setRoadCreationFirstNode] = useState<{ id: NodeId; name?: string } | null>(null);
+  const [isAddingRoad, setIsAddingRoad] = useState(false);
+  const [roadSnapState, setRoadSnapState] = useState<RoadSnapState>(null);
 
   useEffect(() => {
     const unsub1 = manager.onMessage('network-data', msg => {
@@ -42,13 +46,12 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const unsub3 = manager.onMessage('network-selection-cleared', () => {
       setNetworkFocus(null);
     });
-    const unsub4 = manager.onMessage('road-creation-first-node', msg => {
-      setRoadCreationFirstNode({ id: msg.nodeId, name: msg.name });
-      setRoadCreationStep('second');
+    const unsub4 = manager.onMessage('road-creation-snap-update', msg => {
+      setRoadSnapState({ startSnap: msg.startSnap, endSnap: msg.endSnap });
     });
     const unsub5 = manager.onMessage('road-creation-exited', () => {
-      setRoadCreationStep('idle');
-      setRoadCreationFirstNode(null);
+      setIsAddingRoad(false);
+      setRoadSnapState(null);
     });
     const unsub6 = manager.onMessage('node-lines-data', msg => {
       setNodeLinesData(msg.lines);
@@ -58,21 +61,27 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const handleStartRoadCreation = useCallback(() => {
     open(new AddingRoadUISession()).start(manager);
-    setRoadCreationStep('first');
-    setRoadCreationFirstNode(null);
+    setIsAddingRoad(true);
+    setRoadSnapState(null);
   }, [manager, open]);
+
+  const handleConfirmRoadCreation = useCallback(() => {
+    close(s => s.confirm());
+    setIsAddingRoad(false);
+    setRoadSnapState(null);
+  }, [close]);
 
   const handleCancelRoadCreation = useCallback(() => {
     close(s => s.cancel());
-    setRoadCreationStep('idle');
-    setRoadCreationFirstNode(null);
+    setIsAddingRoad(false);
+    setRoadSnapState(null);
   }, [close]);
 
   return (
     <NetworkContext.Provider value={{
       nodes, roads, networkFocus, nodeLinesData,
-      roadCreationStep, roadCreationFirstNode,
-      handleStartRoadCreation, handleCancelRoadCreation,
+      isAddingRoad, roadSnapState,
+      handleStartRoadCreation, handleConfirmRoadCreation, handleCancelRoadCreation,
     }}>
       {children}
     </NetworkContext.Provider>

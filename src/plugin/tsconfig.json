@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": "..",
+    "outDir": "../../.tsbuild/plugin",
+    "typeRoots": [
+      "../../node_modules/@types",
+      "../../node_modules/@figma"
+    ]
+  },
+  "include": ["./**/*.ts", "../figml-parser/**/*.ts"],
+  "references": [{ "path": "../common" }]
+}

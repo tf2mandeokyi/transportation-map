@@ -10,8 +10,8 @@ export interface StationPathItemProps {
 }
 
 const StationPathItem: React.FC<StationPathItemProps> = ({ name, index, stops, onRemove, onSelect, onToggleStops }) => (
-  <div className="station-path-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-    <span className="station-number" style={{ paddingLeft: '4px', paddingRight: '4px' }}>{index + 1}</span>
+  <div className="flex items-center gap-2 rounded border border-neutral-200 bg-white px-2 hover:bg-neutral-100">
+    <span className="mr-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#18a0fb] px-1 text-[10px] font-bold text-white">{index + 1}</span>
     {onToggleStops && (
       <input
         type="checkbox"
@@ -21,18 +21,13 @@ const StationPathItem: React.FC<StationPathItemProps> = ({ name, index, stops, o
       />
     )}
     <span
-      style={{
-        flex: 1,
-        cursor: onSelect ? 'pointer' : 'default',
-        color: stops ? 'inherit' : '#999',
-        fontStyle: stops ? 'normal' : 'italic',
-      }}
+      className={`flex-1 ${onSelect ? 'cursor-pointer' : 'cursor-default'} ${stops ? '' : 'italic text-neutral-400'}`}
       onClick={onSelect}
     >
       {name}
     </span>
     {onRemove && stops && (
-      <button className="button button--secondary small-btn" onClick={onRemove}>X</button>
+      <button className="rounded border border-neutral-300 bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200" onClick={onRemove}>X</button>
     )}
   </div>
 );

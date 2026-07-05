@@ -18,57 +18,83 @@ const FocusedNodePanel: React.FC<{ element: Extract<NetworkFocusedElement, { kin
     }
   };
 
-  const getSectionLabel = (sectionId: RoadSectionId | null): string => {
-    if (!sectionId) return '(none)';
+  const sectionIdKey = (id: RoadSectionId) => id.join(':');
+
+  const findRoadAndSection = (sectionId: RoadSectionId) => {
     for (const road of roads) {
-      const sec = road.sections.find(s => s.id === sectionId);
-      if (sec) return sec.name ? `${road.name ?? road.id} / ${sec.name}` : road.name ?? road.id;
+      const sec = road.sections.find(s => s.id[0] === sectionId[0] && s.id[1] === sectionId[1]);
+      if (sec) return { road, sec };
     }
-    return sectionId;
+    return null;
   };
 
   const allSectionIds = [
-    ...new Set([
+    ...new Map([
       ...lines.map(l => l.exitingSectionId),
       ...lines.map(l => l.enteringSectionId),
-    ].filter(Boolean) as RoadSectionId[]),
+    ].filter(Boolean).map(id => [sectionIdKey(id as RoadSectionId), id as RoadSectionId])).values(),
   ];
 
+  // Group arms by their parent road so sections of the same road appear together.
+  const roadGroups: Array<{ roadKey: string; roadLabel: string; sectionIds: RoadSectionId[] }> = [];
+  for (const sectionId of allSectionIds) {
+    const found = findRoadAndSection(sectionId);
+    const roadKey = found ? found.road.id : `unknown:${sectionIdKey(sectionId)}`;
+    const roadLabel = found ? (found.road.name ?? `road #${found.road.id}`) : `road #${sectionId[0]}`;
+    let group = roadGroups.find(g => g.roadKey === roadKey);
+    if (!group) {
+      group = { roadKey, roadLabel, sectionIds: [] };
+      roadGroups.push(group);
+    }
+    group.sectionIds.push(sectionId);
+  }
+
+  const getSectionLabel = (sectionId: RoadSectionId): string => {
+    const found = findRoadAndSection(sectionId);
+    return found?.sec.name ?? `section #${found?.sec.index ?? sectionId[1]}`;
+  };
+
   return (
-    <div style={{ padding: '8px', background: '#e8f4ff', borderRadius: '4px', marginBottom: '12px', fontSize: '12px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '6px' }}>
-        <span style={{ fontWeight: 600, flex: 1 }}>Selected Junction</span>
-        <button className="button button--secondary small-btn" onClick={() => postMessageToPlugin({ type: 'remove-node', nodeId: element.nodeId })}>
+    <div className="mb-3 rounded bg-[#e8f4ff] p-2 text-xs">
+      <div className="mb-1.5 flex items-center">
+        <span className="flex-1 font-semibold">Selected Junction</span>
+        <button className="rounded border border-neutral-300 bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200" onClick={() => postMessageToPlugin({ type: 'remove-node', nodeId: element.nodeId })}>
           Delete
         </button>
       </div>
       <input
-        className="input"
+        className="mb-1 w-full rounded border border-neutral-300 px-2 py-1 text-xs"
         placeholder="Junction name (optional)"
         value={editName}
         onChange={e => setEditName(e.target.value)}
         onBlur={commitName}
         onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-        style={{ marginBottom: '4px' }}
       />
-      <div style={{ color: '#666', marginTop: '2px' }}>x: {element.pos.x.toFixed(1)},&nbsp; y: {element.pos.y.toFixed(1)}</div>
-      <div style={{ color: '#999', fontSize: '11px', marginTop: '4px' }}>Drag the junction marker on the canvas to move it.</div>
+      <div className="mt-0.5 text-neutral-500">x: {element.pos.x.toFixed(1)},&nbsp; y: {element.pos.y.toFixed(1)}</div>
+      <div className="mt-1 text-[11px] text-neutral-400">Drag the junction marker on the canvas to move it.</div>
 
-      {allSectionIds.map(sectionId => {
-        const items: ArmItem[] = [
-          ...lines.filter(l => l.exitingSectionId === sectionId).map(l => ({ line: l, role: 'exit' as const, rank: l.exitRank })),
-          ...lines.filter(l => l.enteringSectionId === sectionId).map(l => ({ line: l, role: 'enter' as const, rank: l.enterRank })),
-        ].sort((a, b) => a.rank - b.rank);
+      {roadGroups.map((group, gi) => (
+        <React.Fragment key={group.roadKey}>
+          {gi > 0 && <hr className="my-2.5 mb-1 border-t border-[#d0e4f7]" />}
+          <div className="mt-1.5 font-semibold text-neutral-600">{group.roadLabel}</div>
+          {group.sectionIds.map(sectionId => {
+            const key = sectionIdKey(sectionId);
+            const items: ArmItem[] = [
+              ...lines.filter(l => l.exitingSectionId && sectionIdKey(l.exitingSectionId) === key).map(l => ({ line: l, role: 'exit' as const, rank: l.exitRank })),
+              ...lines.filter(l => l.enteringSectionId && sectionIdKey(l.enteringSectionId) === key).map(l => ({ line: l, role: 'enter' as const, rank: l.enterRank })),
+            ].sort((a, b) => a.rank - b.rank);
 
-        return (
-          <NodeArmList
-            key={sectionId}
-            label={`${getSectionLabel(sectionId)} (drag to reorder)`}
-            nodeId={element.nodeId}
-            items={items}
-          />
-        );
-      })}
+            return (
+              <NodeArmList
+                key={key}
+                label={`${getSectionLabel(sectionId)} (drag to reorder)`}
+                nodeId={element.nodeId}
+                items={items}
+              />
+            );
+          })}
+        </React.Fragment>
+      ))}
     </div>
   );
 };
@@ -80,24 +106,24 @@ interface NodeArmListProps {
 }
 
 const NodeArmList: React.FC<NodeArmListProps> = ({ label, nodeId, items }) => (
-  <div style={{ marginTop: '8px' }}>
-    <label style={{ color: '#555' }}>{label}</label>
-    <div style={{ marginTop: '4px' }}>
+  <div className="mt-2">
+    <label className="text-neutral-600">{label}</label>
+    <div className="mt-1">
       <DraggableLineList
         items={items}
-        getKey={item => `${item.line.lineId}-${item.line.pathIndex}-${item.role}`}
+        getKey={item => `${item.line.lineId}-${item.line.groupIndex}-${item.role}`}
         getLineColor={item => item.line.lineColor}
         getLineName={item => item.line.lineName}
         showRank
         right={item => (
-          <span style={{ color: '#aaa', fontSize: '11px' }}>
+          <span className="text-[11px] text-neutral-400">
             {item.role === 'exit' ? 'exit' : 'enter'}
           </span>
         )}
         onCommit={items => {
           const changes = items.map((it, i) => ({
             lineId: it.line.lineId,
-            pathIndex: it.line.pathIndex,
+            groupIndex: it.line.groupIndex,
             exitRank: it.role === 'exit' ? i : it.line.exitRank,
             enterRank: it.role === 'enter' ? i : it.line.enterRank,
           }));

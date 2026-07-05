@@ -18,7 +18,7 @@ module.exports = (env, argv) => {
         rules: [
           {
             test: /\.tsx?$/,
-            use: 'ts-loader',
+            use: { loader: 'ts-loader', options: { configFile: path.resolve(__dirname, 'tsconfig.json') } },
             exclude: /node_modules/,
           },
           {
@@ -64,12 +64,12 @@ module.exports = (env, argv) => {
         rules: [
           {
             test: /\.tsx?$/,
-            use: 'ts-loader',
+            use: { loader: 'ts-loader', options: { configFile: path.resolve(__dirname, 'tsconfig.json') } },
             exclude: /node_modules/,
           },
           {
             test: /\.css$/,
-            use: ['style-loader', 'css-loader'],
+            use: ['style-loader', 'css-loader', 'postcss-loader'],
           },
         ],
       },

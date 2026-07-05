@@ -9,12 +9,12 @@ const EditLinePathSection: React.FC = () => {
   const currentLine = lines.find(l => l.id === currentEditingLineId);
 
   return (
-    <div className="section">
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-        <button className="button button--secondary" onClick={() => setCurrentEditingLineId(null)} style={{ padding: '8px 12px' }}>
+    <div className="mb-4 border-b border-neutral-200 pb-4">
+      <div className="mb-4 flex items-center gap-2">
+        <button className="rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium hover:bg-neutral-200" onClick={() => setCurrentEditingLineId(null)}>
           &lt; Back
         </button>
-        <h3 style={{ margin: 0, flex: 1 }}>Edit Line Path</h3>
+        <h3 className="flex-1 text-sm font-semibold">Edit Line Path</h3>
       </div>
 
       {currentLine && (

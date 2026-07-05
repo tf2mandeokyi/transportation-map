@@ -1,10 +1,8 @@
-import { LineAtStationData, StationParams, StationPatch } from "@/common/messages";
-import { HVAlign, LineId, RoadSectionId, StationId, TextHAlign } from "@/common/types";
+import { StationParams, StationPatch } from "@/common/messages";
+import { LineId, RoadSectionId, StationId } from "@/common/types";
 import { PlacingStationPluginSession } from "../sessions/placing-station";
 import { postMessageToUI } from "../figma";
-import { findNearestRoadSection } from "../utils/snap";
-import { getLineDirectionAtStop, getLineDepartureAtStop } from "../utils/section";
-import { getStationStopsAcrossLines } from "../utils/line-queries";
+import { RoadSection } from "../models/structures";
 import { BaseController } from "./base";
 import { ListenerHandle } from "./listener";
 import { UIMessageRouter } from "./router";
@@ -19,7 +17,7 @@ interface PlacingState {
   handleId: string;
   previewId: string;
   listenerHandle: ListenerHandle;
-  snap: { roadSectionId: RoadSectionId; interpT: number } | null;
+  snap: { section: RoadSection; interpT: number } | null;
 }
 
 export class StationController extends BaseController {
@@ -67,7 +65,7 @@ export class StationController extends BaseController {
     preview.name = '_station-placing-preview';
     figma.currentPage.appendChild(preview);
 
-    const initialSnap = findNearestRoadSection(center, this.model.getState());
+    const initialSnap = this.model.state.findNearestRoadSection(center);
     if (initialSnap) {
       preview.x = initialSnap.pos.x - PREVIEW_SIZE / 2;
       preview.y = initialSnap.pos.y - PREVIEW_SIZE / 2;
@@ -89,7 +87,7 @@ export class StationController extends BaseController {
       const h = handleNode as EllipseNode;
       const handleCenter = { x: h.x + h.width / 2, y: h.y + h.height / 2 };
 
-      const snap = findNearestRoadSection(handleCenter, this.model.getState());
+      const snap = this.model.state.findNearestRoadSection(handleCenter);
       if (!snap) return;
 
       const previewNode = await figma.getNodeByIdAsync(previewId);
@@ -98,14 +96,14 @@ export class StationController extends BaseController {
       p.x = snap.pos.x - p.width / 2;
       p.y = snap.pos.y - p.height / 2;
 
-      this.placingState.snap = { roadSectionId: snap.roadSectionId, interpT: snap.interpT };
+      this.placingState.snap = { section: snap.section, interpT: snap.interpT };
     });
 
     this.placingState = {
       handleId,
       previewId,
       listenerHandle,
-      snap: initialSnap ? { roadSectionId: initialSnap.roadSectionId, interpT: initialSnap.interpT } : null,
+      snap: initialSnap ? { section: initialSnap.section, interpT: initialSnap.interpT } : null,
     };
 
     figma.currentPage.selection = [handle];
@@ -116,11 +114,8 @@ export class StationController extends BaseController {
     const snap = this.placingState.snap;
     await this.cancelPlacingMode();
 
-    const id = this.createStation(name, textAlign, textHAlign, textRotation, flipped, snap?.roadSectionId ?? null, snap?.interpT ?? 0.5);
-    const station = this.model.getState().stations.get(id);
-    if (!station) return;
-
-    await this.view.stationRenderer.renderStation(station, this.model.getState());
+    const station = this.model.addStation({ name, textAlign, textHAlign, textRotation, flipped, interpT: snap?.interpT ?? 0.5, roadSection: snap?.section ?? null });
+    await this.view.stationRenderer.renderStation(station);
     await this.save();
   }
 
@@ -139,11 +134,9 @@ export class StationController extends BaseController {
   // ── Message handlers ──────────────────────────────────────────────────────
 
   public async handleAddStation({ name, textAlign, textHAlign, textRotation, flipped, roadSectionId, interpT }: StationParams & { roadSectionId: RoadSectionId | null; interpT: number }): Promise<void> {
-    const id = this.createStation(name, textAlign, textHAlign, textRotation, flipped, roadSectionId, interpT);
-    const station = this.model.getState().stations.get(id);
-    if (!station) return;
-
-    await this.view.stationRenderer.renderStation(station, this.model.getState());
+    const roadSection = roadSectionId ? this.model.findSection(roadSectionId) : null;
+    const station = this.model.addStation({ name, textAlign, textHAlign, textRotation, flipped, interpT, roadSection });
+    await this.view.stationRenderer.renderStation(station);
     await this.save();
   }
 
@@ -159,51 +152,40 @@ export class StationController extends BaseController {
 
   // ── Individual handlers ───────────────────────────────────────────────────
 
-  public createStation(name: string, textAlign: HVAlign = 'right', textHAlign: TextHAlign = 'left', textRotation: number = 0, flipped: boolean = false, roadSectionId: RoadSectionId | null = null, interpT: number = 0.5): StationId {
-    return this.model.addStation({ name, textAlign, textHAlign, textRotation, flipped, interpT, roadSectionId });
-  }
-
   public async handleGetStationInfo(stationId: StationId): Promise<void> {
-    const state = this.model.getState();
-    const station = state.stations.get(stationId);
+    const state = this.model.state;
+    const station = state.getStation(stationId);
     if (!station) {
       console.warn(`Station ${stationId} not found`);
       return;
-    }
-
-    const lines: Array<LineAtStationData> = [];
-    for (const { line, path } of getStationStopsAcrossLines(stationId, state)) {
-      const arrDir = getLineDirectionAtStop(line, path.index, state);
-      const facing: 'left' | 'right' = arrDir === 'forward' ? 'right' : 'left';
-      lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing, stops: path.stops });
-      // U-turn: add a departure-direction entry when arrival and departure directions differ.
-      const depDir = getLineDepartureAtStop(line, path.index, state);
-      if (depDir !== null && depDir !== arrDir) {
-        const depFacing: 'left' | 'right' = depDir === 'forward' ? 'right' : 'left';
-        lines.push({ id: line.id, name: line.name, color: line.color, pathIndex: path.index, rank: path.rank, facing: depFacing, stops: false, departureRole: true });
-      }
     }
 
     postMessageToUI({
       type: 'station-clicked',
       stationId,
       station: { name: station.name, textAlign: station.textAlign, textHAlign: station.textHAlign, textRotation: station.textRotation, flipped: station.flipped },
-      lines,
+      lines: station.getLinesAtStationData(),
     });
   }
 
   private async handleUpdateStationStopRanks(
     stationId: StationId,
-    stops: Array<{ lineId: LineId; pathIndex: number; rank: number }>
+    stops: Array<{ lineId: LineId; groupIndex: number; stopIndex: number; rank: number }>
   ): Promise<void> {
-    this.model.updateStationStopRanks(stationId, stops);
+    const station = this.model.state.getStation(stationId);
+    if (!station) return;
+    const resolvedStops = stops.flatMap(({ lineId, groupIndex, stopIndex, rank }) => {
+      const line = this.model.state.getLine(lineId);
+      return line ? [{ line, groupIndex, stopIndex, rank }] : [];
+    });
+    station.updateStopRanks(resolvedStops);
     await this.render();
     await this.save();
     await this.handleGetStationInfo(stationId);
   }
 
   private async handleUpdateStation(stationId: StationId, { name, textAlign, textHAlign, textRotation, flipped }: StationParams): Promise<void> {
-    const station = this.model.getState().stations.get(stationId);
+    const station = this.model.state.getStation(stationId);
     if (!station) { console.warn(`Station ${stationId} not found`); return; }
 
     station.name = name;
@@ -217,7 +199,7 @@ export class StationController extends BaseController {
   }
 
   private async handleDeleteStation(stationId: StationId): Promise<void> {
-    const station = this.model.getState().stations.get(stationId);
+    const station = this.model.state.getStation(stationId);
     if (!station) { console.warn(`Station ${stationId} not found`); return; }
 
     if (station.figmaNodeId) {
@@ -225,54 +207,41 @@ export class StationController extends BaseController {
       if (node) node.remove();
     }
 
-    this.model.removeStation(stationId);
+    this.model.removeStation(station);
     await this.save();
   }
 
   private async handleCopyStation(stationId: StationId, direction: 'forwards' | 'backwards'): Promise<void> {
-    const station = this.model.getState().stations.get(stationId);
+    const station = this.model.state.getStation(stationId);
     if (!station) { console.warn(`Station ${stationId} not found`); return; }
 
-    const interpTOffset = direction === 'forwards' ? 0.1 : -0.1;
-    const newInterpT = Math.max(0, Math.min(1, station.interpT + interpTOffset));
-
-    const newStationId = this.model.addStation({
-      name: station.name,
-      textAlign: station.textAlign,
-      textHAlign: station.textHAlign,
-      textRotation: station.textRotation,
-      flipped: station.flipped,
-      interpT: newInterpT,
-      roadSectionId: station.roadSectionId,
-    });
-    const newStation = this.model.getState().stations.get(newStationId);
-    if (!newStation) return;
+    const newStation = this.model.addStation(station.createCopyProps());
 
     if (this.connectionController) {
-      const linesAtStation = this.model.getLineStackingOrderForStation(stationId);
-      for (const lineId of linesAtStation) {
-        this.connectionController.insertStationIntoLine(lineId, newStationId, stationId, direction === 'forwards');
+      const linesAtStation = station.getStopsAcrossLines();
+      for (const { line } of linesAtStation) {
+        this.connectionController.insertStationIntoLine(line.id, newStation, station, direction === 'forwards');
       }
     }
 
-    await this.view.stationRenderer.renderStation(newStation, this.model.getState());
+    await this.view.stationRenderer.renderStation(newStation);
     await this.save();
-    await this.handleSelectStation(newStationId);
+    await this.handleSelectStation(newStation.id);
   }
 
   private async handleCombineStations(sourceStationId: StationId, targetStationId: StationId): Promise<void> {
-    const sourceStation = this.model.getState().stations.get(sourceStationId);
-    const targetStation = this.model.getState().stations.get(targetStationId);
+    const sourceStation = this.model.state.getStation(sourceStationId);
+    const targetStation = this.model.state.getStation(targetStationId);
 
     if (!sourceStation || !targetStation) {
       console.warn(`Station not found: ${sourceStationId} or ${targetStationId}`);
       return;
     }
 
-    for (const line of this.model.getState().lines.values()) {
-      for (const path of line.paths) {
-        if (path.kind === 'station-stop' && path.stationId === sourceStationId) {
-          path.stationId = targetStationId;
+    for (const line of this.model.state.getLines()) {
+      for (const group of line.paths) {
+        for (const stop of group.stationStops) {
+          if (stop.station === sourceStation) stop.station = targetStation;
         }
       }
     }
@@ -282,12 +251,12 @@ export class StationController extends BaseController {
       if (node) node.remove();
     }
 
-    this.model.removeStation(sourceStationId);
+    this.model.removeStation(sourceStation);
     await this.save();
   }
 
   public async handleSelectStation(stationId: StationId): Promise<void> {
-    const station = this.model.getState().stations.get(stationId);
+    const station = this.model.state.getStation(stationId);
     if (!station) { console.warn(`Station ${stationId} not found`); return; }
 
     if (station.figmaNodeId) {
