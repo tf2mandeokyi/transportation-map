@@ -1,7 +1,7 @@
 import { HVAlign, StationId } from "@/common/types";
 import { LineAtStationData } from "@/common/messages";
 import { TransportationMapObject } from './types';
-import type { RoadSection } from './road-section';
+import type { RoadSection, LinePass } from './road-section';
 import { StationStop } from "./line-path";
 import { Line } from "./line";
 import { own, Owned } from "@/common/utils/ownership";
@@ -99,6 +99,27 @@ export class Station extends TransportationMapObject<StationId> {
       l: this.flipped || undefined,
       p: this._interpT,
     };
+  }
+
+  // Returns one LinePass per occurrence of this station in any line's path (real stop
+  // or pass-through shadow), sorted by rank so lane ordering is consistent with station
+  // stop ordering.
+  getLinePasses(): LinePass[] {
+    const passes: Array<LinePass & { rank: number }> = [];
+    for (const line of this.mapState.getLines()) {
+      for (const [groupIndex, group] of line.paths.entries()) {
+        for (const [stopIndex, p] of group.stationStops.entries()) {
+          if (p.station === this) {
+            passes.push({ line, groupIndex, stopIndex, rank: p.rank, stops: p.stops });
+          }
+        }
+      }
+    }
+    passes.sort((a, b) => {
+      if (a.rank !== b.rank) return a.rank - b.rank;
+      return a.line.id < b.line.id ? -1 : 1;
+    });
+    return passes;
   }
 
   // Collects every stop this line makes at this station, normalizes their ranks to a

@@ -22,7 +22,7 @@ export function computeTotalOffset(
   const totalSlots = section.getMaxStationStopCount();
   let effectiveIdx: number;
   if (forceRank === undefined) {
-    const passes = section.getLines(referenceStation);
+    const passes = referenceStation ? referenceStation.getLinePasses() : section.getLines();
     const passIndex = pathGroupIndex === undefined
       ? passes.findIndex(lp => lp.line === line)
       : passes.findIndex(lp => lp.line === line && lp.groupIndex === pathGroupIndex && lp.stopIndex === pathStopIndex);

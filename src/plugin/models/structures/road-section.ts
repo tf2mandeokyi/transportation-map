@@ -64,7 +64,11 @@ export class RoadSection extends TransportationMapObject<SectionId> {
   
   getMaxStationStopCount(): number {
     if (this.stations.length === 0) return 0;
-    return Math.max(...this.stations.map(s => this.getLines(s).filter(lp => lp.stops).length));
+    // Every entry — real stop or pass-through shadow — is a distinct directed pass and
+    // needs its own lane slot. A U-turn's pivot station duplicates itself this way (see
+    // line-validator.ts), so counting only `stops: true` entries would under-reserve
+    // width for the reversed direction's pass.
+    return Math.max(...this.stations.map(s => s.getLinePasses().length));
   }
 
   getWidth(): number {
@@ -93,31 +97,9 @@ export class RoadSection extends TransportationMapObject<SectionId> {
     return 0;
   }
 
-  // Returns one LinePass per directed run (lane slot) on the section.
-  // With referenceStationId: one entry per occurrence of that station in any line's path,
-  //   sorted by rank so lane ordering is consistent with station stop ordering.
-  // Without referenceStationId: one entry per directed run across all lines; only
-  //   .length is meaningful (used for road-width computations).
-  getLines(referenceStation?: Station): LinePass[] {
-    if (referenceStation) {
-      const passes: Array<LinePass & { rank: number }> = [];
-      for (const line of this.mapState.getLines()) {
-        for (const [groupIndex, group] of line.paths.entries()) {
-          for (const [stopIndex, p] of group.stationStops.entries()) {
-            if (p.station === referenceStation) {
-              passes.push({ line, groupIndex, stopIndex, rank: p.rank, stops: p.stops });
-            }
-          }
-        }
-      }
-      passes.sort((a, b) => {
-        if (a.rank !== b.rank) return a.rank - b.rank;
-        return a.line.id < b.line.id ? -1 : 1;
-      });
-      return passes;
-    }
-
-    // No reference station: count directed runs per line for road-width sizing.
+  // Returns one LinePass per directed run (lane slot) across all lines on the section;
+  // only .length is meaningful (used for road-width computations).
+  getLines(): LinePass[] {
     const allPasses: LinePass[] = [];
     for (const line of this.mapState.getLines()) {
       const count = line.countPassesOnSection(this);

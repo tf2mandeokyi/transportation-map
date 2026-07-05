@@ -123,12 +123,12 @@ export function validateLinePaths(line: Line): Owned<LinePath>[] {
     }
 
     const stops = group.stationStops;
-    for (let i = 0; i < stops.length; i++) {
-      const stop = stops[i];
+    for (const element of stops) {
+      const stop = element;
       if (!stop.stops) continue; // strip stale pass-throughs left over from a previous validation run
 
       // Direction must be set before calling start()/end(), since those use it for bias.
-      if (currentPos && currentPos.section === stop.station.parentRoadSection) {
+      if (currentPos?.section === stop.station.parentRoadSection) {
         stop.direction = currentPos.offset.compare(stop.station.interpT) < 0 ? 'ascending' : 'descending';
       } else if (!currentPos) {
         // Very first stop of the line — nothing to compare against yet.
