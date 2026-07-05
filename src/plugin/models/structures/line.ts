@@ -128,6 +128,18 @@ export class Line extends TransportationMapObject<LineId> {
     if (stop) stop.stops = stops;
   }
 
+  // Manually flips a stop's direction. validateLinePaths recomputes direction from
+  // geometry wherever it can (i.e. whenever the running position from the previous
+  // stop lands on the same road section as this one), so this only has a lasting
+  // effect where direction is otherwise ambiguous — mainly the very first stop of
+  // the line when there's no same-section stop after it to compare against.
+  setStopDirection(groupIndex: number, stopIndex: number, direction: 'ascending' | 'descending'): void {
+    const stop = this.paths[groupIndex]?.stationStops[stopIndex];
+    if (!stop) return;
+    stop.direction = direction;
+    this._paths = validateLinePaths(this);
+  }
+
   // Counts the number of directed runs a line makes on a section.
   // Also counts runs that enter the section via RSE but have no station-stops on it
   // (pure through-passes between two junctions).

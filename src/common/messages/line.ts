@@ -25,7 +25,8 @@ export type LinePatch =
   | { op: 'update-path'; paths: LinePathData[] }
   | { op: 'rotate-path'; steps: number }
   | { op: 'remove-station'; groupIndex: number; stopIndex: number }
-  | { op: 'toggle-stops'; groupIndex: number; stopIndex: number; stops: boolean };
+  | { op: 'toggle-stops'; groupIndex: number; stopIndex: number; stops: boolean }
+  | { op: 'toggle-direction'; groupIndex: number; stopIndex: number; direction: 'ascending' | 'descending' };
 
 export type UIToPluginLineMessage =
   | { type: 'add-line'; line: { name: string; color: string; isCircular?: boolean } }

@@ -95,6 +95,23 @@ describe('validateLinePaths — virtual U-turn shadow duplication', () => {
     ]);
   });
 
+  it('infers the correct initial direction when the first click has a higher interpT than the second', () => {
+    const state = new MapState();
+    const { stations } = buildSection(state, { A: 0.7, B: 0.3 });
+
+    const line = buildLine(state, [
+      { station: stations.A },
+      { station: stations.B },
+    ]);
+
+    line.paths = validateLinePaths(line);
+
+    expect(summarize(line)).toEqual([
+      { id: 'A', stops: true, direction: 'descending' },
+      { id: 'B', stops: true, direction: 'descending' },
+    ]);
+  });
+
   it('leaves a straight, non-reversing path untouched', () => {
     const state = new MapState();
     const { stations } = buildSection(state, { A: 0.1, B: 0.3, C: 0.5 });
@@ -111,5 +128,67 @@ describe('validateLinePaths — virtual U-turn shadow duplication', () => {
       { id: 'B', stops: false, direction: 'ascending' }, // ordinary gap fill, not a reversal
       { id: 'C', stops: true,  direction: 'ascending' },
     ]);
+  });
+});
+
+describe('validateLinePaths — manual direction override on an ambiguous first stop', () => {
+  it('preserves a manually-set direction on a lone first stop with no lookahead reference', () => {
+    const state = new MapState();
+    const { stations } = buildSection(state, { A: 0.5 });
+
+    const line = buildLine(state, [{ station: stations.A }]);
+
+    // Simulate what Line.setStopDirection does: flip the stored direction, then re-validate.
+    line.paths[0].stationStops[0].direction = 'descending';
+    line.paths = validateLinePaths(line);
+
+    expect(summarize(line)).toEqual([
+      { id: 'A', stops: true, direction: 'descending' },
+    ]);
+
+    // Flipping back and re-validating again should stick just the same —
+    // this isn't a one-way default, it's a real toggle.
+    line.paths[0].stationStops[0].direction = 'ascending';
+    line.paths = validateLinePaths(line);
+
+    expect(summarize(line)).toEqual([
+      { id: 'A', stops: true, direction: 'ascending' },
+    ]);
+  });
+
+  it('does NOT preserve a manual override when a same-section lookahead can determine it', () => {
+    const state = new MapState();
+    const { stations } = buildSection(state, { A: 0.1, B: 0.3 });
+
+    const line = buildLine(state, [
+      { station: stations.A },
+      { station: stations.B },
+    ]);
+    line.paths = validateLinePaths(line);
+
+    // Manually force A to 'descending', even though A→B is a real, unambiguous ascending hop.
+    line.paths[0].stationStops[0].direction = 'descending';
+    line.paths = validateLinePaths(line);
+
+    // The lookahead recomputes it back to 'ascending' — geometry wins when it's known.
+    expect(summarize(line)).toEqual([
+      { id: 'A', stops: true, direction: 'ascending' },
+      { id: 'B', stops: true, direction: 'ascending' },
+    ]);
+  });
+
+  it('Line.setStopDirection (the method the UI toggle button actually calls) flips and keeps a lone stop\'s direction', () => {
+    const state = new MapState();
+    const { stations } = buildSection(state, { A: 0.5 });
+
+    const line = buildLine(state, [{ station: stations.A }]);
+    line.paths = validateLinePaths(line);
+    expect(summarize(line)).toEqual([{ id: 'A', stops: true, direction: 'ascending' }]);
+
+    line.setStopDirection(0, 0, 'descending');
+    expect(summarize(line)).toEqual([{ id: 'A', stops: true, direction: 'descending' }]);
+
+    line.setStopDirection(0, 0, 'ascending');
+    expect(summarize(line)).toEqual([{ id: 'A', stops: true, direction: 'ascending' }]);
   });
 });

@@ -12,13 +12,14 @@ interface PathItemsListProps {
   onRemoveRse: (groupIndex: number) => void;
   onSelectStation: (stationId: StationId) => void;
   onToggleStops: (groupIndex: number, stopIndex: number, stops: boolean) => void;
+  onToggleDirection: (groupIndex: number, stopIndex: number, direction: 'ascending' | 'descending') => void;
   onAddSectionStation: (stationId: StationId, after: LinePathAddress, direction: 'ascending' | 'descending') => void;
   onStartAddingRse: (after: LinePathAddress) => void;
 }
 
 const PathItemsList: React.FC<PathItemsListProps> = ({
   displayEntries, linePaths, inactive,
-  onRemoveStop, onRemoveRse, onSelectStation, onToggleStops,
+  onRemoveStop, onRemoveRse, onSelectStation, onToggleStops, onToggleDirection,
   onAddSectionStation, onStartAddingRse,
 }) => {
   const elements: React.ReactNode[] = [];
@@ -108,9 +109,11 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
                 name={s.name}
                 index={item.flatIndex}
                 stops={s.stops}
+                direction={dir}
                 onRemove={() => onRemoveStop(groupIndex, stopIndex)}
                 onSelect={() => onSelectStation(s.stationId)}
                 onToggleStops={stops => onToggleStops(groupIndex, stopIndex, stops)}
+                onToggleDirection={() => onToggleDirection(groupIndex, stopIndex, dir === 'ascending' ? 'descending' : 'ascending')}
               />
             </div>
           );

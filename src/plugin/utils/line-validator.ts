@@ -105,6 +105,11 @@ export function validateLinePaths(line: Line): Owned<LinePath>[] {
   // position) — never by looking ahead to what comes after it. That's what lets a
   // U-turn's pivot naturally re-surface via fillBetween's bias tie-break instead of
   // needing a dedicated "is this stop a pivot" check.
+  // Flattened real stops (pass-throughs already stripped by the `!stop.stops` filter
+  // below) — used only to peek one stop ahead when picking the very first stop's
+  // initial direction, since at that point there's no currentPos to compare against.
+  const realStops = line.paths.flatMap(group => group.stationStops.filter(s => s.stops));
+
   let currentPos: RoadSectionPos | undefined;
   let prevStop: StationStop | null = null;
 
@@ -131,8 +136,18 @@ export function validateLinePaths(line: Line): Owned<LinePath>[] {
       if (currentPos?.section === stop.station.parentRoadSection) {
         stop.direction = currentPos.offset.compare(stop.station.interpT) < 0 ? 'ascending' : 'descending';
       } else if (!currentPos) {
-        // Very first stop of the line — nothing to compare against yet.
-        stop.direction = 'ascending';
+        // Very first stop of the line — nothing to compare against yet. Peek at the
+        // next real stop: if it's on the same section, infer direction from the raw
+        // interpT ordering instead of blindly defaulting to 'ascending', which would
+        // otherwise mis-bias this stop and spuriously trigger the U-turn shadow logic
+        // in fillBetween on a perfectly straight two-stop path. If there's no such
+        // reference (no next stop, or it's on a different section), direction is
+        // inherently ambiguous here — leave the stored value alone rather than
+        // stomping it, so a manual override (see Line.setStopDirection) sticks.
+        const next = realStops[1];
+        if (next && next.station.parentRoadSection === stop.station.parentRoadSection) {
+          stop.direction = stop.station.interpT.compare(next.station.interpT) < 0 ? 'ascending' : 'descending';
+        }
       }
       // else: currentPos is on a different section (RSC crossing handled below via
       // fillInMissingPaths' auto-insert branch) — keep the stored/default direction.

@@ -169,6 +169,12 @@ const PathEditor: React.FC = () => {
     postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
   };
 
+  const handleToggleDirection = (groupIndex: number, stopIndex: number, direction: 'ascending' | 'descending') => {
+    if (!currentEditingLineId) return;
+    postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'toggle-direction', groupIndex, stopIndex, direction } });
+    postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
+  };
+
   const handleRemoveRse = (groupIndex: number) => {
     if (!currentEditingLineId) return;
     const newPaths = removeRsc(linePaths, groupIndex);
@@ -208,6 +214,7 @@ const PathEditor: React.FC = () => {
             onRemoveRse={handleRemoveRse}
             onSelectStation={(stationId) => postMessageToPlugin({ type: 'select-station', stationId })}
             onToggleStops={handleToggleStops}
+            onToggleDirection={handleToggleDirection}
             onAddSectionStation={handleAddSectionStation}
             onStartAddingRse={startRseMode}
           />

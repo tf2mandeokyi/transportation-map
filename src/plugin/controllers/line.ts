@@ -32,6 +32,7 @@ export class LineController extends BaseController {
       case 'rotate-path':    return this.handleRotateLinePath(lineId, patch.steps);
       case 'remove-station': return this.handleRemoveStationFromLine(lineId, patch.groupIndex, patch.stopIndex);
       case 'toggle-stops':   return this.handleToggleStops(lineId, patch.groupIndex, patch.stopIndex, patch.stops);
+      case 'toggle-direction': return this.handleToggleDirection(lineId, patch.groupIndex, patch.stopIndex, patch.direction);
     }
   }
 
@@ -72,6 +73,15 @@ export class LineController extends BaseController {
     const line = this.model.state.getLine(lineId);
     if (!line) return;
     line.setStopFlag(groupIndex, stopIndex, stops);
+    await this.render();
+    await this.save();
+    postMessageToUI({ type: 'station-removed-from-line' });
+  }
+
+  private async handleToggleDirection(lineId: LineId, groupIndex: number, stopIndex: number, direction: 'ascending' | 'descending'): Promise<void> {
+    const line = this.model.state.getLine(lineId);
+    if (!line) return;
+    line.setStopDirection(groupIndex, stopIndex, direction);
     await this.render();
     await this.save();
     postMessageToUI({ type: 'station-removed-from-line' });
