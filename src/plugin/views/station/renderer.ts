@@ -6,13 +6,7 @@ import { computeStationTangentAngle } from "./position";
 import { getLinesForStation } from "./layout";
 import { LINE_SPACING } from "../../utils/constants";
 import { RenderResult } from "@/figml-parser/result";
-
-function applyTransform(transform: Transform, point: Vector): Vector {
-  return {
-    x: transform[0][0] * point.x + transform[0][1] * point.y + transform[0][2],
-    y: transform[1][0] * point.x + transform[1][1] * point.y + transform[1][2],
-  };
-}
+import { applyTransform } from "../../utils/math";
 
 async function renderStationWithTemplate(
   parentFrame: FrameNode,
@@ -83,6 +77,10 @@ async function renderStationWithTemplate(
 export class StationRenderer {
   private readonly lineConnectionPoints: Map<string, Vector> = new Map();
 
+  // Fired every time a station's frame is rendered (both newly created and reused across
+  // reloads), so callers can (re)register drag listeners against the current frame id.
+  public onRendered?: (station: Station, frame: FrameNode) => void;
+
   public async renderStation(station: Station): Promise<void> {
     let frame: FrameNode | null = null;
     if (station.figmaNodeId) {
@@ -116,6 +114,7 @@ export class StationRenderer {
     frame.y = position.y - Math.sin(θRad) * w / 2 - Math.cos(θRad) * h / 2;
 
     this.storeLineConnectionPoints(station, children);
+    this.onRendered?.(station, frame);
   }
 
   private storeLineConnectionPoints(

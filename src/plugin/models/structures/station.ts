@@ -36,6 +36,7 @@ export class Station extends TransportationMapObject<StationId> {
   flipped!: boolean;
   private _interpT!: number;
   get interpT(): OffsetT { return new OffsetT(this._interpT, 'zero'); }
+  get rawInterpT(): number { return this._interpT; }
   parentRoadSection!: RoadSection;
 
   applyProps(props: StationProps): this {
@@ -60,6 +61,23 @@ export class Station extends TransportationMapObject<StationId> {
 
   setParent(roadSection: RoadSection): void {
     this.parentRoadSection = roadSection;
+  }
+
+  setInterpT(t: number): void {
+    this._interpT = t;
+  }
+
+  // Bounds this station may move within along its road section's shared bezier param,
+  // exclusive of its immediate neighbors (or the section's 0/1 ends when there is none),
+  // so stations can never cross past each other or reorder within the section.
+  getMovableRange(): { min: number; max: number } {
+    const section = this.parentRoadSection;
+    if (!section) return { min: 0, max: 1 };
+    const sorted = [...section.stations].sort((a, b) => a._interpT - b._interpT);
+    const index = sorted.indexOf(this);
+    const min = index > 0 ? sorted[index - 1]._interpT : 0;
+    const max = index < sorted.length - 1 ? sorted[index + 1]._interpT : 1;
+    return { min, max };
   }
 
   createCopyProps(): StationProps {

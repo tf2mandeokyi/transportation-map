@@ -19,3 +19,10 @@ export function applyLateralOffset(pos: Vector, tan: Vector, offset: number): Ve
   const len = Math.hypot(tan.x, tan.y) || 1;
   return { x: pos.x + (-tan.y / len) * offset, y: pos.y + (tan.x / len) * offset };
 }
+
+export function applyTransform(transform: Transform, point: Vector): Vector {
+  return {
+    x: transform[0][0] * point.x + transform[0][1] * point.y + transform[0][2],
+    y: transform[1][0] * point.x + transform[1][1] * point.y + transform[1][2],
+  };
+}

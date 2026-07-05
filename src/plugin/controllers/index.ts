@@ -36,6 +36,7 @@ export class Controller {
     this.networkController    = new NetworkController(model, view, this.listener, this.sessionManager);
 
     this.stationController.setConnectionController(this.connectionController);
+    this.view.stationRenderer.onRendered = (station, frame) => this.renderController.registerStationDragListener(station, frame);
   }
 
   public async render(): Promise<void> {
@@ -82,7 +83,6 @@ export class Controller {
     try {
       await figma.loadAllPagesAsync();
       figma.on('documentchange', (event) => {
-        this.renderController.handleDocumentChange(event).catch(console.error);
         this.networkController.handleDocumentChange(event).catch(console.error);
         for (const change of event.documentChanges) {
           this.listener.dispatch(change);

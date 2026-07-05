@@ -2,7 +2,7 @@ export interface ListenerHandle {
   dispose(): void;
 }
 
-type AnyDocumentChange = DocumentChangeEvent['documentChanges'][number];
+export type AnyDocumentChange = DocumentChangeEvent['documentChanges'][number];
 
 export class NodeChangeListener {
   private readonly handlers = new Map<string, Map<symbol, (change: AnyDocumentChange) => void | Promise<void>>>();
