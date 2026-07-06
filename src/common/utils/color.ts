@@ -8,3 +8,12 @@ export function hexToRgb(hex: string): RGB {
     b: Number.parseInt(result[3], 16) / 255
   } : { r: 1, g: 0, b: 0 };
 }
+
+// Accepts either #RRGGBB (opaque) or #RRGGBBAA (alpha as the trailing byte).
+export function hexToRgba(hex: string): { color: RGB; opacity: number } {
+  const withAlpha = /^#?([a-f\d]{6})([a-f\d]{2})$/i.exec(hex);
+  if (withAlpha) {
+    return { color: hexToRgb(withAlpha[1]), opacity: Number.parseInt(withAlpha[2], 16) / 255 };
+  }
+  return { color: hexToRgb(hex), opacity: 1 };
+}

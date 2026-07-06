@@ -1,7 +1,7 @@
 import { Node } from "../../models/structures";
 import { JunctionShape } from "../../utils/junction-shape";
 import { PathBuilder } from "../../utils/path";
-import { NODE_RADIUS, FIGMA_KEY_NODE_ID, FIGMA_KEY_IS_NODE_MARKER, FIGMA_KEY_JUNCTION_OFFSET_X, FIGMA_KEY_JUNCTION_OFFSET_Y } from "./constants";
+import { NODE_MARKER_RADIUS, FIGMA_KEY_NODE_ID, FIGMA_KEY_IS_NODE_MARKER, FIGMA_KEY_JUNCTION_OFFSET_X, FIGMA_KEY_JUNCTION_OFFSET_Y } from "./constants";
 import { renderEditHandle } from "../../figmls";
 
 const JUNCTION_FILL: RGB = { r: 0.82, g: 0.82, b: 0.82 };
@@ -22,14 +22,8 @@ export function buildNodePolygon(node: Node): VectorNode | null {
   return vn;
 }
 
-function computeJunctionCenter(node: Node, bounds: Rect): Vector {
-  let jx = 0, jy = 0, jc = 0;
-  for (const { road, endpointIndex } of node.roadConnections) {
-    jx += road.endpoints[endpointIndex].endpointPos.x;
-    jy += road.endpoints[endpointIndex].endpointPos.y;
-    jc++;
-  }
-  return jc > 0 ? { x: jx / jc, y: jy / jc } : { x: bounds.x, y: bounds.y };
+function computeJunctionCenter(node: Node): Vector {
+  return node.position;
 }
 
 // Returns true if a junction frame was appended (so the caller can skip the node marker).
@@ -51,7 +45,7 @@ export async function buildAndAppendJunction(node: Node): Promise<boolean> {
   frame.name = `Junction: ${node.name ?? node.id}`;
   frame.setPluginData(FIGMA_KEY_NODE_ID, node.id);
 
-  const center = computeJunctionCenter(node, bounds);
+  const center = computeJunctionCenter(node);
   frame.setPluginData(FIGMA_KEY_JUNCTION_OFFSET_X, String(center.x - bounds.x));
   frame.setPluginData(FIGMA_KEY_JUNCTION_OFFSET_Y, String(center.y - bounds.y));
 
@@ -63,24 +57,12 @@ export async function buildAndAppendJunction(node: Node): Promise<boolean> {
   return true;
 }
 
-function resolveNodePosition(node: Node): Vector | null {
-  let x = 0, y = 0, count = 0;
-  for (const { road, endpointIndex } of node.roadConnections) {
-    x += road.endpoints[endpointIndex].endpointPos.x;
-    y += road.endpoints[endpointIndex].endpointPos.y;
-    count++;
-  }
-  if (count > 0) return { x: x / count, y: y / count };
-  return null;
-}
-
 export async function buildNodeMarker(node: Node): Promise<FrameNode | null> {
-  const pos = resolveNodePosition(node);
-  if (!pos) return null;
+  const pos = node.position;
 
-  const frame = await renderEditHandle({ fill: '#333333', size: NODE_RADIUS * 2 }).intoNode() as FrameNode;
-  frame.x = pos.x - NODE_RADIUS;
-  frame.y = pos.y - NODE_RADIUS;
+  const frame = await renderEditHandle({ fill: '#333333', size: NODE_MARKER_RADIUS * 2 }).intoNode() as FrameNode;
+  frame.x = pos.x - NODE_MARKER_RADIUS;
+  frame.y = pos.y - NODE_MARKER_RADIUS;
   frame.name = `Node: ${node.name ?? node.id}`;
   frame.setPluginData(FIGMA_KEY_NODE_ID, node.id);
   frame.setPluginData(FIGMA_KEY_IS_NODE_MARKER, 'true');

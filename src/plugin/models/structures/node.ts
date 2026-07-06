@@ -6,49 +6,53 @@ import { Line } from "./line";
 
 export interface SerializedNode {
   n?: string;                         // name
+  x: number;                          // position.x
+  y: number;                          // position.y
+  r: number;                          // radius
 }
 
 export interface NodeProps {
   name?: string;
+  position: Vector;
+  radius: number;
 }
 
 // TODO: Make Node without any road connections invalid and remove them
 export class Node extends TransportationMapObject<NodeId> {
   name?: string;
+  position!: Vector;
+  radius!: number;
   roadConnections: Array<{ road: Road; endpointIndex: 0 | 1 }> = [];
 
   applyProps(props: NodeProps): this {
     this.name = props.name;
+    this.position = props.position;
+    this.radius = props.radius;
     return this;
   }
 
   applySerialized(ser: SerializedNode): this {
     this.name = ser.n;
+    this.position = { x: ser.x, y: ser.y };
+    this.radius = ser.r;
     return this;
   }
 
   serialize(): SerializedNode {
     return {
       n: this.name,
+      x: this.position.x,
+      y: this.position.y,
+      r: this.radius,
     };
   }
-  
-  getCenter(): { x: number; y: number } {
-    let sumX = 0, sumY = 0, count = 0;
-    for (const { road, endpointIndex } of this.roadConnections) {
-      sumX += road.endpoints[endpointIndex].endpointPos.x;
-      sumY += road.endpoints[endpointIndex].endpointPos.y;
-      count++;
-    }
-    if (count == 0) throw new Error(`Node ${this.id} has no road connections, cannot compute center`);
-    return { x: sumX / count, y: sumY / count };
+
+  getCenter(): Vector {
+    return this.position;
   }
 
-  moveByDelta(delta: { x: number; y: number }): void {
-    for (const { road, endpointIndex } of this.roadConnections) {
-      const oldPos = road.endpoints[endpointIndex].endpointPos
-      road.endpoints[endpointIndex].endpointPos = { x: oldPos.x + delta.x, y: oldPos.y + delta.y };
-    }
+  moveByDelta(delta: Vector): void {
+    this.position = { x: this.position.x + delta.x, y: this.position.y + delta.y };
   }
 
   addRoadConnection(road: Road, endpointIndex: 0 | 1): void {

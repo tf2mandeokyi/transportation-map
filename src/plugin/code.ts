@@ -2,6 +2,7 @@ import { own } from "@/common/utils/ownership";
 import { Controller } from "./controllers";
 import { Model } from "./models";
 import { View } from "./views";
+import { NODE_DEFAULT_RADIUS } from "./views/road";
 
 async function main() {
   figma.skipInvisibleInstanceChildren = true;
@@ -43,18 +44,18 @@ async function createDemoMap(controller: Controller, model: Model) {
   const n4Pos = { x: 400, y: 100 };
 
   // Create graph nodes (intersection points)
-  const n1 = model.addNode({ name: 'West Junction'    });
-  const n2 = model.addNode({ name: 'Central Junction' });
-  const n3 = model.addNode({ name: 'East Junction'    });
-  const n4 = model.addNode({ name: 'North Junction'   });
+  const n1 = model.addNode({ name: 'West Junction',    position: n1Pos, radius: NODE_DEFAULT_RADIUS });
+  const n2 = model.addNode({ name: 'Central Junction', position: n2Pos, radius: NODE_DEFAULT_RADIUS });
+  const n3 = model.addNode({ name: 'East Junction',    position: n3Pos, radius: NODE_DEFAULT_RADIUS });
+  const n4 = model.addNode({ name: 'North Junction',   position: n4Pos, radius: NODE_DEFAULT_RADIUS });
 
-  // Create roads between nodes with absolute endpoint and bezier positions
+  // Create roads between nodes with absolute bezier positions; endpoints sit on each node's boundary circle
   const road1 = model.addRoad({
     name: 'West-Central',
     bezierMidPoint: { x: (n1Pos.x + n2Pos.x) / 2, y: (n1Pos.y + n2Pos.y) / 2 },
     endpoints: [
-      own({ node: n1, endpointPos: n1Pos, groupNumber: 0 }),
-      own({ node: n2, endpointPos: n2Pos, groupNumber: 0 }),
+      own({ node: n1, horizontalOffset: 0, groupNumber: 0 }),
+      own({ node: n2, horizontalOffset: 0, groupNumber: 0 }),
     ],
   });
 
@@ -62,8 +63,8 @@ async function createDemoMap(controller: Controller, model: Model) {
     name: 'Central-East',
     bezierMidPoint: { x: (n2Pos.x + n3Pos.x) / 2, y: (n2Pos.y + n3Pos.y) / 2 },
     endpoints: [
-      own({ node: n2, endpointPos: n2Pos, groupNumber: 0 }),
-      own({ node: n3, endpointPos: n3Pos, groupNumber: 0 }),
+      own({ node: n2, horizontalOffset: 0, groupNumber: 0 }),
+      own({ node: n3, horizontalOffset: 0, groupNumber: 0 }),
     ],
   });
 
@@ -71,8 +72,8 @@ async function createDemoMap(controller: Controller, model: Model) {
     name: 'Central-North',
     bezierMidPoint: { x: (n2Pos.x + n4Pos.x) / 2, y: (n2Pos.y + n4Pos.y) / 2 },
     endpoints: [
-      own({ node: n2, endpointPos: n2Pos, groupNumber: 0 }),
-      own({ node: n4, endpointPos: n4Pos, groupNumber: 0 }),
+      own({ node: n2, horizontalOffset: 0, groupNumber: 0 }),
+      own({ node: n4, horizontalOffset: 0, groupNumber: 0 }),
     ],
   });
 

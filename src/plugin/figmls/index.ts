@@ -5,6 +5,7 @@ import stationLineFigml from "./station-line.figml";
 import stationLineDotFigml from "./station-line-dot.figml";
 import stationLineTextFigml from "./station-line-text.figml";
 import editHandleFigml from "./edit-handle.figml";
+import radiusHandleFigml from "./radius-handle.figml";
 import { RenderResult } from "@/figml-parser/result";
 
 import { FigmlParser } from "@/figml-parser";
@@ -19,6 +20,7 @@ const FIGML_IMPORTS = {
   'station-line-dot.figml': stationLineDotFigml,
   'station-line-text.figml': stationLineTextFigml,
   'edit-handle.figml': editHandleFigml,
+  'radius-handle.figml': radiusHandleFigml,
 } as const;
 
 export function resolveImport(filename: string): string {
@@ -58,4 +60,9 @@ export function renderStation({ text, visible, rotation, textRotation, textLocat
 const EDIT_HANDLE_TEMPLATE = FigmlParser.parseComponent(editHandleFigml);
 export function renderEditHandle({ fill, size }: { fill: string; size: number }): RenderResult {
   return EDIT_HANDLE_TEMPLATE.render({ fill, size }, {});
+}
+
+const RADIUS_HANDLE_TEMPLATE = FigmlParser.parseComponent(radiusHandleFigml);
+export function renderRadiusHandle({ diameter }: { diameter: number }): RenderResult {
+  return RADIUS_HANDLE_TEMPLATE.render({ diameter }, {});
 }

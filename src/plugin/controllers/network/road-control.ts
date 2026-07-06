@@ -1,13 +1,13 @@
 import { RoadId } from "@/common/types";
-import { Node } from "../../models/structures/node";
 import { Model } from "../../models";
 import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_ROAD_ID, FIGMA_KEY_SECTION_ID } from "../../views/road";
 import { renderEditHandle } from "../../figmls";
 import { bezierPathData, CubicBezierPoints, QuadBezierPoints } from "../../utils/bezier";
+import { normalize, perp, dot } from "../../utils/math";
 
 const ROAD_CONTROL_NODE_NAME = '_road-bezier-control';
-export const FIGMA_KEY_BEZIER_HANDLE   = 'mapBezierHandle';
-export const FIGMA_KEY_ENDPOINT_HANDLE = 'mapEndpointHandle';
+export const FIGMA_KEY_BEZIER_HANDLE = 'mapBezierHandle';
+export const FIGMA_KEY_OFFSET_HANDLE = 'mapOffsetHandle';
 
 const HANDLE_RADIUS = 5;
 const STEM_STROKE:  RGB = { r: 0.6,  g: 0.75, b: 1 };
@@ -45,29 +45,27 @@ export class RoadControlManager {
     const endNode   = road.endpoints[1].node;
     if (!startNode || !endNode) return;
 
-    const p0  = road.endpoints[0].endpointPos;
+    const p0  = road.computeEndpointPos(0);
     const mid = road.bezierMidPoint;
-    const p2  = road.endpoints[1].endpointPos;
+    const p2  = road.computeEndpointPos(1);
 
     const roadVisualNodes = this.findRoadVisualNodes(roadId);
     for (const n of roadVisualNodes) n.locked = true;
     this.lockedRoadNodeIds = roadVisualNodes.map(n => n.id);
 
-    const startCenter = this.computeNodeCenter(startNode);
-    const endCenter   = this.computeNodeCenter(endNode);
-    const startNodeStem = this.buildStemLine(startCenter, p0,  roadId);
+    const startNodeStem = this.buildStemLine(startNode.position, p0, roadId);
     const startToMid    = this.buildStemLine(p0, mid, roadId);
-    const endNodeStem   = this.buildStemLine(endCenter,   p2,  roadId);
+    const endNodeStem   = this.buildStemLine(endNode.position,   p2, roadId);
     const endToMid      = this.buildStemLine(p2, mid, roadId);
     figma.currentPage.appendChild(startNodeStem);
     figma.currentPage.appendChild(startToMid);
     figma.currentPage.appendChild(endNodeStem);
     figma.currentPage.appendChild(endToMid);
 
-    const startEndpointHandle = await this.buildEndpointHandle(p0, roadId, 'start');
-    const endEndpointHandle   = await this.buildEndpointHandle(p2, roadId, 'end');
-    figma.currentPage.appendChild(startEndpointHandle);
-    figma.currentPage.appendChild(endEndpointHandle);
+    const startOffsetHandle = await this.buildOffsetHandle(p0, roadId, 'start');
+    const endOffsetHandle   = await this.buildOffsetHandle(p2, roadId, 'end');
+    figma.currentPage.appendChild(startOffsetHandle);
+    figma.currentPage.appendChild(endOffsetHandle);
 
     const midHandle = await this.buildBezierHandle(mid, roadId);
     figma.currentPage.appendChild(midHandle);
@@ -81,7 +79,7 @@ export class RoadControlManager {
     };
     this.controlElementIds = [
       startNodeStem.id, startToMid.id, endNodeStem.id, endToMid.id,
-      startEndpointHandle.id, endEndpointHandle.id,
+      startOffsetHandle.id, endOffsetHandle.id,
       midHandle.id,
     ];
     this.suppressNextControlChanges = true;
@@ -122,17 +120,27 @@ export class RoadControlManager {
     );
   }
 
-  async onEndpointHandleMoved(roadId: RoadId, side: 'start' | 'end', handle: FrameNode): Promise<void> {
-    const handlePos = { x: handle.x + HANDLE_RADIUS, y: handle.y + HANDLE_RADIUS };
+  // Only the component of the drag along the node's tangent direction affects horizontalOffset;
+  // any drift along the normal is discarded and the handle snaps back onto the tangent line.
+  async onOffsetHandleMoved(roadId: RoadId, side: 'start' | 'end', handle: FrameNode): Promise<void> {
+    const draggedPos = { x: handle.x + HANDLE_RADIUS, y: handle.y + HANDLE_RADIUS };
     const state = this.model.state;
     const road = state.getRoad(roadId);
     if (!road) return;
 
-    if (side === 'start') {
-      road.endpoints[0].endpointPos = handlePos;
-    } else {
-      road.endpoints[1].endpointPos = handlePos;
-    }
+    const endpointIndex = side === 'start' ? 0 : 1;
+    const conn = road.endpoints[endpointIndex];
+    const node = conn.node;
+
+    const normal  = normalize({ x: road.bezierMidPoint.x - node.position.x, y: road.bezierMidPoint.y - node.position.y });
+    const tangent = perp(normal);
+    const anchor  = { x: node.position.x + normal.x * node.radius, y: node.position.y + normal.y * node.radius };
+    const offsetVec = { x: draggedPos.x - anchor.x, y: draggedPos.y - anchor.y };
+    conn.horizontalOffset = dot(offsetVec, tangent);
+
+    const resolvedPos = road.computeEndpointPos(endpointIndex);
+    handle.x = resolvedPos.x - HANDLE_RADIUS;
+    handle.y = resolvedPos.y - HANDLE_RADIUS;
 
     await this.updateRoadAndStems(roadId);
   }
@@ -150,9 +158,9 @@ export class RoadControlManager {
     const road = state.getRoad(roadId);
     if (!road) return;
 
-    const p0  = road.endpoints[0].endpointPos;
+    const p0  = road.computeEndpointPos(0);
     const mid = road.bezierMidPoint;
-    const p2  = road.endpoints[1].endpointPos;
+    const p2  = road.computeEndpointPos(1);
     const cubic = new QuadBezierPoints(p0, mid, p2).elevateToCubic();
 
     if (this.stemLineIds) {
@@ -167,11 +175,9 @@ export class RoadControlManager {
           data: `M ${from.x - tx} ${from.y - ty} L ${to.x - tx} ${to.y - ty}`,
         }];
       };
-      const startCenter = this.computeNodeCenter(road.endpoints[0].node);
-      const endCenter   = this.computeNodeCenter(road.endpoints[1].node);
-      await updateStem(ids.startNodeStem, startCenter, p0);
+      await updateStem(ids.startNodeStem, road.endpoints[0].node.position, p0);
       await updateStem(ids.startToMid,   p0,  mid);
-      await updateStem(ids.endNodeStem,   endCenter,   p2);
+      await updateStem(ids.endNodeStem,   road.endpoints[1].node.position, p2);
       await updateStem(ids.endToMid,     p2,  mid);
     }
 
@@ -207,25 +213,14 @@ export class RoadControlManager {
     }
   }
 
-  private computeNodeCenter(node: Node): Vector {
-    if (!node || node.roadConnections.length === 0) return { x: 0, y: 0 };
-    let sumX = 0, sumY = 0, count = 0;
-    for (const { road, endpointIndex } of node.roadConnections) {
-      sumX += road.endpoints[endpointIndex].endpointPos.x;
-      sumY += road.endpoints[endpointIndex].endpointPos.y;
-      count++;
-    }
-    return count > 0 ? { x: sumX / count, y: sumY / count } : { x: 0, y: 0 };
-  }
-
-  private async buildEndpointHandle(pos: Vector, roadId: RoadId, side: 'start' | 'end'): Promise<FrameNode> {
+  private async buildOffsetHandle(pos: Vector, roadId: RoadId, side: 'start' | 'end'): Promise<FrameNode> {
     const frame = await renderEditHandle({ fill: '#262626', size: HANDLE_RADIUS * 2 }).intoNode() as FrameNode;
     frame.x = pos.x - HANDLE_RADIUS;
     frame.y = pos.y - HANDLE_RADIUS;
-    frame.name = `Endpoint: ${side}`;
+    frame.name = `Offset: ${side}`;
     frame.setPluginData(FIGMA_KEY_ROAD_ID, roadId);
     frame.setPluginData(FIGMA_KEY_IS_ROAD_CONTROL, 'true');
-    frame.setPluginData(FIGMA_KEY_ENDPOINT_HANDLE, side);
+    frame.setPluginData(FIGMA_KEY_OFFSET_HANDLE, side);
     return frame;
   }
 

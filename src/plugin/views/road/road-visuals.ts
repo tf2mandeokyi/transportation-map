@@ -19,9 +19,9 @@ export function buildRoadVisuals(road: Road): SceneNode[] {
   if (!road.endpoints[0]?.node || !road.endpoints[1]?.node) return [];
 
   const baseCurve = new QuadBezierPoints(
-    road.endpoints[0].endpointPos,
+    road.computeEndpointPos(0),
     road.bezierMidPoint,
-    road.endpoints[1].endpointPos,
+    road.computeEndpointPos(1),
   ).elevateToCubic();
 
   const sections = road.getSectionsByIndex();

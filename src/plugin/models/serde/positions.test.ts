@@ -66,7 +66,7 @@ describe.skipIf(!fixtureExists)('line end positions match station/RSC positions'
           if (!bezier) continue;
 
           const isStart = road.endpoints[0].node === p.node;
-          const ep = road.endpoints[isStart ? 0 : 1].endpointPos;
+          const ep = road.computeEndpointPos(isStart ? 0 : 1);
           const tan = bezier.evalTangent(isStart ? 0 : 1);
           const sign = isStart ? 1 : -1;
 

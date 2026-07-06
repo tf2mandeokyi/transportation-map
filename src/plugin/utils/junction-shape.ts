@@ -11,8 +11,7 @@ interface Arm {
 }
 
 function buildArm(road: Road, endpointIndex: 0 | 1): Arm | null {
-  const conn = road.endpoints[endpointIndex];
-  const ep: Vector = conn.endpointPos;
+  const ep: Vector = road.computeEndpointPos(endpointIndex);
 
   const bDx = road.bezierMidPoint.x - ep.x;
   const bDy = road.bezierMidPoint.y - ep.y;

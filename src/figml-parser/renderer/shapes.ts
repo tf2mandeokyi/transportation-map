@@ -2,7 +2,7 @@ import { FigmlNode, FigmlProps } from '../types';
 import { BaseRenderer } from './base';
 import { RenderResult } from '../result';
 import { StringTemplate } from '../template';
-import { hexToRgb } from '@/common/utils/color';
+import { hexToRgb, hexToRgba } from '@/common/utils/color';
 
 export class RectangleRenderer extends BaseRenderer {
   render(node: FigmlNode, props: FigmlProps): RenderResult {
@@ -58,8 +58,13 @@ export class EllipseRenderer extends BaseRenderer {
     const stroke = attributes.stroke?.interpolate(props);
     const strokeWeight = attributes.strokeWeight?.interpolate(props);
 
-    if (fill) {
-      shape.fills = [{ type: 'SOLID', color: hexToRgb(fill) }];
+    if (fill === 'none') {
+      // An unfilled shape only hit-tests along its stroke, letting clicks on its
+      // interior fall through to whatever sits underneath.
+      shape.fills = [];
+    } else if (fill) {
+      const { color, opacity } = hexToRgba(fill);
+      shape.fills = [{ type: 'SOLID', color, opacity }];
     }
 
     if (stroke) {

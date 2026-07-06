@@ -3,21 +3,21 @@ import { Node } from "./node";
 import { MapState } from "./map-state";
 
 export interface SerializedConnection {
-  n: NodeId;                   // nodeId
-  p: { x: number; y: number }; // endpointPos
-  g: number;                   // groupNumber
+  n: NodeId;   // nodeId
+  o: number;   // horizontalOffset
+  g: number;   // groupNumber
 }
 
 export interface Connection {
   node: Node;
-  endpointPos: Vector;
+  horizontalOffset: number;
   groupNumber: number;
 }
 
 export function serializeConnection(c: Connection): SerializedConnection {
-  return { n: c.node.id, p: c.endpointPos, g: c.groupNumber };
+  return { n: c.node.id, o: c.horizontalOffset, g: c.groupNumber };
 }
 
 export function deserializeConnection(mapState: Readonly<MapState>, c: SerializedConnection): Connection {
-  return { node: mapState.getNodeHarsh(c.n), endpointPos: c.p, groupNumber: c.g };
+  return { node: mapState.getNodeHarsh(c.n), horizontalOffset: c.o, groupNumber: c.g };
 }

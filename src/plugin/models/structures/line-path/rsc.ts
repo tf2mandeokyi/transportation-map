@@ -99,7 +99,7 @@ export class RoadSectionChange {
 
     const totalOffset = section.computeOffset() + lineOffsetInSection(rank, numLines);
     const isStart = road.endpoints[0].node === this.node;
-    const ep = road.endpoints[isStart ? 0 : 1].endpointPos;
+    const ep = road.computeEndpointPos(isStart ? 0 : 1);
     if (totalOffset === 0) return ep;
     return applyLateralOffset(ep, bezier.evalTangent(isStart ? 0 : 1), totalOffset * (isStart ? 1 : -1));
   }

@@ -15,6 +15,10 @@ export function perp(v: Vector): Vector {
   return { x: -v.y, y: v.x };
 }
 
+export function dot(a: Vector, b: Vector): number {
+  return a.x * b.x + a.y * b.y;
+}
+
 export function applyLateralOffset(pos: Vector, tan: Vector, offset: number): Vector {
   const len = Math.hypot(tan.x, tan.y) || 1;
   return { x: pos.x + (-tan.y / len) * offset, y: pos.y + (tan.x / len) * offset };

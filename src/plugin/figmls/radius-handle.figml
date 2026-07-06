@@ -1,0 +1,3 @@
+<component prop:fill="#1A78FF4D" prop:stroke="#1A78FF" prop:diameter="8">
+  <ellipse fill="$$prop:fill$$" stroke="$$prop:stroke$$" strokeWeight="1.5" width="$$prop:diameter$$" height="$$prop:diameter$$" lockAspectRatio="true"/>
+</component>

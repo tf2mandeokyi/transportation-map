@@ -44,13 +44,6 @@ export class Model {
     this.state.removeNode(node);
   }
 
-  public moveNodeConnections(node: Node, delta: { x: number; y: number }): void {
-    for (const { road, endpointIndex } of node.roadConnections) {
-      const conn = road.endpoints[endpointIndex];
-      conn.endpointPos = { x: conn.endpointPos.x + delta.x, y: conn.endpointPos.y + delta.y };
-    }
-  }
-
   // ─── Road ───
 
   public addRoad(road: RoadProps): Road {

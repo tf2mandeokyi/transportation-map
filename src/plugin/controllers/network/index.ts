@@ -8,8 +8,9 @@ import { View } from "../../views";
 import { BaseController } from "../base";
 import { NodeChangeListener } from "../listener";
 import { UIMessageRouter } from "../router";
-import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_NODE_ID, FIGMA_KEY_IS_NODE_MARKER, FIGMA_KEY_ROAD_ID, FIGMA_KEY_SECTION_ID, FIGMA_KEY_JUNCTION_OFFSET_X, FIGMA_KEY_JUNCTION_OFFSET_Y } from "../../views/road";
-import { RoadControlManager, FIGMA_KEY_BEZIER_HANDLE, FIGMA_KEY_ENDPOINT_HANDLE } from "./road-control";
+import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_NODE_ID, FIGMA_KEY_IS_NODE_MARKER, FIGMA_KEY_ROAD_ID, FIGMA_KEY_SECTION_ID, FIGMA_KEY_JUNCTION_OFFSET_X, FIGMA_KEY_JUNCTION_OFFSET_Y, NODE_DEFAULT_RADIUS } from "../../views/road";
+import { RoadControlManager, FIGMA_KEY_BEZIER_HANDLE, FIGMA_KEY_OFFSET_HANDLE } from "./road-control";
+import { NodeControlManager, FIGMA_KEY_IS_NODE_CONTROL, FIGMA_KEY_RADIUS_HANDLE } from "./node-control";
 import { RoadPlacingState } from "./road-placing";
 import { AddingRsePluginSession } from "../../sessions/adding-rse";
 import { AddingRoadPluginSession } from "../../sessions/adding-road";
@@ -18,6 +19,7 @@ import { own } from "@/common/utils/ownership";
 
 export class NetworkController extends BaseController {
   private readonly roadControl: RoadControlManager;
+  private readonly nodeControl: NodeControlManager;
   private readonly roadPlacing = new RoadPlacingState();
   private isRendering = false;
   private renderDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -26,6 +28,7 @@ export class NetworkController extends BaseController {
   constructor(model: Model, view: View, listener: NodeChangeListener, sessionManager: PluginSessionManager) {
     super(model, view, listener, sessionManager);
     this.roadControl = new RoadControlManager(model);
+    this.nodeControl = new NodeControlManager(model);
   }
 
   public registerMessages(router: UIMessageRouter): void {
@@ -98,15 +101,15 @@ export class NetworkController extends BaseController {
     await this.roadPlacing.cleanup();
 
     if (result) {
-      const startNode = result.startNode ?? this.model.addNode({});
-      const endNode   = result.endNode   ?? this.model.addNode({});
+      const startNode = result.startNode ?? this.model.addNode({ position: result.startPos, radius: NODE_DEFAULT_RADIUS });
+      const endNode   = result.endNode   ?? this.model.addNode({ position: result.endPos,   radius: NODE_DEFAULT_RADIUS });
 
       this.model.addRoad({
         name: undefined,
         bezierMidPoint: result.bezierPos,
         endpoints: [
-          own({ node: startNode, endpointPos: result.startPos, groupNumber: 0 }),
-          own({ node: endNode,   endpointPos: result.endPos,   groupNumber: 0 }),
+          own({ node: startNode, horizontalOffset: 0, groupNumber: 0 }),
+          own({ node: endNode,   horizontalOffset: 0, groupNumber: 0 }),
         ],
       });
 
@@ -155,9 +158,16 @@ export class NetworkController extends BaseController {
       return;
     }
 
+    if (first.getPluginData(FIGMA_KEY_IS_NODE_CONTROL) === 'true') {
+      const nodeId = this.nodeControl.activeNodeId;
+      if (nodeId) postMessageToUI({ type: 'network-element-focused', element: this.buildNodeElement(nodeId) });
+      return;
+    }
+
     const nodeId = first.getPluginData(FIGMA_KEY_NODE_ID) as NodeId;
     if (nodeId) {
       await this.roadControl.remove();
+      await this.nodeControl.activate(nodeId);
       postMessageToUI({ type: 'network-element-focused', element: this.buildNodeElement(nodeId) });
       const node = this.model.state.getNode(nodeId);
       if (node) await this.emitNodeLinesData(node);
@@ -166,6 +176,7 @@ export class NetworkController extends BaseController {
 
     const roadId = first.getPluginData(FIGMA_KEY_ROAD_ID) as RoadId;
     if (roadId) {
+      await this.nodeControl.remove();
       await this.roadControl.activate(roadId);
       postMessageToUI({ type: 'network-element-focused', element: this.buildRoadElement(roadId) });
       return;
@@ -176,13 +187,15 @@ export class NetworkController extends BaseController {
 
   public async handleDocumentChange(event: DocumentChangeEvent): Promise<void> {
     if (this.isRendering || this.view.isRendering) return;
-    const suppressThisBatch = this.roadControl.suppressNextControlChanges;
+    const suppressThisBatch = this.roadControl.suppressNextControlChanges || this.nodeControl.suppressNextControlChanges;
     this.roadControl.suppressNextControlChanges = false;
+    this.nodeControl.suppressNextControlChanges = false;
 
     for (const change of event.documentChanges) {
       if (change.type !== 'PROPERTY_CHANGE') continue;
-      if (!change.properties.includes('x') && !change.properties.includes('y')) continue;
-      if (suppressThisBatch && this.roadControl.isControlElement(change.id)) continue;
+      const isResize = change.properties.includes('width') || change.properties.includes('height');
+      if (!change.properties.includes('x') && !change.properties.includes('y') && !isResize) continue;
+      if (suppressThisBatch && (this.roadControl.isControlElement(change.id) || this.nodeControl.isControlElement(change.id))) continue;
 
       const figmaNode = await figma.getNodeByIdAsync(change.id);
       if (!figmaNode || figmaNode.removed) continue;
@@ -203,11 +216,26 @@ export class NetworkController extends BaseController {
         }
       }
 
-      const endpointSide = figmaNode.getPluginData(FIGMA_KEY_ENDPOINT_HANDLE) as 'start' | 'end' | '';
-      if (endpointSide) {
-        const endpointRoadId = figmaNode.getPluginData(FIGMA_KEY_ROAD_ID) as RoadId;
-        if (endpointRoadId) {
-          await this.roadControl.onEndpointHandleMoved(endpointRoadId, endpointSide, figmaNode as FrameNode);
+      if (figmaNode.getPluginData(FIGMA_KEY_RADIUS_HANDLE) === 'radius') {
+        const controlledNodeId = this.nodeControl.activeNodeId;
+        if (controlledNodeId) {
+          const handle = figmaNode as EllipseNode;
+          if (isResize) {
+            await this.nodeControl.onRadiusHandleResized(controlledNodeId, handle);
+          } else {
+            // Plain drag (no size change): move the node itself, same as dragging its marker/junction.
+            // Keep the handle alive since it's the very element being dragged.
+            await this.onNodePositionChanged(controlledNodeId, { x: handle.x + handle.width / 2, y: handle.y + handle.height / 2 }, { keepNodeControl: true });
+          }
+          return;
+        }
+      }
+
+      const offsetSide = figmaNode.getPluginData(FIGMA_KEY_OFFSET_HANDLE) as 'start' | 'end' | '';
+      if (offsetSide) {
+        const offsetRoadId = figmaNode.getPluginData(FIGMA_KEY_ROAD_ID) as RoadId;
+        if (offsetRoadId) {
+          await this.roadControl.onOffsetHandleMoved(offsetRoadId, offsetSide, figmaNode as FrameNode);
           return;
         }
       }
@@ -229,6 +257,7 @@ export class NetworkController extends BaseController {
       this.renderDebounceTimer = null;
     }
     this.roadControl.cleanup();
+    this.nodeControl.cleanup();
   }
 
   public syncNetworkToUI(): void {
@@ -252,16 +281,15 @@ export class NetworkController extends BaseController {
     return { nodes, roads };
   }
 
-  private async onNodePositionChanged(nodeId: NodeId, newPos: { x: number; y: number }): Promise<void> {
+  private async onNodePositionChanged(nodeId: NodeId, newPos: { x: number; y: number }, options?: { keepNodeControl?: boolean }): Promise<void> {
     const node = this.model.state.getNode(nodeId);
     if (!node) return;
     const currentCenter = node.getCenter();
     const delta = { x: newPos.x - currentCenter.x, y: newPos.y - currentCenter.y };
     if (Math.abs(delta.x) < 0.5 && Math.abs(delta.y) < 0.5) return;
-    if (node && node.roadConnections.length > 0) {
-      this.model.moveNodeConnections(node, delta);
-    }
+    node.moveByDelta(delta);
     await this.roadControl.remove();
+    if (!options?.keepNodeControl) await this.nodeControl.remove();
 
     if (this.renderDebounceTimer !== null) clearTimeout(this.renderDebounceTimer);
     this.renderDebounceTimer = setTimeout(async () => {
@@ -279,8 +307,10 @@ export class NetworkController extends BaseController {
       this.renderDebounceTimer = null;
     }
     const wasEditingRoad = this.roadControl.activeRoadId !== null;
+    const wasEditingNode = this.nodeControl.activeNodeId !== null;
     await this.roadControl.remove();
-    if (wasEditingRoad) {
+    await this.nodeControl.remove();
+    if (wasEditingRoad || wasEditingNode) {
       this.isRendering = true;
       try { await this.render(); await this.save(); } finally { this.isRendering = false; }
     }

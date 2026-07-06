@@ -10,6 +10,7 @@ export abstract class BaseRenderer {
     const name = attributes.name?.interpolate(props);
     const rotation = attributes.rotation?.interpolate(props);
     const locked = attributes.locked?.interpolate(props);
+    const lockAspectRatio = attributes.lockAspectRatio?.interpolate(props);
 
     if (width) {
       try {
@@ -56,6 +57,17 @@ export abstract class BaseRenderer {
         throw new Error(`Invalid value for locked attribute: ${locked}. Expected 'true' or 'false'.`);
       }
       node.locked = locked === 'true';
+    }
+
+    if (lockAspectRatio) {
+      if (lockAspectRatio !== 'true' && lockAspectRatio !== 'false') {
+        throw new Error(`Invalid value for lockAspectRatio attribute: ${lockAspectRatio}. Expected 'true' or 'false'.`);
+      }
+      if ('lockAspectRatio' in node && 'unlockAspectRatio' in node) {
+        const aspectNode = node as AspectRatioLockMixin;
+        if (lockAspectRatio === 'true') aspectNode.lockAspectRatio();
+        else aspectNode.unlockAspectRatio();
+      }
     }
   }
 

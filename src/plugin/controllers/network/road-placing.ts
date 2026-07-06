@@ -121,7 +121,6 @@ export class RoadPlacingState {
     let nearest: Node | null = null;
     let nearestDist = SNAP_RADIUS;
     for (const node of model.state.getNodes()) {
-      if (node.roadConnections.length === 0) continue;
       const c = this.nodeCenter(node);
       const dist = Math.hypot(c.x - pos.x, c.y - pos.y);
       if (dist < nearestDist) { nearestDist = dist; nearest = node; }
@@ -130,13 +129,7 @@ export class RoadPlacingState {
   }
 
   nodeCenter(node: Node): Vector {
-    let sumX = 0, sumY = 0, count = 0;
-    for (const { road, endpointIndex } of node.roadConnections) {
-      sumX += road.endpoints[endpointIndex].endpointPos.x;
-      sumY += road.endpoints[endpointIndex].endpointPos.y;
-      count++;
-    }
-    return count > 0 ? { x: sumX / count, y: sumY / count } : { x: 0, y: 0 };
+    return node.position;
   }
 
   private effectivePos(state: EndpointState): Vector {

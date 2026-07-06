@@ -5,6 +5,7 @@ import { RoadSection, SerializedRoadSection } from './road-section';
 import { own, Owned } from "@/common/utils/ownership";
 import { Connection, deserializeConnection, serializeConnection, SerializedConnection } from "./connection";
 import { Node } from "./node";
+import { normalize, perp } from "../../utils/math";
 
 export interface SerializedRoad {
   n?: string;                                         // name
@@ -99,10 +100,23 @@ export class Road extends TransportationMapObject<RoadId> {
   computeBezier(): QuadBezierPoints | null {
     if (!this.endpoints[0].node || !this.endpoints[1].node) return null;
     return new QuadBezierPoints(
-      this.endpoints[0].endpointPos,
+      this.computeEndpointPos(0),
       this.bezierMidPoint,
-      this.endpoints[1].endpointPos,
+      this.computeEndpointPos(1),
     );
+  }
+
+  // Connection position on a node's boundary circle: nodePosition + radius*normal + horizontalOffset*tangent,
+  // where normal points from the node's center out toward this road's bezier midpoint.
+  computeEndpointPos(endpointIndex: 0 | 1): Vector {
+    const conn = this.endpoints[endpointIndex];
+    const node = conn.node;
+    const normal = normalize({ x: this.bezierMidPoint.x - node.position.x, y: this.bezierMidPoint.y - node.position.y });
+    const tangent = perp(normal);
+    return {
+      x: node.position.x + normal.x * node.radius + tangent.x * conn.horizontalOffset,
+      y: node.position.y + normal.y * node.radius + tangent.y * conn.horizontalOffset,
+    };
   }
 
   findSharedNode(roadB: Road): Node | null {
