@@ -6,6 +6,7 @@ import { RoadSection } from "../models/structures";
 import { BaseController } from "./base";
 import { ListenerHandle } from "./listener";
 import { UIMessageRouter } from "./router";
+import { absoluteOrigin } from "../utils/math";
 
 const HANDLE_SIZE = 16;
 const PREVIEW_SIZE = 10;
@@ -85,7 +86,8 @@ export class StationController extends BaseController {
       const handleNode = await figma.getNodeByIdAsync(handleId);
       if (!handleNode || handleNode.removed) return;
       const h = handleNode as EllipseNode;
-      const handleCenter = { x: h.x + h.width / 2, y: h.y + h.height / 2 };
+      const origin = absoluteOrigin(h);
+      const handleCenter = { x: origin.x + h.width / 2, y: origin.y + h.height / 2 };
 
       const snap = this.model.state.findNearestRoadSection(handleCenter);
       if (!snap) return;

@@ -15,6 +15,7 @@ import { RoadPlacingState } from "./road-placing";
 import { AddingRsePluginSession } from "../../sessions/adding-rse";
 import { AddingRoadPluginSession } from "../../sessions/adding-road";
 import { own } from "@/common/utils/ownership";
+import { absoluteOrigin } from "../../utils/math";
 
 
 export class NetworkController extends BaseController {
@@ -204,14 +205,16 @@ export class NetworkController extends BaseController {
       if (nodeId) {
         if (figmaNode.getPluginData(FIGMA_KEY_IS_NODE_MARKER) === 'true') {
           const frame = figmaNode as FrameNode;
-          await this.onNodePositionChanged(nodeId, { x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 });
+          const origin = absoluteOrigin(frame);
+          await this.onNodePositionChanged(nodeId, { x: origin.x + frame.width / 2, y: origin.y + frame.height / 2 });
           return;
         }
         if (figmaNode.type === 'FRAME') {
           const frame = figmaNode as FrameNode;
           const ox = Number.parseFloat(frame.getPluginData(FIGMA_KEY_JUNCTION_OFFSET_X) || '0');
           const oy = Number.parseFloat(frame.getPluginData(FIGMA_KEY_JUNCTION_OFFSET_Y) || '0');
-          await this.onNodePositionChanged(nodeId, { x: frame.x + ox, y: frame.y + oy });
+          const origin = absoluteOrigin(frame);
+          await this.onNodePositionChanged(nodeId, { x: origin.x + ox, y: origin.y + oy });
           return;
         }
       }
@@ -225,7 +228,8 @@ export class NetworkController extends BaseController {
           } else {
             // Plain drag (no size change): move the node itself, same as dragging its marker/junction.
             // Keep the handle alive since it's the very element being dragged.
-            await this.onNodePositionChanged(controlledNodeId, { x: handle.x + handle.width / 2, y: handle.y + handle.height / 2 }, { keepNodeControl: true });
+            const origin = absoluteOrigin(handle);
+            await this.onNodePositionChanged(controlledNodeId, { x: origin.x + handle.width / 2, y: origin.y + handle.height / 2 }, { keepNodeControl: true });
           }
           return;
         }

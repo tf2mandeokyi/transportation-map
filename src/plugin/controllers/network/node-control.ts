@@ -2,6 +2,7 @@ import { NodeId } from "@/common/types";
 import { Model } from "../../models";
 import { renderRadiusHandle } from "../../figmls";
 import { FIGMA_KEY_NODE_ID } from "../../views/road";
+import { absoluteOrigin } from "../../utils/math";
 
 export const FIGMA_KEY_IS_NODE_CONTROL = 'isNodeControl';
 export const FIGMA_KEY_RADIUS_HANDLE   = 'mapRadiusHandle';
@@ -98,8 +99,9 @@ export class NodeControlManager {
     if (!node) return;
 
     const radius = Math.max(handle.width, handle.height) / 2;
-    const centerX = handle.x + handle.width / 2;
-    const centerY = handle.y + handle.height / 2;
+    const origin = absoluteOrigin(handle);
+    const centerX = origin.x + handle.width / 2;
+    const centerY = origin.y + handle.height / 2;
 
     node.radius = radius;
 

@@ -30,3 +30,11 @@ export function applyTransform(transform: Transform, point: Vector): Vector {
     y: transform[1][0] * point.x + transform[1][1] * point.y + transform[1][2],
   };
 }
+
+// node.x/node.y are parent-relative and go stale the instant Figma reparents a
+// dragged node into a frame it was dropped onto. absoluteTransform's translation
+// column is the page-space origin regardless of parent, so use this instead of
+// node.x/node.y whenever reading back a position after a possible user drag.
+export function absoluteOrigin(node: SceneNode): Vector {
+  return { x: node.absoluteTransform[0][2], y: node.absoluteTransform[1][2] };
+}

@@ -3,7 +3,7 @@ import { Model } from "../../models";
 import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_ROAD_ID, FIGMA_KEY_SECTION_ID } from "../../views/road";
 import { renderEditHandle } from "../../figmls";
 import { bezierPathData, CubicBezierPoints, QuadBezierPoints } from "../../utils/bezier";
-import { normalize, perp, dot } from "../../utils/math";
+import { normalize, perp, dot, absoluteOrigin } from "../../utils/math";
 
 const ROAD_CONTROL_NODE_NAME = '_road-bezier-control';
 export const FIGMA_KEY_BEZIER_HANDLE = 'mapBezierHandle';
@@ -123,7 +123,8 @@ export class RoadControlManager {
   // Only the component of the drag along the node's tangent direction affects horizontalOffset;
   // any drift along the normal is discarded and the handle snaps back onto the tangent line.
   async onOffsetHandleMoved(roadId: RoadId, side: 'start' | 'end', handle: FrameNode): Promise<void> {
-    const draggedPos = { x: handle.x + HANDLE_RADIUS, y: handle.y + HANDLE_RADIUS };
+    const handleOrigin = absoluteOrigin(handle);
+    const draggedPos = { x: handleOrigin.x + HANDLE_RADIUS, y: handleOrigin.y + HANDLE_RADIUS };
     const state = this.model.state;
     const road = state.getRoad(roadId);
     if (!road) return;
@@ -146,7 +147,8 @@ export class RoadControlManager {
   }
 
   async onBezierHandleMoved(roadId: RoadId, handle: FrameNode): Promise<void> {
-    const handlePos = { x: handle.x + HANDLE_RADIUS, y: handle.y + HANDLE_RADIUS };
+    const origin = absoluteOrigin(handle);
+    const handlePos = { x: origin.x + HANDLE_RADIUS, y: origin.y + HANDLE_RADIUS };
     const road = this.model.state.getRoad(roadId);
     if (!road) return;
     road.bezierMidPoint = handlePos;

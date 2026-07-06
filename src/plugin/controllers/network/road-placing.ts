@@ -3,6 +3,7 @@ import type { Node } from "../../models/structures";
 import type { Model } from "../../models";
 import { postMessageToUI } from "../../figma";
 import { bezierPathData, CubicBezierPoints, QuadBezierPoints } from "../../utils/bezier";
+import { absoluteOrigin } from "../../utils/math";
 
 const START_SIZE   = 16;
 const END_SIZE     = 16;
@@ -93,7 +94,8 @@ export class RoadPlacingState {
     const figNode = await figma.getNodeByIdAsync(handleId);
     if (!figNode || figNode.removed) return;
     const h = figNode as EllipseNode;
-    const center = { x: h.x + size / 2, y: h.y + size / 2 };
+    const origin = absoluteOrigin(h);
+    const center = { x: origin.x + size / 2, y: origin.y + size / 2 };
 
     state.pos  = center;
     state.snap = this.findNearestNode(center, model);
@@ -112,7 +114,8 @@ export class RoadPlacingState {
     const figNode = await figma.getNodeByIdAsync(handleId);
     if (!figNode || figNode.removed) return;
     const h = figNode as EllipseNode;
-    this.bezierPos = { x: h.x + BEZIER_SIZE / 2, y: h.y + BEZIER_SIZE / 2 };
+    const origin = absoluteOrigin(h);
+    this.bezierPos = { x: origin.x + BEZIER_SIZE / 2, y: origin.y + BEZIER_SIZE / 2 };
 
     await this.updatePreview();
   }
