@@ -1,7 +1,7 @@
 import React from 'react';
 import { StationId } from '@/common/types';
 import { DisplayEntry, LinePathData } from '@/common/messages';
-import { LinePathAddress, START_ADDRESS, flattenLinePathData } from '../../utils/linePathGroups';
+import { flattenLinePathData } from '../../utils/linePathGroups';
 import StationPathItem from './StationPathItem';
 
 interface PathItemsListProps {
@@ -13,14 +13,11 @@ interface PathItemsListProps {
   onSelectStation: (stationId: StationId) => void;
   onToggleStops: (groupIndex: number, stopIndex: number, stops: boolean) => void;
   onToggleDirection: (groupIndex: number, stopIndex: number, direction: 'ascending' | 'descending') => void;
-  onAddSectionStation: (stationId: StationId, after: LinePathAddress, direction: 'ascending' | 'descending') => void;
-  onStartAddingRse: (after: LinePathAddress) => void;
 }
 
 const PathItemsList: React.FC<PathItemsListProps> = ({
   displayEntries, linePaths, inactive,
   onRemoveStop, onRemoveRse, onSelectStation, onToggleStops, onToggleDirection,
-  onAddSectionStation, onStartAddingRse,
 }) => {
   const elements: React.ReactNode[] = [];
 
@@ -35,21 +32,12 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
   let rscCursor = 0;
   let stopCursor = 0;
 
-  // lastAddress: updated by both in-path stations AND RSC entries.
-  // Used as insertAfter for grey station "+" buttons so that post-U-turn grey
-  // stations (which appear before the first in-path station in display order)
-  // correctly insert after the U-turn RSC, not before it.
-  let lastAddress: LinePathAddress = START_ADDRESS;
-
   for (let ei = 0; ei < displayEntries.length; ei++) {
     const entry = displayEntries[ei];
 
     if (entry.kind === 'rse') {
       const { isUturn, nodeId, nodeName, exitRoadName, enterRoadName, exitSectionLabel, enterSectionLabel } = entry;
       const item = rscItems[rscCursor++];
-      const address: LinePathAddress = { groupIndex: item.groupIndex, stopIndex: item.stopIndex };
-
-      lastAddress = address;
 
       const roadLineClass = 'overflow-hidden text-ellipsis whitespace-nowrap text-[11px] text-neutral-500';
 
@@ -67,14 +55,7 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
               {isUturn && 'U-turn at '}<strong>{nodeName ?? nodeId}</strong>
             </span>
             {inactive && (
-              <>
-                <button
-                  className="rounded border border-neutral-300 bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200"
-                  onClick={() => onStartAddingRse(address)}
-                  title={`Insert road after this ${isUturn ? 'U-turn' : 'RSC'}`}
-                >↪ Road</button>
-                <button className="rounded border border-neutral-300 bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200" onClick={() => onRemoveRse(item.groupIndex)}>X</button>
-              </>
+              <button className="rounded border border-neutral-300 bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200" onClick={() => onRemoveRse(item.groupIndex)}>X</button>
             )}
           </div>
           <div className={roadLineClass}>
@@ -91,9 +72,10 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
       );
     } else {
       // Traversal: render each station in the order the plugin computed.
-      // A station is "real" (backed by an explicit linePaths entry, stopping or
-      // not) iff it's next in stopItems order; anything else is a synthesized
-      // greyed pass-through with no linePaths entry at all.
+      // A station is "real" (backed by an explicit linePaths entry — a checkable
+      // pass-through candidate or an actual stop) iff it's next in stopItems order;
+      // anything else is a purely visual look-ahead pad (e.g. a virtual U-turn's
+      // recede-toward-the-pivot padding) with no linePaths entry to check.
       const dir = entry.direction;
       for (const s of entry.stations) {
         const nextItem = stopCursor < stopItems.length ? stopItems[stopCursor] : undefined;
@@ -102,7 +84,6 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
         if (isReal) {
           const item = stopItems[stopCursor++];
           const { groupIndex, stopIndex } = item;
-          lastAddress = { groupIndex, stopIndex };
           elements.push(
             <div key={`stop-${item.flatIndex}`} className="pl-3">
               <StationPathItem
@@ -118,17 +99,9 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
             </div>
           );
         } else {
-          const insertAfter = lastAddress;
           elements.push(
             <div key={`grey-${ei}-${s.stationId}`} className="flex items-center gap-2 py-0.5 pr-2 pl-5">
               <span className="flex-1 text-[11px] text-neutral-400 italic">{s.name}</span>
-              {inactive && (
-                <button
-                  className="rounded border border-neutral-300 bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200"
-                  onClick={() => onAddSectionStation(s.stationId, insertAfter, dir)}
-                  title="Add to path"
-                >+</button>
-              )}
             </div>
           );
         }

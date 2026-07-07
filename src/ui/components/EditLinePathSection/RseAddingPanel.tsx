@@ -20,6 +20,10 @@ type PendingRse = {
   destRoadId: RoadId;
   destRoadName: string | undefined;
   isUturn: boolean;
+  // True for the very first entry of a brand-new path: there's no prior road to cross
+  // from, so the user just picks which end of the clicked road they're starting at —
+  // no shared-junction requirement, no "exiting" section.
+  isStart: boolean;
   nodeOptions: Array<{ nodeId: NodeId; nodeName: string }>;
   sections: RoadSectionData[];
   selectedNodeId: string;
@@ -50,6 +54,26 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
     const sectionIdx = sectionId ? destRoad.sections.findIndex(s => s.id[1] === sectionId[1]) : -1;
     const selectedSectionIdx = sectionIdx >= 0 ? String(sectionIdx) : '';
 
+    if (list.length === 0 && !sourceRoadId) {
+      // Starting a brand-new path: nothing to cross from yet, so just pick which end
+      // of the clicked road to start at — no shared-junction requirement.
+      const nodeOptions = ([destRoad.startNodeId, destRoad.endNodeId] as NodeId[]).map(nodeId => ({
+        nodeId,
+        nodeName: nodes.find(n => n.id === nodeId)?.name ?? nodeId,
+      }));
+      setPendingList(prev => [...prev, {
+        destRoadId,
+        destRoadName: destRoad.name,
+        isUturn: false,
+        isStart: true,
+        nodeOptions,
+        sections: destRoad.sections,
+        selectedNodeId: nodeOptions.length === 1 ? nodeOptions[0].nodeId : '',
+        selectedSectionIdx,
+      }]);
+      return;
+    }
+
     if (currentRoadId === destRoadId) {
       // U-turn on same road
       const nodeOptions = ([destRoad.startNodeId, destRoad.endNodeId] as NodeId[]).map(nodeId => ({
@@ -60,6 +84,7 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
         destRoadId,
         destRoadName: destRoad.name,
         isUturn: true,
+        isStart: false,
         nodeOptions,
         sections: destRoad.sections,
         selectedNodeId: nodeOptions.length === 1 ? nodeOptions[0].nodeId : '',
@@ -90,6 +115,7 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
       destRoadId,
       destRoadName: destRoad.name,
       isUturn: false,
+      isStart: false,
       nodeOptions: sharedNodes,
       sections: destRoad.sections,
       selectedNodeId: sharedNodes.length === 1 ? sharedNodes[0].nodeId : '',
@@ -146,7 +172,7 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
         <div key={i} className="mb-2 rounded border border-neutral-300 bg-white p-2">
           <div className="mb-1.5 flex items-center gap-1.5">
             <span className="flex-1 text-xs font-semibold">
-              {entry.isUturn ? '↩' : '↪'} {entry.destRoadName ?? entry.destRoadId}
+              {entry.isStart ? '●' : entry.isUturn ? '↩' : '↪'} {entry.destRoadName ?? entry.destRoadId}
             </span>
             <button className="rounded border border-neutral-300 bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200" onClick={() => removeEntry(i)}>X</button>
           </div>
@@ -154,7 +180,7 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
           {entry.nodeOptions.length > 1 && (
             <div className="mb-1.5">
               <label className="mb-0.5 block text-[11px] text-neutral-600">
-                {entry.isUturn ? 'Endpoint node:' : 'Junction node:'}
+                {entry.isStart ? 'Starting end:' : entry.isUturn ? 'Endpoint node:' : 'Junction node:'}
               </label>
               <select
                 className="w-full rounded border border-neutral-300 px-2 py-1 text-[11px]"

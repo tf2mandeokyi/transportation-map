@@ -1,20 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { NodeId, RoadId, RoadSectionId, StationId } from '@/common/types';
+import { NodeId, RoadId, RoadSectionId } from '@/common/types';
 import { DisplayEntry, LinePathData } from '@/common/messages';
 import {
   LinePathAddress, START_ADDRESS, isStartAddress, flattenLinePathData,
-  lastAddress as lastGroupAddress, insertedAddress, insertStationStopAfter, insertGroupsAfter, removeRsc,
+  lastAddress as lastGroupAddress, insertGroupsAfter, removeRsc,
 } from '../../utils/linePathGroups';
 import { postMessageToPlugin } from '../../figma';
 import { useLinesContext } from '../../contexts/LinesContext';
 import { useNetworkContext } from '../../contexts/NetworkContext';
 import { useMessageManager } from '../../contexts/MessageContext';
-import { AddingStationsUISession } from '../../sessions/adding-stations';
 import { AddingRseUISession } from '../../sessions/adding-rse';
 import { useUISession } from '../../sessions/useUISession';
 import PathItemsList from './PathItemsList';
-import InsertionButtons from './InsertionButtons';
-import StationAddingPanel from './StationAddingPanel';
 import RseAddingPanel from './RseAddingPanel';
 
 const RoadInsertButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
@@ -37,20 +34,14 @@ const PathEditor: React.FC = () => {
   const [stationRoadIds, setStationRoadIds] = useState<Record<string, RoadId | null>>({});
   const [stationSectionIds, setStationSectionIds] = useState<Record<string, RoadSectionId | null>>({});
   const [displayEntries, setDisplayEntries] = useState<DisplayEntry[]>([]);
-  const [stationInsertAfterIndex, setStationInsertAfterIndex] = useState<LinePathAddress | null>(null);
   const [addingRseAfterPathIndex, setAddingRseAfterPathIndex] = useState<LinePathAddress | null>(null);
 
   const currentLineIdRef     = useRef(currentEditingLineId);
   const linePathsRef         = useRef<LinePathData[]>(linePaths);
-  const stationRoadIdsRef    = useRef(stationRoadIds);
-  const stationSectionIdsRef = useRef(stationSectionIds);
-  const stationsSession      = useUISession<AddingStationsUISession>();
   const rseSession           = useUISession<AddingRseUISession>();
 
   useEffect(() => { currentLineIdRef.current     = currentEditingLineId; }, [currentEditingLineId]);
   useEffect(() => { linePathsRef.current          = linePaths; },           [linePaths]);
-  useEffect(() => { stationRoadIdsRef.current     = stationRoadIds; },      [stationRoadIds]);
-  useEffect(() => { stationSectionIdsRef.current  = stationSectionIds; },   [stationSectionIds]);
 
   useEffect(() => {
     const unsub1 = manager.onMessage('line-path-data', msg => {
@@ -89,48 +80,10 @@ const PathEditor: React.FC = () => {
     return { roadId: stationRoadIds[stop.stationId] ?? null, sectionId: stationSectionIds[stop.stationId] ?? null };
   };
 
-  // ─── Station adding (empty-path only) ─────────────────────────────────────
-
-  const handleStartAdding = (after: LinePathAddress) => {
-    if (!currentEditingLineId) return;
-    setStationInsertAfterIndex(after);
-    setAddingRseAfterPathIndex(null);
-    stationsSession.open(new AddingStationsUISession()).start(currentEditingLineId, manager);
-  };
-
-  const handleFinishAdding = (stations: Array<{ id: StationId; name: string }>) => {
-    if (!currentEditingLineId || stations.length === 0 || stationInsertAfterIndex === null) return;
-    let newPaths = linePaths;
-    let cursor = stationInsertAfterIndex;
-    for (const s of stations) {
-      newPaths = insertStationStopAfter(newPaths, cursor, { stationId: s.id, direction: 'ascending' });
-      cursor = insertedAddress(cursor);
-    }
-    postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'update-path', paths: newPaths } });
-    stationsSession.close(s => s.stop());
-    postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
-    setStationInsertAfterIndex(null);
-  };
-
-  const handleCancelAdding = () => {
-    stationsSession.close(s => s.stop());
-    setStationInsertAfterIndex(null);
-  };
-
-  // ─── Section station adding (inline, no canvas session) ───────────────────
-
-  const handleAddSectionStation = (stationId: StationId, after: LinePathAddress, direction: 'ascending' | 'descending') => {
-    if (!currentEditingLineId) return;
-    const newPaths = insertStationStopAfter(linePathsRef.current, after, { stationId, direction });
-    postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'update-path', paths: newPaths } });
-    postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
-  };
-
   // ─── RSE adding ────────────────────────────────────────────────────────────
 
   const startRseMode = (after: LinePathAddress) => {
     setAddingRseAfterPathIndex(after);
-    setStationInsertAfterIndex(null);
     rseSession.open(new AddingRseUISession()).start(manager);
   };
 
@@ -144,10 +97,17 @@ const PathEditor: React.FC = () => {
     entries: Array<{ nodeId: NodeId; exitingSectionId: RoadSectionId | null; enteringSectionId: RoadSectionId | null }>
   ) => {
     if (!currentEditingLineId) return;
+    // A section's side (0/1) records which end of its road the junction node sits at —
+    // it must match the node the RSC actually crosses at, not always default to 0,
+    // or validateLinePaths mis-infers the line's direction there (see autoInsertRSCTo).
+    const sideAt = (sectionId: RoadSectionId | null, nodeId: NodeId): 0 | 1 => {
+      const road = sectionId ? roads.find(r => r.id === sectionId[0]) : undefined;
+      return road?.endNodeId === nodeId ? 1 : 0;
+    };
     const newGroups: LinePathData[] = entries.map(e => ({
       fromNodeId: e.nodeId,
-      exiting: e.exitingSectionId ? { sectionId: e.exitingSectionId, side: 0 as const, rank: 0 } : null,
-      entering: e.enteringSectionId ? { sectionId: e.enteringSectionId, side: 0 as const, rank: 0 } : null,
+      exiting: e.exitingSectionId ? { sectionId: e.exitingSectionId, side: sideAt(e.exitingSectionId, e.nodeId), rank: 0 } : null,
+      entering: e.enteringSectionId ? { sectionId: e.enteringSectionId, side: sideAt(e.enteringSectionId, e.nodeId), rank: 0 } : null,
       stationStops: [],
     }));
     const newPaths = insertGroupsAfter(linePathsRef.current, after, newGroups);
@@ -190,7 +150,7 @@ const PathEditor: React.FC = () => {
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
-  const inactive = stationInsertAfterIndex === null && addingRseAfterPathIndex === null;
+  const inactive = addingRseAfterPathIndex === null;
   const isEmpty = flattenLinePathData(linePaths).length === 0;
   const stationStopCount = linePaths.reduce((n, g) => n + g.stationStops.length, 0);
 
@@ -201,7 +161,7 @@ const PathEditor: React.FC = () => {
       {isEmpty ? (
         <div>
           <p className="p-2 text-[11px] text-neutral-500">No stops in path</p>
-          {inactive && <InsertionButtons onAddStation={() => handleStartAdding(START_ADDRESS)} />}
+          {inactive && <RoadInsertButton onClick={() => startRseMode(START_ADDRESS)} />}
         </div>
       ) : (
         <div>
@@ -215,26 +175,9 @@ const PathEditor: React.FC = () => {
             onSelectStation={(stationId) => postMessageToPlugin({ type: 'select-station', stationId })}
             onToggleStops={handleToggleStops}
             onToggleDirection={handleToggleDirection}
-            onAddSectionStation={handleAddSectionStation}
-            onStartAddingRse={startRseMode}
           />
           {inactive && <RoadInsertButton onClick={() => startRseMode(lastGroupAddress(linePaths))} />}
         </div>
-      )}
-
-      {stationInsertAfterIndex !== null && (
-        <StationAddingPanel
-          currentRoadId={getSourceAt(stationInsertAfterIndex).roadId}
-          stationRoadIds={stationRoadIds}
-          onFinish={handleFinishAdding}
-          onCancel={handleCancelAdding}
-          onSwitchToRse={() => {
-            const afterIdx = stationInsertAfterIndex;
-            stationsSession.close(s => s.stop());
-            setStationInsertAfterIndex(null);
-            startRseMode(afterIdx);
-          }}
-        />
       )}
 
       {addingRseAfterPathIndex !== null && (() => {

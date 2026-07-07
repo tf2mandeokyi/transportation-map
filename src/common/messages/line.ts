@@ -33,5 +33,4 @@ export type UIToPluginLineMessage =
   | { type: 'remove-line'; lineId: LineId }
   | { type: 'patch-line'; lineId: LineId; patch: LinePatch }
   | { type: 'update-line-stacking-order'; lineIds: LineId[] }
-  | { type: 'start-adding-stations-mode'; lineId: LineId }
   | { type: 'get-line-path'; lineId: LineId };

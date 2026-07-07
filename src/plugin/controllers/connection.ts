@@ -1,5 +1,4 @@
 import { LineId, RoadId, RoadSectionId, StationId } from "@/common/types";
-import { AddingStationsPluginSession } from "../sessions/adding-stations";
 import { Station, linePathsToData } from "../models/structures";
 import { postMessageToUI } from "../figma";
 import { buildDisplayEntries } from "../utils/display-entries";
@@ -8,13 +7,7 @@ import { UIMessageRouter } from "./router";
 
 export class ConnectionController extends BaseController {
   public registerMessages(router: UIMessageRouter): void {
-    router.register('start-adding-stations-mode', msg => this.handleStartAddingStationsMode(msg.lineId));
     router.register('get-line-path', msg => this.handleGetLinePath(msg.lineId));
-  }
-
-  public async handleStartAddingStationsMode(lineId: LineId): Promise<void> {
-    console.log("Entered station-adding mode for line:", lineId);
-    this.sessionManager.create(new AddingStationsPluginSession());
   }
 
   // ── Line path handler ────────────────────────────────────────────────────────

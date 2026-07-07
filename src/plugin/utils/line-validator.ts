@@ -111,6 +111,7 @@ export function validateLinePaths(line: Line): Owned<LinePath>[] {
   const realStops = line.paths.flatMap(group => group.stationStops.filter(s => s.stops));
 
   let currentPos: RoadSectionPos | undefined;
+  let currentDir: 'ascending' | 'descending' | undefined;
   let prevStop: StationStop | null = null;
 
   for (const group of line.paths) {
@@ -125,6 +126,7 @@ export function validateLinePaths(line: Line): Owned<LinePath>[] {
       }
       pushRsc(rsc);
       currentPos = rsc.end();
+      currentDir = rsc.entering ? (rsc.entering.side === 0 ? 'ascending' : 'descending') : undefined;
     }
 
     const stops = group.stationStops;
@@ -161,11 +163,28 @@ export function validateLinePaths(line: Line): Owned<LinePath>[] {
 
       pushStop(stop);
       currentPos = stop.end();
+      currentDir = stop.direction;
       prevStop = stop;
     }
   }
 
-  // Drop trailing RSC-only groups — a valid path ends on a stop.
+  // The path's tail — whatever section it currently ends in, whether reached via the
+  // last real stop or a bare road crossing with no stops of its own — gets every
+  // remaining station up to that section's far boundary auto-filled as a checkable
+  // (non-stopping) candidate. "Add Road" is the only way to extend a path now; this is
+  // how the entered section's stations become available to check on, rather than
+  // needing a separate "add station" action. Regenerated fresh every validation pass,
+  // same as any other pass-through — nothing here is preserved as authored data.
+  if (currentPos && currentDir) {
+    const boundary = currentDir === 'ascending' ? new OffsetT(1) : new OffsetT(0);
+    const rank = prevStop?.rank ?? 0;
+    for (const fill of fillBetween(currentPos, boundary, rank, savedPassRanks)) {
+      pushStop(fill);
+    }
+  }
+
+  // Drop a trailing crossing that ended up with nothing to check (its entered section
+  // has no stations at all) — a dangling road crossing with no candidates isn't useful.
   while (result.length > 0 && result[result.length - 1].stationStops.length === 0) result.pop();
 
   return result.map(group => own(group));
