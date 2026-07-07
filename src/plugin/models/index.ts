@@ -2,6 +2,7 @@ import { LineId, NodeId, RoadId, RoadSectionId, SectionId, StationId } from "@/c
 import { Line, LineProps, MapState, Node, NodeProps, Road, RoadProps, RoadSection, RoadSectionProps, Station, StationProps } from "./structures";
 import { deserializeMapState, serializeMapState } from "./serde";
 import { validateLinePaths } from "../utils/line-validator";
+import { own } from "@/common/utils/ownership";
 
 function generateBase62(length: number): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -67,6 +68,93 @@ export class Model {
     }
     this._removeRoadFromLines(road);
     this.state.removeRoad(road);
+  }
+
+  // Splits `road` at bezier parameter `t` into two roads joined by a new junction node.
+  // Every section is cloned onto both halves (by name/index), stations are reparented to
+  // whichever half they now fall on with interpT remapped to that half's local param, and
+  // any line's existing junction crossing into/out of one of the old sections is repointed
+  // at the matching new section — the same side (0/1), since each half keeps the original
+  // endpoint node on that side. New crossings needed right at the split point (for lines
+  // whose stops now straddle two roads where there used to be one) are picked up afterward
+  // by validateAllLinePaths, which auto-inserts them via Road.findSharedNode.
+  public splitRoad(road: Road, t: number, junctionRadius: number): Node {
+    const bezier = road.computeBezier();
+    if (!bezier) throw new Error('Cannot split a road without both endpoints');
+    const { left, right } = bezier.split(t);
+
+    const startConn = road.endpoints[0];
+    const endConn   = road.endpoints[1];
+
+    const splitNode = this.addNode({ position: bezier.eval(t), radius: junctionRadius });
+
+    const roadLeft = this.addRoad({
+      name: road.name,
+      bezierMidPoint: left.p1,
+      endpoints: [
+        own({ node: startConn.node, horizontalOffset: startConn.horizontalOffset, groupNumber: startConn.groupNumber }),
+        own({ node: splitNode, horizontalOffset: 0, groupNumber: 0 }),
+      ],
+    });
+    const roadRight = this.addRoad({
+      name: undefined,
+      bezierMidPoint: right.p1,
+      endpoints: [
+        own({ node: splitNode, horizontalOffset: 0, groupNumber: 0 }),
+        own({ node: endConn.node, horizontalOffset: endConn.horizontalOffset, groupNumber: endConn.groupNumber }),
+      ],
+    });
+
+    // addRoad() auto-creates a default (unnamed, index 0) section on each half; drop those
+    // and rebuild sections matching the original road's, one-to-one, on both halves.
+    roadLeft.removeSection(roadLeft.getSectionByIndex(0)!);
+    roadRight.removeSection(roadRight.getSectionByIndex(0)!);
+
+    const sectionMap = new Map<RoadSection, { left: RoadSection; right: RoadSection }>();
+    for (const section of road.getSectionsByIndex()) {
+      const leftSection  = this.addRoadSection(roadLeft,  { name: section.name, index: section.index });
+      const rightSection = this.addRoadSection(roadRight, { name: section.name, index: section.index });
+      sectionMap.set(section, { left: leftSection, right: rightSection });
+
+      for (const station of [...section.stations]) {
+        const rawT = station.rawInterpT;
+        if (rawT <= t) {
+          station.setInterpT(t < 0.000001 ? 0 : rawT / t);
+          station.setParent(leftSection);
+          leftSection.stations.push(station);
+        } else {
+          station.setInterpT(t > 0.999999 ? 0 : (rawT - t) / (1 - t));
+          station.setParent(rightSection);
+          rightSection.stations.push(station);
+        }
+      }
+    }
+
+    // Repoint any existing junction crossing (elsewhere on the map) that referenced one of
+    // the original road's sections — same side, on whichever new section replaced it.
+    for (const line of this.state.getLines()) {
+      for (const group of line.paths) {
+        const rsc = group.fromRoadSectionChange;
+        if (!rsc) continue;
+        if (rsc.exiting) {
+          const mapped = sectionMap.get(rsc.exiting.section);
+          if (mapped) rsc.exiting = { section: rsc.exiting.side === 0 ? mapped.left : mapped.right, side: rsc.exiting.side };
+        }
+        if (rsc.entering) {
+          const mapped = sectionMap.get(rsc.entering.section);
+          if (mapped) rsc.entering = { section: rsc.entering.side === 0 ? mapped.left : mapped.right, side: rsc.entering.side };
+        }
+      }
+    }
+
+    for (const node of this.state.getNodes()) {
+      node.roadConnections = node.roadConnections.filter(rc => rc.road !== road);
+    }
+    this.state.removeRoad(road);
+
+    this.validateAllLinePaths();
+
+    return splitNode;
   }
 
   // ─── RoadSection ───

@@ -11,7 +11,7 @@ import { UIMessageRouter } from "../router";
 import { FIGMA_KEY_IS_ROAD_CONTROL, FIGMA_KEY_NODE_ID, FIGMA_KEY_IS_NODE_MARKER, FIGMA_KEY_ROAD_ID, FIGMA_KEY_SECTION_ID, FIGMA_KEY_JUNCTION_OFFSET_X, FIGMA_KEY_JUNCTION_OFFSET_Y, NODE_DEFAULT_RADIUS } from "../../views/road";
 import { RoadControlManager, FIGMA_KEY_BEZIER_HANDLE, FIGMA_KEY_OFFSET_HANDLE } from "./road-control";
 import { NodeControlManager, FIGMA_KEY_IS_NODE_CONTROL, FIGMA_KEY_RADIUS_HANDLE } from "./node-control";
-import { RoadPlacingState } from "./road-placing";
+import { RoadPlacingState, SnapTarget } from "./road-placing";
 import { AddingRsePluginSession } from "../../sessions/adding-rse";
 import { AddingRoadPluginSession } from "../../sessions/adding-road";
 import { own } from "@/common/utils/ownership";
@@ -94,7 +94,19 @@ export class NetworkController extends BaseController {
     this.sessionManager.create(new AddingRoadPluginSession(
       () => this.confirmRoadPlacing(),
       () => this.cancelRoadPlacing(),
+      enabled => this.roadPlacing.setSnapEnabled(enabled),
     ));
+  }
+
+  // Resolves a road-placing endpoint's snap target to an actual Node, splicing a new
+  // junction into an existing road if the endpoint snapped to a mid-road point. Falls
+  // back to a plain new node if a mid-road target's road was already consumed by the
+  // other endpoint's split (both endpoints snapped into the same road).
+  private resolveEndpointNode(snap: SnapTarget | null, pos: Vector): Node {
+    if (!snap) return this.model.addNode({ position: pos, radius: NODE_DEFAULT_RADIUS });
+    if (snap.kind === 'node') return snap.node;
+    if (!this.model.state.getRoad(snap.road.id)) return this.model.addNode({ position: pos, radius: NODE_DEFAULT_RADIUS });
+    return this.model.splitRoad(snap.road, snap.t, NODE_DEFAULT_RADIUS);
   }
 
   private async confirmRoadPlacing(): Promise<void> {
@@ -102,8 +114,8 @@ export class NetworkController extends BaseController {
     await this.roadPlacing.cleanup();
 
     if (result) {
-      const startNode = result.startNode ?? this.model.addNode({ position: result.startPos, radius: NODE_DEFAULT_RADIUS });
-      const endNode   = result.endNode   ?? this.model.addNode({ position: result.endPos,   radius: NODE_DEFAULT_RADIUS });
+      const startNode = this.resolveEndpointNode(result.startSnap, result.startPos);
+      const endNode   = this.resolveEndpointNode(result.endSnap,   result.endPos);
 
       this.model.addRoad({
         name: undefined,

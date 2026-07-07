@@ -1,13 +1,12 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { LineAtNodeData, NetworkFocusedElement, NodeData, RoadData } from '@/common/messages';
-import { NodeId } from '@/common/types';
+import { LineAtNodeData, NetworkFocusedElement, NodeData, RoadCreationSnap, RoadData } from '@/common/messages';
 import { useMessageManager } from './MessageContext';
 import { AddingRoadUISession } from '../sessions/adding-road';
 import { useUISession } from '../sessions/useUISession';
 
 type RoadSnapState = {
-  startSnap: { nodeId: NodeId; name?: string } | null;
-  endSnap:   { nodeId: NodeId; name?: string } | null;
+  startSnap: RoadCreationSnap;
+  endSnap:   RoadCreationSnap;
 } | null;
 
 interface NetworkContextValue {
@@ -17,16 +16,18 @@ interface NetworkContextValue {
   nodeLinesData: LineAtNodeData[];
   isAddingRoad: boolean;
   roadSnapState: RoadSnapState;
+  roadSnapModeEnabled: boolean;
   handleStartRoadCreation:   () => void;
   handleConfirmRoadCreation: () => void;
   handleCancelRoadCreation:  () => void;
+  handleSetRoadSnapMode:     (enabled: boolean) => void;
 }
 
 const NetworkContext = createContext<NetworkContextValue | null>(null);
 
 export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const manager = useMessageManager();
-  const { open, close } = useUISession<AddingRoadUISession>();
+  const { open, close, send } = useUISession<AddingRoadUISession>();
 
   const [nodes, setNodes] = useState<NodeData[]>([]);
   const [roads, setRoads] = useState<RoadData[]>([]);
@@ -34,6 +35,7 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [nodeLinesData, setNodeLinesData] = useState<LineAtNodeData[]>([]);
   const [isAddingRoad, setIsAddingRoad] = useState(false);
   const [roadSnapState, setRoadSnapState] = useState<RoadSnapState>(null);
+  const [roadSnapModeEnabled, setRoadSnapModeEnabled] = useState(true);
 
   useEffect(() => {
     const unsub1 = manager.onMessage('network-data', msg => {
@@ -63,7 +65,13 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
     open(new AddingRoadUISession()).start(manager);
     setIsAddingRoad(true);
     setRoadSnapState(null);
+    setRoadSnapModeEnabled(true);
   }, [manager, open]);
+
+  const handleSetRoadSnapMode = useCallback((enabled: boolean) => {
+    setRoadSnapModeEnabled(enabled);
+    send(s => s.setSnapMode(enabled));
+  }, [send]);
 
   const handleConfirmRoadCreation = useCallback(() => {
     close(s => s.confirm());
@@ -80,8 +88,8 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
   return (
     <NetworkContext.Provider value={{
       nodes, roads, networkFocus, nodeLinesData,
-      isAddingRoad, roadSnapState,
-      handleStartRoadCreation, handleConfirmRoadCreation, handleCancelRoadCreation,
+      isAddingRoad, roadSnapState, roadSnapModeEnabled,
+      handleStartRoadCreation, handleConfirmRoadCreation, handleCancelRoadCreation, handleSetRoadSnapMode,
     }}>
       {children}
     </NetworkContext.Provider>

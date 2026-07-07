@@ -17,5 +17,11 @@ export function useUISession<S extends UISession<AnySessionMessage>>() {
     }
   }, []);
 
-  return { open, close };
+  // Invokes `fn` on the currently-open session, if any, without closing it —
+  // for messages that update session state mid-flight (e.g. toggling a mode).
+  const send = useCallback((fn: (session: S) => void): void => {
+    if (ref.current) fn(ref.current);
+  }, []);
+
+  return { open, close, send };
 }

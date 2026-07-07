@@ -1,6 +1,7 @@
 import type { NodeChangeListener, ListenerHandle } from "../listener";
-import type { Node } from "../../models/structures";
+import type { Node, Road } from "../../models/structures";
 import type { Model } from "../../models";
+import type { RoadCreationSnap } from "@/common/messages";
 import { postMessageToUI } from "../../figma";
 import { bezierPathData, CubicBezierPoints, QuadBezierPoints } from "../../utils/bezier";
 import { absoluteOrigin } from "../../utils/math";
@@ -9,6 +10,7 @@ const START_SIZE   = 16;
 const END_SIZE     = 16;
 const BEZIER_SIZE  = 10;
 const SNAP_RADIUS  = 24;
+const MID_ROAD_T_MARGIN = 0.03;
 
 const START_FILL:    RGB = { r: 1,    g: 0.4,  b: 0   };
 const END_FILL:      RGB = { r: 0,    g: 0.7,  b: 0.3 };
@@ -16,17 +18,24 @@ const BEZIER_FILL:   RGB = { r: 0.08, g: 0.6,  b: 1   };
 const WHITE:         RGB = { r: 1,    g: 1,    b: 1   };
 const PREVIEW_STROKE:RGB = { r: 0.6,  g: 0.75, b: 1   };
 
+// Where a dragged endpoint handle currently resolves to: an existing junction node,
+// a point along an existing road's curve (splicing in a new junction on confirm), or
+// nothing (a brand-new node will be created at the handle's raw position).
+export type SnapTarget =
+  | { kind: 'node'; node: Node }
+  | { kind: 'road'; road: Road; t: number; pos: Vector };
+
 interface EndpointState {
   handleId: string;
   pos:  Vector;
-  snap: Node | null;
+  snap: SnapTarget | null;
 }
 
 export interface RoadPlacingResult {
   startPos:  Vector;
-  startNode: Node | null;
+  startSnap: SnapTarget | null;
   endPos:    Vector;
-  endNode:   Node | null;
+  endSnap:   SnapTarget | null;
   bezierPos: Vector;
 }
 
@@ -37,6 +46,8 @@ export class RoadPlacingState {
   private bezierPos:      Vector = { x: 0, y: 0 };
   private previewId:      string | null = null;
   private listenerHandles: ListenerHandle[] = [];
+  private model:           Model | null = null;
+  private snapEnabled = true;
 
   get isActive(): boolean { return this.startState !== null; }
 
@@ -63,6 +74,8 @@ export class RoadPlacingState {
     this.bezierHandleId = bezierHandle.id;
     this.bezierPos      = bezierPos;
     this.previewId      = preview.id;
+    this.model          = model;
+    this.snapEnabled    = true;
 
     const startId = startHandle.id;
     const endId   = endHandle.id;
@@ -98,9 +111,20 @@ export class RoadPlacingState {
     const center = { x: origin.x + size / 2, y: origin.y + size / 2 };
 
     state.pos  = center;
-    state.snap = this.findNearestNode(center, model);
+    state.snap = this.findSnapTarget(center, model);
 
     await this.updatePreview();
+    this.postSnapUpdate();
+  }
+
+  // Called by the UI to flip snapping on/off mid-session. Immediately re-resolves both
+  // handles against their last known raw position so the preview/labels update right away.
+  setSnapEnabled(enabled: boolean): void {
+    this.snapEnabled = enabled;
+    if (!this.model) return;
+    if (this.startState) this.startState.snap = this.findSnapTarget(this.startState.pos, this.model);
+    if (this.endState)   this.endState.snap   = this.findSnapTarget(this.endState.pos,   this.model);
+    void this.updatePreview();
     this.postSnapUpdate();
   }
 
@@ -120,15 +144,31 @@ export class RoadPlacingState {
     await this.updatePreview();
   }
 
-  private findNearestNode(pos: Vector, model: Model): Node | null {
-    let nearest: Node | null = null;
-    let nearestDist = SNAP_RADIUS;
+  // Nearest node wins over nearest mid-road point at equal distance — plain node/node
+  // connections are the common case and shouldn't get displaced by a near-tied splice.
+  private findSnapTarget(pos: Vector, model: Model): SnapTarget | null {
+    if (!this.snapEnabled) return null;
+
+    let best: SnapTarget | null = null;
+    let bestDist = SNAP_RADIUS;
+
     for (const node of model.state.getNodes()) {
       const c = this.nodeCenter(node);
       const dist = Math.hypot(c.x - pos.x, c.y - pos.y);
-      if (dist < nearestDist) { nearestDist = dist; nearest = node; }
+      if (dist <= bestDist) { bestDist = dist; best = { kind: 'node', node }; }
     }
-    return nearest;
+
+    for (const road of model.state.getRoads()) {
+      const bezier = road.computeBezier();
+      if (!bezier) continue;
+      const t = bezier.nearestT(pos);
+      if (t < MID_ROAD_T_MARGIN || t > 1 - MID_ROAD_T_MARGIN) continue; // too close to an endpoint — let node snap handle it
+      const p = bezier.eval(t);
+      const dist = Math.hypot(p.x - pos.x, p.y - pos.y);
+      if (dist < bestDist) { bestDist = dist; best = { kind: 'road', road, t, pos: p }; }
+    }
+
+    return best;
   }
 
   nodeCenter(node: Node): Vector {
@@ -136,7 +176,8 @@ export class RoadPlacingState {
   }
 
   private effectivePos(state: EndpointState): Vector {
-    return state.snap ? this.nodeCenter(state.snap) : state.pos;
+    if (!state.snap) return state.pos;
+    return state.snap.kind === 'node' ? this.nodeCenter(state.snap.node) : state.snap.pos;
   }
 
   private async updatePreview(): Promise<void> {
@@ -164,13 +205,18 @@ export class RoadPlacingState {
     }];
   }
 
+  private toSnapInfo(target: SnapTarget | null): RoadCreationSnap {
+    if (!target) return null;
+    return target.kind === 'node'
+      ? { kind: 'node', nodeId: target.node.id, name: target.node.name }
+      : { kind: 'road', roadId: target.road.id, name: target.road.name };
+  }
+
   private postSnapUpdate(): void {
-    const s = this.startState?.snap;
-    const e = this.endState?.snap;
     postMessageToUI({
       type: 'road-creation-snap-update',
-      startSnap: s ? { nodeId: s.id, name: s.name } : null,
-      endSnap:   e ? { nodeId: e.id, name: e.name } : null,
+      startSnap: this.toSnapInfo(this.startState?.snap ?? null),
+      endSnap:   this.toSnapInfo(this.endState?.snap ?? null),
     });
   }
 
@@ -178,9 +224,9 @@ export class RoadPlacingState {
     if (!this.startState || !this.endState) return null;
     return {
       startPos:  this.effectivePos(this.startState),
-      startNode: this.startState.snap,
+      startSnap: this.startState.snap,
       endPos:    this.effectivePos(this.endState),
-      endNode:   this.endState.snap,
+      endSnap:   this.endState.snap,
       bezierPos: this.bezierPos,
     };
   }
@@ -205,6 +251,7 @@ export class RoadPlacingState {
     this.endState       = null;
     this.bezierHandleId = null;
     this.previewId      = null;
+    this.model          = null;
   }
 
   private makeHandle(pos: Vector, size: number, color: RGB, name: string): EllipseNode {

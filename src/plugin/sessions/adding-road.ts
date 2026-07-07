@@ -5,6 +5,7 @@ export class AddingRoadPluginSession extends PluginSession {
   constructor(
     private readonly onConfirm: () => Promise<void>,
     private readonly onCancel:  () => Promise<void>,
+    private readonly onSetSnapMode: (enabled: boolean) => void,
   ) { super(); }
 
   async handleMessage(msg: AnySessionMessage): Promise<void> {
@@ -14,6 +15,8 @@ export class AddingRoadPluginSession extends PluginSession {
     } else if (msg.type === 'cancel-adding-road-mode') {
       await this.onCancel();
       this.end();
+    } else if (msg.type === 'set-road-snap-mode') {
+      this.onSetSnapMode(msg.enabled);
     }
   }
 }

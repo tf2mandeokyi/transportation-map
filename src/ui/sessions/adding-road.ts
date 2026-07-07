@@ -12,4 +12,7 @@ export class AddingRoadUISession extends UISession<AddingRoadMessage> {
   cancel(): void {
     this.send({ type: 'cancel-adding-road-mode' });
   }
+  setSnapMode(enabled: boolean): void {
+    this.send({ type: 'set-road-snap-mode', enabled });
+  }
 }

@@ -3,6 +3,12 @@ import { StationParams, LineAtStationData } from "./station";
 import { LineData, LinePathData } from "./line";
 import { LineAtNodeData, NodeData, RoadData, NetworkFocusedElement } from "./network";
 
+// Where a road-creation endpoint handle currently resolves to, for the UI's live label.
+export type RoadCreationSnap =
+  | { kind: 'node'; nodeId: NodeId; name?: string }
+  | { kind: 'road'; roadId: RoadId; name?: string }
+  | null;
+
 export type DisplayStation = {
   stationId: StationId;
   name: string;
@@ -39,7 +45,7 @@ export type PluginToUIMessage =
   | { type: 'network-data'; nodes: NodeData[]; roads: RoadData[] }
   | { type: 'network-element-focused'; element: NetworkFocusedElement }
   | { type: 'network-selection-cleared' }
-  | { type: 'road-creation-snap-update'; startSnap: { nodeId: NodeId; name?: string } | null; endSnap: { nodeId: NodeId; name?: string } | null }
+  | { type: 'road-creation-snap-update'; startSnap: RoadCreationSnap; endSnap: RoadCreationSnap }
   | { type: 'road-creation-exited' }
   | { type: 'road-clicked'; roadId: RoadId; sectionId: RoadSectionId | null }
   | { type: 'node-lines-data'; nodeId: NodeId; lines: LineAtNodeData[] }
