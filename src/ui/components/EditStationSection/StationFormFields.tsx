@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { HVAlign, StationId, TextHAlign } from '@/common/types';
 import { postMessageToPlugin } from '../../figma';
+import Button from '../common/Button';
 
 interface Props {
   stationId: StationId;
@@ -116,20 +117,17 @@ const StationFormFields: React.FC<Props> = ({
         />
       </div>
       <div className="mb-2">
-        <button
-          className={`w-full rounded px-3 py-2 font-medium ${flipped ? 'bg-[#18a0fb] text-white hover:bg-[#0d8ee0]' : 'border border-neutral-300 bg-neutral-100 hover:bg-neutral-200'}`}
-          onClick={() => setFlipped(f => !f)}
-        >
+        <Button variant={flipped ? 'primary' : 'secondary'} fullWidth onClick={() => setFlipped(f => !f)}>
           {flipped ? 'Flipped (180°)' : 'Flip 180°'}
-        </button>
+        </Button>
       </div>
       <div className="mb-2 grid grid-cols-2 gap-2">
-        <button className="rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium hover:bg-neutral-200" onClick={() => postMessageToPlugin({ type: 'patch-station', stationId, patch: { op: 'copy', direction: 'forwards' } })}>
+        <Button onClick={() => postMessageToPlugin({ type: 'patch-station', stationId, patch: { op: 'copy', direction: 'forwards' } })}>
           Copy Forwards
-        </button>
-        <button className="rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium hover:bg-neutral-200" onClick={() => postMessageToPlugin({ type: 'patch-station', stationId, patch: { op: 'copy', direction: 'backwards' } })}>
+        </Button>
+        <Button onClick={() => postMessageToPlugin({ type: 'patch-station', stationId, patch: { op: 'copy', direction: 'backwards' } })}>
           Copy Backwards
-        </button>
+        </Button>
       </div>
       {isCombiningMode ? (
         <div className="mb-2 rounded border border-amber-400 bg-amber-50 p-3">
@@ -137,15 +135,16 @@ const StationFormFields: React.FC<Props> = ({
           <p className="mb-2 text-[11px] text-amber-800">
             Click another station on the canvas to combine this station with it. All line stops will be transferred.
           </p>
-          <button className="w-full rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium hover:bg-neutral-200" onClick={() => setIsCombiningMode(false)}>Cancel</button>
+          <Button fullWidth onClick={() => setIsCombiningMode(false)}>Cancel</Button>
         </div>
       ) : (
-        <button className="mb-2 w-full rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium hover:bg-neutral-200" onClick={() => setIsCombiningMode(true)}>
+        <Button fullWidth className="mb-2" onClick={() => setIsCombiningMode(true)}>
           Combine with Another Station
-        </button>
+        </Button>
       )}
-      <button
-        className="w-full rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium text-[#F24822] hover:bg-neutral-200"
+      <Button
+        fullWidth
+        className="text-[#F24822]"
         onClick={() => {
           const displayName = stationName || '(unnamed station)';
           if (confirm(`Are you sure you want to delete "${displayName}"? This action cannot be undone.`)) {
@@ -155,7 +154,7 @@ const StationFormFields: React.FC<Props> = ({
         }}
       >
         Delete Station
-      </button>
+      </Button>
     </div>
   );
 };

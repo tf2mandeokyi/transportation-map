@@ -3,6 +3,7 @@ import { LineAtStationData } from '@/common/messages';
 import { HVAlign, StationId, TextHAlign } from '@/common/types';
 import { postMessageToPlugin } from '../../figma';
 import { useMessageManager } from '../../contexts/MessageContext';
+import Button from '../common/Button';
 import StationFormFields from './StationFormFields';
 import StationLineList from './StationLineList';
 
@@ -67,7 +68,7 @@ const EditStationSection: React.FC = () => {
     <div className="mb-4 border-b border-neutral-200 pb-4">
       <div className="flex items-center justify-between">
         <h3 className="mb-3 text-sm font-semibold">Edit Station</h3>
-        <button className="rounded border border-neutral-300 bg-neutral-100 px-2 py-1 text-[11px] font-medium hover:bg-neutral-200" onClick={onClose}>Close</button>
+        <Button size="sm" onClick={onClose}>Close</Button>
       </div>
       <StationFormFields
         stationId={stationId}

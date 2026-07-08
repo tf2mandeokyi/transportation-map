@@ -1,6 +1,7 @@
 import React from 'react';
 import { LineId } from '@/common/types';
 import { LineData } from '@/common/messages';
+import Button from '../common/Button';
 
 export interface LineItemProps {
   line: LineData;
@@ -27,12 +28,12 @@ const LineItem: React.FC<LineItemProps> = ({ line, index, onRemove, onEdit, onDr
       <span className="flex-1 font-medium">{line.name}</span>
     </div>
     <div className="flex gap-1">
-      <button
-        className="rounded border border-neutral-300 bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200"
+      <Button
+        size="sm"
         onClick={(e) => { e.stopPropagation(); onRemove(line.id); }}
       >
         Remove
-      </button>
+      </Button>
     </div>
   </div>
 );

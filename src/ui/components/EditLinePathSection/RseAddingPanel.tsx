@@ -4,6 +4,7 @@ import { RoadSectionData } from '@/common/messages';
 import { LinePathAddress } from '../../utils/linePathGroups';
 import { useMessageManager } from '../../contexts/MessageContext';
 import { useNetworkContext } from '../../contexts/NetworkContext';
+import Button from '../common/Button';
 
 interface RseAddingPanelProps {
   afterPathIndex: LinePathAddress;
@@ -273,7 +274,7 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
                   {entry.nodeOptions[0]?.nodeName ?? nodeLabel}
                 </span>
               )}
-              <button className="rounded border border-neutral-300 bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200" onClick={() => removeEntry(i)}>X</button>
+              <Button size="sm" onClick={() => removeEntry(i)}>X</Button>
             </div>
 
             <div className="ml-3 border-l-2 border-neutral-300 py-1 pl-3">
@@ -303,15 +304,16 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
 
       <div className="flex flex-col gap-1">
         {pendingList.length > 0 && (
-          <button
-            className="w-full rounded bg-[#18a0fb] px-3 py-2 font-medium text-white hover:bg-[#0d8ee0] disabled:cursor-not-allowed disabled:opacity-50"
+          <Button
+            variant="primary"
+            fullWidth
             disabled={!canCommit}
             onClick={handleCommit}
           >
             Add {pendingList.length === 1 ? 'road' : `${pendingList.length} roads`}
-          </button>
+          </Button>
         )}
-        <button className="w-full rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium hover:bg-neutral-200" onClick={onCancel}>Cancel</button>
+        <Button fullWidth onClick={onCancel}>Cancel</Button>
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import EditStationSection from '../components/EditStationSection';
 import NetworkSection from '../components/NetworkSection';
 import SettingsSection from '../components/SettingsSection';
 import { postMessageToPlugin } from '../figma';
+import Button from '../components/common/Button';
 import NavButton from './NavButton';
 import LineTabContent from './LineTabContent';
 
@@ -19,12 +20,9 @@ const App: React.FC = () => {
   return (
     <div className="p-4 font-sans text-xs text-neutral-900">
       <div className="mb-4">
-        <button
-          className="w-full rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium hover:bg-neutral-200"
-          onClick={() => postMessageToPlugin({ type: 'render-map' })}
-        >
+        <Button fullWidth onClick={() => postMessageToPlugin({ type: 'render-map' })}>
           Render Map
-        </button>
+        </Button>
       </div>
 
       <div className="mb-4 flex border-b border-neutral-200">

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { postMessageToPlugin } from '../figma';
+import Button from './common/Button';
 import { useMessageManager } from '../contexts/MessageContext';
 
 const SettingsSection: React.FC = () => {
@@ -40,15 +41,15 @@ const SettingsSection: React.FC = () => {
     <div className="mb-4 border-b border-neutral-200 pb-4">
       <h3 className="mb-3 text-sm font-semibold">Development</h3>
       <div className="mt-4 flex flex-col gap-2">
-        <button className="w-full rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium hover:bg-neutral-200" onClick={handleValidatePaths}>
+        <Button fullWidth onClick={handleValidatePaths}>
           Validate Line Paths
-        </button>
-        <button className="w-full rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium hover:bg-neutral-200" onClick={handleCopyMapData}>
+        </Button>
+        <Button fullWidth onClick={handleCopyMapData}>
           {copyLabel}
-        </button>
-        <button className="w-full rounded border border-red-300 bg-red-50 px-3 py-2 font-medium text-red-700 hover:bg-red-100" onClick={handleClearData}>
+        </Button>
+        <Button variant="danger" fullWidth onClick={handleClearData}>
           Clear Saved Data
-        </button>
+        </Button>
       </div>
     </div>
   );

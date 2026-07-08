@@ -1,5 +1,6 @@
 import React from 'react';
 import { postMessageToPlugin } from '../../figma';
+import Button from '../common/Button';
 import { useLinesContext } from '../../contexts/LinesContext';
 import LineInfoEditor from './LineInfoEditor';
 import PathEditor from './PathEditor';
@@ -11,9 +12,9 @@ const EditLinePathSection: React.FC = () => {
   return (
     <div className="mb-4 border-b border-neutral-200 pb-4">
       <div className="mb-4 flex items-center gap-2">
-        <button className="rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium hover:bg-neutral-200" onClick={() => setCurrentEditingLineId(null)}>
+        <Button onClick={() => setCurrentEditingLineId(null)}>
           &lt; Back
-        </button>
+        </Button>
         <h3 className="flex-1 text-sm font-semibold">Edit Line Path</h3>
       </div>
 

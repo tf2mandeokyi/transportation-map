@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { NetworkFocusedElement, NodeData } from '@/common/messages';
 import { postMessageToPlugin } from '../../figma';
+import Button from '../common/Button';
 
 const FocusedRoadPanel: React.FC<{
   element: Extract<NetworkFocusedElement, { kind: 'road' }>;
@@ -20,9 +21,9 @@ const FocusedRoadPanel: React.FC<{
     <div className="mb-3 rounded bg-[#e8f4ff] p-2 text-xs">
       <div className="mb-1 flex items-center">
         <span className="flex-1 font-semibold">Selected Road</span>
-        <button className="rounded border border-neutral-300 bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200" onClick={() => postMessageToPlugin({ type: 'remove-road', roadId: element.roadId })}>
+        <Button size="sm" onClick={() => postMessageToPlugin({ type: 'remove-road', roadId: element.roadId })}>
           Delete
-        </button>
+        </Button>
       </div>
       <div>{element.name ?? element.roadId}</div>
       <div className="mt-0.5 text-neutral-500">
@@ -36,11 +37,11 @@ const FocusedRoadPanel: React.FC<{
         {element.sections.map(section => (
           <div key={section.id.join(':')} className="mb-1 flex items-center gap-2">
             <span className="flex-1">{section.name ?? `Section ${section.index}`}</span>
-            <button className="rounded border border-neutral-300 bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200" onClick={() => postMessageToPlugin({ type: 'patch-road', roadId: element.roadId, patch: { op: 'remove-section', sectionId: section.id } })}>×</button>
+            <Button size="sm" onClick={() => postMessageToPlugin({ type: 'patch-road', roadId: element.roadId, patch: { op: 'remove-section', sectionId: section.id } })}>×</Button>
           </div>
         ))}
         <input className="my-1 w-full rounded border border-neutral-300 px-2 py-1 text-xs" placeholder="Section name (optional)" value={sectionName} onChange={e => setSectionName(e.target.value)} />
-        <button className="w-full rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium hover:bg-neutral-200" onClick={handleAddSection}>+ Add Section</button>
+        <Button fullWidth onClick={handleAddSection}>+ Add Section</Button>
       </div>
     </div>
   );

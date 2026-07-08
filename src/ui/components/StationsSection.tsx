@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { HVAlign, TextHAlign } from '@/common/types';
+import Button from './common/Button';
 import { useMessageManager } from '../contexts/MessageContext';
 import { PlacingStationUISession } from '../sessions/placing-station';
 import { useUISession } from '../sessions/useUISession';
@@ -35,9 +36,9 @@ const StationsSection: React.FC = () => {
       <div className="mb-4 border-b border-neutral-200 pb-4">
         <h3 className="mb-3 text-sm font-semibold">Stations</h3>
         <div className="flex flex-col gap-2">
-          <button className="rounded bg-[#18a0fb] px-3 py-2 font-medium text-white hover:bg-[#0d8ee0]" onClick={handleStartPlacing}>
+          <Button variant="primary" onClick={handleStartPlacing}>
             Add Station
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -89,12 +90,12 @@ const StationsSection: React.FC = () => {
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <button className="rounded bg-[#18a0fb] px-3 py-2 font-medium text-white hover:bg-[#0d8ee0]" onClick={handleConfirm}>
+          <Button variant="primary" onClick={handleConfirm}>
             Place Here!
-          </button>
-          <button className="rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium hover:bg-neutral-200" onClick={handleCancel}>
+          </Button>
+          <Button onClick={handleCancel}>
             Cancel
-          </button>
+          </Button>
         </div>
       </div>
     </div>

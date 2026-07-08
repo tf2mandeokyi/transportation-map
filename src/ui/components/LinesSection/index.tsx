@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { LineId } from '@/common/types';
 import { postMessageToPlugin } from '../../figma';
+import Button from '../common/Button';
 import { useLinesContext } from '../../contexts/LinesContext';
 import LineItem from './LineItem';
 
@@ -66,7 +67,7 @@ const LinesSection: React.FC = () => {
           <input type="checkbox" checked={lineIsCircular} onChange={(e) => setLineIsCircular(e.target.checked)} />
           Circular line
         </label>
-        <button className="rounded bg-[#18a0fb] px-3 py-2 font-medium text-white hover:bg-[#0d8ee0]" onClick={handleAddLine}>Add Line</button>
+        <Button variant="primary" onClick={handleAddLine}>Add Line</Button>
       </div>
 
       <div id="lines-list" className="mt-3 flex flex-col gap-2">

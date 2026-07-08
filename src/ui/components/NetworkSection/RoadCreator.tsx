@@ -1,5 +1,6 @@
 import React from 'react';
 import { RoadCreationSnap } from '@/common/messages';
+import Button from '../common/Button';
 import { useNetworkContext } from '../../contexts/NetworkContext';
 
 function snapLabel(snap: RoadCreationSnap): string {
@@ -16,9 +17,9 @@ const RoadCreator: React.FC = () => {
 
   if (!isAddingRoad) {
     return (
-      <button className="w-full rounded bg-[#18a0fb] px-3 py-2 font-medium text-white hover:bg-[#0d8ee0]" onClick={handleStartRoadCreation}>
+      <Button variant="primary" fullWidth onClick={handleStartRoadCreation}>
         Add Road
-      </button>
+      </Button>
     );
   }
 
@@ -47,8 +48,8 @@ const RoadCreator: React.FC = () => {
         <span className="text-neutral-500">End: </span><strong>{endLabel}</strong>
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <button className="rounded bg-[#18a0fb] px-3 py-2 font-medium text-white hover:bg-[#0d8ee0]" onClick={handleConfirmRoadCreation}>Create</button>
-        <button className="rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium hover:bg-neutral-200" onClick={handleCancelRoadCreation}>Cancel</button>
+        <Button variant="primary" onClick={handleConfirmRoadCreation}>Create</Button>
+        <Button onClick={handleCancelRoadCreation}>Cancel</Button>
       </div>
     </div>
   );

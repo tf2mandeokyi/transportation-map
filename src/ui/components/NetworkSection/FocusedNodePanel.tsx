@@ -3,6 +3,7 @@ import { LineAtNodeData, NetworkFocusedElement } from '@/common/messages';
 import { NodeId, RoadSectionId } from '@/common/types';
 import { postMessageToPlugin } from '../../figma';
 import { useNetworkContext } from '../../contexts/NetworkContext';
+import Button from '../common/Button';
 import DraggableLineList from '../DraggableLineList';
 
 type ArmItem = { line: LineAtNodeData; role: 'exit' | 'enter'; rank: number };
@@ -58,9 +59,9 @@ const FocusedNodePanel: React.FC<{ element: Extract<NetworkFocusedElement, { kin
     <div className="mb-3 rounded bg-[#e8f4ff] p-2 text-xs">
       <div className="mb-1.5 flex items-center">
         <span className="flex-1 font-semibold">Selected Junction</span>
-        <button className="rounded border border-neutral-300 bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200" onClick={() => postMessageToPlugin({ type: 'remove-node', nodeId: element.nodeId })}>
+        <Button size="sm" onClick={() => postMessageToPlugin({ type: 'remove-node', nodeId: element.nodeId })}>
           Delete
-        </button>
+        </Button>
       </div>
       <input
         className="mb-1 w-full rounded border border-neutral-300 px-2 py-1 text-xs"

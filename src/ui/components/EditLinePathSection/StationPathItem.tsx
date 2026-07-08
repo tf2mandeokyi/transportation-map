@@ -1,4 +1,5 @@
 import React from 'react';
+import Button from '../common/Button';
 
 export interface StationPathItemProps {
   name: string;
@@ -31,16 +32,16 @@ const StationPathItem: React.FC<StationPathItemProps> = ({
       {name}
     </span>
     {onToggleDirection && direction && (
-      <button
-        className="rounded border border-neutral-300 bg-neutral-100 px-1.5 py-1 text-[10px] font-medium hover:bg-neutral-200"
+      <Button
+        size="xs"
         onClick={onToggleDirection}
         title={`Direction: ${direction} (click to flip — only takes effect where direction can't be inferred automatically)`}
       >
         {direction === 'ascending' ? '↑' : '↓'}
-      </button>
+      </Button>
     )}
     {onRemove && stops && (
-      <button className="rounded border border-neutral-300 bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200" onClick={onRemove}>X</button>
+      <Button size="sm" onClick={onRemove}>X</Button>
     )}
   </div>
 );

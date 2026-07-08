@@ -6,6 +6,7 @@ import {
   lastAddress as lastGroupAddress, insertGroupsAfter, removeRsc,
 } from '../../utils/linePathGroups';
 import { postMessageToPlugin } from '../../figma';
+import Button from '../common/Button';
 import { useLinesContext } from '../../contexts/LinesContext';
 import { useNetworkContext } from '../../contexts/NetworkContext';
 import { useMessageManager } from '../../contexts/MessageContext';
@@ -17,9 +18,9 @@ import RseAddingPanel from './RseAddingPanel';
 const RoadInsertButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
   <div className="flex items-center gap-1.5 py-0.5">
     <div className="h-px flex-1 bg-neutral-300" />
-    <button className="rounded border border-neutral-300 bg-neutral-100 px-1.5 py-0.5 text-[10px] leading-[14px] font-medium hover:bg-neutral-200" onClick={onClick}>
+    <Button size="xxs" onClick={onClick}>
       ↪ Road
-    </button>
+    </Button>
     <div className="h-px flex-1 bg-neutral-300" />
   </div>
 );
@@ -195,7 +196,7 @@ const PathEditor: React.FC = () => {
 
       {inactive && stationStopCount > 1 && (
         <div className="mt-1 flex justify-end gap-2">
-          <button className="rounded border border-neutral-300 bg-neutral-100 px-3 py-2 font-medium hover:bg-neutral-200" onClick={() => handleRotatePath(1)} title="Rotate path by 1">↻</button>
+          <Button onClick={() => handleRotatePath(1)} title="Rotate path by 1">↻</Button>
         </div>
       )}
     </div>

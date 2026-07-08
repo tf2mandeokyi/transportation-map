@@ -2,6 +2,7 @@ import React from 'react';
 import { StationId } from '@/common/types';
 import { DisplayEntry, LinePathData } from '@/common/messages';
 import { flattenLinePathData } from '../../utils/linePathGroups';
+import Button from '../common/Button';
 import StationPathItem from './StationPathItem';
 
 interface PathItemsListProps {
@@ -55,7 +56,7 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
               {isUturn && 'U-turn at '}<strong>{nodeName ?? nodeId}</strong>
             </span>
             {inactive && (
-              <button className="rounded border border-neutral-300 bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200" onClick={() => onRemoveRse(item.groupIndex)}>X</button>
+              <Button size="sm" onClick={() => onRemoveRse(item.groupIndex)}>X</Button>
             )}
           </div>
           <div className={roadLineClass}>
