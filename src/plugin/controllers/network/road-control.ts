@@ -19,10 +19,16 @@ interface StemLineIds {
   endToMid:      string;
 }
 
+interface OffsetHandleIds {
+  start: string;
+  end:   string;
+}
+
 export class RoadControlManager {
   private controlledRoadId: RoadId | null = null;
   private controlElementIds: string[] = [];
   private stemLineIds: StemLineIds | null = null;
+  private offsetHandleIds: OffsetHandleIds | null = null;
   private lockedRoadNodeIds: string[] = [];
   public suppressNextControlChanges = false;
 
@@ -77,6 +83,10 @@ export class RoadControlManager {
       endNodeStem:   endNodeStem.id,
       endToMid:      endToMid.id,
     };
+    this.offsetHandleIds = {
+      start: startOffsetHandle.id,
+      end:   endOffsetHandle.id,
+    };
     this.controlElementIds = [
       startNodeStem.id, startToMid.id, endNodeStem.id, endToMid.id,
       startOffsetHandle.id, endOffsetHandle.id,
@@ -97,6 +107,7 @@ export class RoadControlManager {
     }
     this.controlElementIds = [];
     this.stemLineIds = null;
+    this.offsetHandleIds = null;
     this.controlledRoadId = null;
   }
 
@@ -111,6 +122,7 @@ export class RoadControlManager {
       .forEach(n => { if (!n.removed) n.remove(); });
     this.controlElementIds = [];
     this.stemLineIds = null;
+    this.offsetHandleIds = null;
     this.controlledRoadId = null;
   }
 
@@ -181,6 +193,17 @@ export class RoadControlManager {
       await updateStem(ids.startToMid,   p0,  mid);
       await updateStem(ids.endNodeStem,   road.endpoints[1].node.position, p2);
       await updateStem(ids.endToMid,     p2,  mid);
+    }
+
+    if (this.offsetHandleIds) {
+      const moveHandle = async (id: string, pos: Vector) => {
+        const node = await figma.getNodeByIdAsync(id) as FrameNode | null;
+        if (!node || node.removed) return;
+        node.x = pos.x - HANDLE_RADIUS;
+        node.y = pos.y - HANDLE_RADIUS;
+      };
+      await moveHandle(this.offsetHandleIds.start, p0);
+      await moveHandle(this.offsetHandleIds.end,   p2);
     }
 
     const roadVisualNodes = this.findRoadVisualNodes(roadId) as VectorNode[];
