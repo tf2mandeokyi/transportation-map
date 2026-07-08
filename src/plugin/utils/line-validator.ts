@@ -183,9 +183,16 @@ export function validateLinePaths(line: Line): Owned<LinePath>[] {
     }
   }
 
-  // Drop a trailing crossing that ended up with nothing to check (its entered section
-  // has no stations at all) — a dangling road crossing with no candidates isn't useful.
-  while (result.length > 0 && result[result.length - 1].stationStops.length === 0) result.pop();
+  // Drop a trailing *bare* group (no RSC of its own) that ended up with nothing to
+  // check. A group backed by a real RoadSectionChange is kept even with zero stops —
+  // "Add Road" is the only way to extend a path now, so a just-added road into a
+  // stationless connector section is expected, legitimate tail state (the user may
+  // still chain another road after it), not a dangling artifact to discard.
+  while (
+    result.length > 0 &&
+    result[result.length - 1].stationStops.length === 0 &&
+    !result[result.length - 1].fromRoadSectionChange
+  ) result.pop();
 
   return result.map(group => own(group));
 }

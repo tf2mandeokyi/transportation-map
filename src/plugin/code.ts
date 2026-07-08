@@ -26,9 +26,8 @@ async function main() {
 
   const hasExistingData = !model.state.getStations().next().done || !model.state.getLines().next().done;
   if (hasExistingData) {
-    console.log("Existing map data found, skipping initial render");
-    controller.syncLinesToUI();
-    controller.syncNetworkToUI();
+    console.log("Existing map data found, rendering it");
+    await controller.refresh();
   } else {
     console.log("Creating demo map");
     await createDemoMap(controller, model);

@@ -3,10 +3,11 @@ import { MapState } from '../models/structures/map-state';
 import { Road } from '../models/structures/road';
 import { RoadSection } from '../models/structures/road-section';
 import { Station } from '../models/structures/station';
+import { Node } from '../models/structures/node';
 import { Line } from '../models/structures/line';
-import { StationStop } from '../models/structures/line-path';
+import { LinePath, RoadSectionChange, StationStop } from '../models/structures/line-path';
 import { validateLinePaths } from './line-validator';
-import { RoadId, SectionId, StationId, LineId } from '@/common/types';
+import { RoadId, SectionId, StationId, LineId, NodeId } from '@/common/types';
 
 // Builds a single-section road with five stations at fixed positions, with no
 // geometry beyond what the validator needs (parentRoadSection + interpT).
@@ -128,6 +129,46 @@ describe('validateLinePaths — virtual U-turn shadow duplication', () => {
       { id: 'B', stops: false, direction: 'ascending' }, // ordinary gap fill, not a reversal
       { id: 'C', stops: true,  direction: 'ascending' },
     ]);
+  });
+});
+
+describe('validateLinePaths — trailing RSC with nothing to check', () => {
+  it('keeps a freshly-added road crossing into a stationless section instead of dropping it', () => {
+    const state = new MapState();
+    const { section: emptySection } = buildSection(state, {}); // no stations on this section
+
+    const line = new Line(state, 'l1' as LineId).applyProps({
+      name: 'Test Line',
+      color: '#ff0000',
+      isCircular: false,
+      paths: [],
+      figmaGroupId: null,
+    });
+    state.addLine(line);
+
+    const node = new Node(state, 'n1' as NodeId).applyProps({ name: 'N1', position: { x: 0, y: 0 }, radius: 0 });
+    state.addNode(node);
+
+    // Mirrors what "Add Road" commits as the very first entry of a brand-new path:
+    // exiting is null (nothing to cross from yet), entering is the clicked section.
+    const rsc = new RoadSectionChange();
+    rsc.node = node;
+    rsc.exiting = null;
+    rsc.entering = { section: emptySection, side: 0 };
+    rsc.exitRank = 0;
+    rsc.enterRank = 0;
+
+    const group = new LinePath();
+    group.fromRoadSectionChange = rsc;
+    line.paths = [group];
+
+    const result = validateLinePaths(line);
+
+    // Previously this trailing group got popped because it had nothing to check
+    // (the entered section has zero stations), collapsing the whole path to [].
+    expect(result).toHaveLength(1);
+    expect(result[0].fromRoadSectionChange).toBe(rsc);
+    expect(result[0].stationStops).toEqual([]);
   });
 });
 

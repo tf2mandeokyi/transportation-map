@@ -24,7 +24,7 @@ if (rootElement) {
     </React.StrictMode>
   );
   // Give MessageProvider's window.onmessage listener a tick to attach.
-  setTimeout(seedFakeData, 0);
+  setTimeout(seedFakeData, 100);
 } else {
   console.error('Root element not found');
 }
