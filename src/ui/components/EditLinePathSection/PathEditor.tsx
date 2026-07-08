@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { NodeId, RoadId, RoadSectionId } from '@/common/types';
 import { DisplayEntry, LinePathData } from '@/common/messages';
 import {
@@ -25,7 +25,11 @@ const RoadInsertButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
   </div>
 );
 
-const PathEditor: React.FC = () => {
+export interface PathEditorHandle {
+  flushPendingToggles: () => void;
+}
+
+const PathEditor = forwardRef<PathEditorHandle>((_props, ref) => {
   const { currentEditingLineId } = useLinesContext();
   const { roads } = useNetworkContext();
   const manager = useMessageManager();
@@ -39,6 +43,7 @@ const PathEditor: React.FC = () => {
 
   const currentLineIdRef     = useRef(currentEditingLineId);
   const linePathsRef         = useRef<LinePathData[]>(linePaths);
+  const pendingToggleRef     = useRef(false);
   const rseSession           = useUISession<AddingRseUISession>();
 
   useEffect(() => { currentLineIdRef.current     = currentEditingLineId; }, [currentEditingLineId]);
@@ -60,10 +65,25 @@ const PathEditor: React.FC = () => {
   }, [manager]);
 
   useEffect(() => {
+    pendingToggleRef.current = false;
     if (currentEditingLineId) {
       postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
     }
   }, [currentEditingLineId]);
+
+  // Stop-flag toggles only update local state (see handleToggleStops) so the
+  // canvas isn't re-rendered on every checkbox click. This flushes them to the
+  // plugin as a single update-path patch — called before any other patch that
+  // would refetch from the backend, and when the user leaves the path editor.
+  const flushPendingToggles = () => {
+    if (!pendingToggleRef.current) return;
+    const lineId = currentLineIdRef.current;
+    pendingToggleRef.current = false;
+    if (!lineId) return;
+    postMessageToPlugin({ type: 'patch-line', lineId, patch: { op: 'update-path', paths: linePathsRef.current } });
+  };
+
+  useImperativeHandle(ref, () => ({ flushPendingToggles }));
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -111,6 +131,7 @@ const PathEditor: React.FC = () => {
       entering: e.enteringSectionId ? { sectionId: e.enteringSectionId, side: sideAt(e.enteringSectionId, e.nodeId), rank: 0 } : null,
       stationStops: [],
     }));
+    flushPendingToggles();
     const newPaths = insertGroupsAfter(linePathsRef.current, after, newGroups);
     postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'update-path', paths: newPaths } });
     postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
@@ -121,23 +142,41 @@ const PathEditor: React.FC = () => {
 
   const handleRemovePath = (groupIndex: number, stopIndex: number) => {
     if (!currentEditingLineId) return;
+    flushPendingToggles();
     postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'remove-station', groupIndex, stopIndex } });
   };
 
+  // Only updates local state — deferred to a single update-path patch (see
+  // flushPendingToggles) so toggling a checkbox doesn't trigger a canvas
+  // re-render on every click.
   const handleToggleStops = (groupIndex: number, stopIndex: number, stops: boolean) => {
     if (!currentEditingLineId) return;
-    postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'toggle-stops', groupIndex, stopIndex, stops } });
-    postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
+    const stationId = linePaths[groupIndex]?.stationStops[stopIndex]?.stationId;
+    const nextPaths = linePaths.map((g, gi) => gi !== groupIndex ? g : {
+      ...g,
+      stationStops: g.stationStops.map((s, si) => si !== stopIndex ? s : { ...s, stops }),
+    });
+    linePathsRef.current = nextPaths;
+    setLinePaths(nextPaths);
+    pendingToggleRef.current = true;
+    if (stationId) {
+      setDisplayEntries(prev => prev.map(entry => entry.kind !== 'traversal' ? entry : {
+        ...entry,
+        stations: entry.stations.map(s => s.stationId === stationId ? { ...s, stops } : s),
+      }));
+    }
   };
 
   const handleToggleDirection = (groupIndex: number, stopIndex: number, direction: 'ascending' | 'descending') => {
     if (!currentEditingLineId) return;
+    flushPendingToggles();
     postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'toggle-direction', groupIndex, stopIndex, direction } });
     postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
   };
 
   const handleRemoveRse = (groupIndex: number) => {
     if (!currentEditingLineId) return;
+    flushPendingToggles();
     const newPaths = removeRsc(linePaths, groupIndex);
     postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'update-path', paths: newPaths } });
     postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
@@ -145,6 +184,7 @@ const PathEditor: React.FC = () => {
 
   const handleRotatePath = (steps: number) => {
     if (!currentEditingLineId) return;
+    flushPendingToggles();
     postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'rotate-path', steps } });
     postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
   };
@@ -201,6 +241,8 @@ const PathEditor: React.FC = () => {
       )}
     </div>
   );
-};
+});
+
+PathEditor.displayName = 'PathEditor';
 
 export default PathEditor;

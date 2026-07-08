@@ -1,18 +1,24 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { postMessageToPlugin } from '../../figma';
 import Button from '../common/Button';
 import { useLinesContext } from '../../contexts/LinesContext';
 import LineInfoEditor from './LineInfoEditor';
-import PathEditor from './PathEditor';
+import PathEditor, { PathEditorHandle } from './PathEditor';
 
 const EditLinePathSection: React.FC = () => {
   const { lines, currentEditingLineId, setCurrentEditingLineId } = useLinesContext();
   const currentLine = lines.find(l => l.id === currentEditingLineId);
+  const pathEditorRef = useRef<PathEditorHandle>(null);
+
+  const handleBack = () => {
+    pathEditorRef.current?.flushPendingToggles();
+    setCurrentEditingLineId(null);
+  };
 
   return (
     <div className="mb-4 border-b border-neutral-200 pb-4">
       <div className="mb-4 flex items-center gap-2">
-        <Button onClick={() => setCurrentEditingLineId(null)}>
+        <Button onClick={handleBack}>
           &lt; Back
         </Button>
         <h3 className="flex-1 text-sm font-semibold">Edit Line Path</h3>
@@ -34,7 +40,7 @@ const EditLinePathSection: React.FC = () => {
         />
       )}
 
-      <PathEditor />
+      <PathEditor ref={pathEditorRef} />
     </div>
   );
 };
