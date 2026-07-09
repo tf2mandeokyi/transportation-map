@@ -5,7 +5,7 @@ import { MessageProvider } from '../contexts/MessageContext';
 import { LinesProvider } from '../contexts/LinesContext';
 import { NetworkProvider } from '../contexts/NetworkContext';
 import '../styles.css';
-import { seedFakeData } from './seed';
+import { seedInitialData } from './seed';
 import DevPanel from './DevPanel';
 
 const rootElement = document.getElementById('root');
@@ -24,7 +24,7 @@ if (rootElement) {
     </React.StrictMode>
   );
   // Give MessageProvider's window.onmessage listener a tick to attach.
-  setTimeout(seedFakeData, 100);
+  setTimeout(seedInitialData, 100);
 } else {
   console.error('Root element not found');
 }

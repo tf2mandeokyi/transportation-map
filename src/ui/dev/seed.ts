@@ -1,5 +1,8 @@
-import type { PluginToUIMessage } from '@/common/messages';
+import type { NodeData, PluginToUIMessage, RoadData, RoadSectionData } from '@/common/messages';
 import type { LineId, NodeId, RoadId, RoadSectionId, StationId } from '@/common/types';
+import { MapState } from '../../plugin/models/structures/map-state';
+import { deserializeMapState } from '../../plugin/models/serde';
+import { validateLinePaths } from '../../plugin/utils/line-validator';
 
 const nodeId = (id: string) => id as NodeId;
 const roadId = (id: string) => id as RoadId;
@@ -9,6 +12,45 @@ const sectionId = (roadId_: string, id: string): RoadSectionId => [roadId(roadId
 
 function send(msg: PluginToUIMessage) {
   window.postMessage({ pluginMessage: msg }, '*');
+}
+
+// Mirrors LineController.syncLinesToUI + NetworkController.syncNetworkToUI, which is
+// what the real plugin sends to the UI on load.
+function seedFromMapState(state: MapState) {
+  for (const line of state.getLines()) {
+    send({ type: 'line-added', id: line.id, name: line.name, color: line.color });
+  }
+
+  const nodes: NodeData[] = [...state.getNodes()].map(n => ({ id: n.id, name: n.name, pos: n.getCenter() }));
+  const roads: RoadData[] = [...state.getRoads()].map(r => ({
+    id: r.id,
+    name: r.name,
+    startNodeId: r.endpoints[0].node.id,
+    endNodeId: r.endpoints[1].node.id,
+    sections: [...r.getSections()].map((s): RoadSectionData => ({ id: s.getRoadSectionId(), name: s.name, index: s.index })),
+  }));
+  send({ type: 'network-data', nodes, roads });
+}
+
+// Seeds from a real saved map at tmp/data.json when present (served by the dev vite
+// config), falling back to hardcoded fake data otherwise.
+export async function seedInitialData() {
+  try {
+    const res = await fetch('/__dev-data.json');
+    if (res.ok) {
+      const json = await res.text();
+      const state = new MapState();
+      if (deserializeMapState(json, state)) {
+        for (const line of state.getLines()) line.paths = validateLinePaths(line);
+        state.normalize();
+        seedFromMapState(state);
+        return;
+      }
+    }
+  } catch {
+    // fall through to fake data
+  }
+  seedFakeData();
 }
 
 export function seedFakeData() {
