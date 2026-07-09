@@ -24,6 +24,6 @@ function serveTmpData(): Plugin {
 }
 
 export default defineConfig({
-  root: 'src/ui/dev',
+  root: 'src/dev-backend',
   plugins: [tsconfigPaths(), serveTmpData()],
 });

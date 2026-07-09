@@ -2,9 +2,9 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
-    "outDir": "../../.tsbuild/ui",
+    "outDir": "../../.tsbuild/dev-backend",
     "jsx": "react"
   },
   "include": ["./**/*.ts", "./**/*.tsx"],
-  "references": [{ "path": "../common" }]
+  "references": [{ "path": "../common" }, { "path": "../plugin" }, { "path": "../ui" }]
 }

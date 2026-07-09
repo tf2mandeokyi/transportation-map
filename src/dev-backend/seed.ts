@@ -1,8 +1,13 @@
-import type { NodeData, PluginToUIMessage, RoadData, RoadSectionData } from '@/common/messages';
+import type { PluginToUIMessage, NodeData, RoadData, RoadSectionData, UIToPluginMessage } from '@/common/messages';
 import type { LineId, NodeId, RoadId, RoadSectionId, StationId } from '@/common/types';
-import { MapState } from '../../plugin/models/structures/map-state';
-import { deserializeMapState } from '../../plugin/models/serde';
-import { validateLinePaths } from '../../plugin/utils/line-validator';
+import { MapState } from '../plugin/models/structures/map-state';
+import { deserializeMapState } from '../plugin/models/serde';
+import { validateLinePaths } from '../plugin/utils/line-validator';
+import { getLinePathData } from '../plugin/utils/get-line-path-data';
+
+// Backs 'get-line-path' responses below — only set when seeded from a real
+// saved map (seedFakeData's lines have no paths, so there's nothing to serve).
+let seededState: MapState | null = null;
 
 const nodeId = (id: string) => id as NodeId;
 const roadId = (id: string) => id as RoadId;
@@ -43,6 +48,7 @@ export async function seedInitialData() {
       if (deserializeMapState(json, state)) {
         for (const line of state.getLines()) line.paths = validateLinePaths(line);
         state.normalize();
+        seededState = state;
         seedFromMapState(state);
         return;
       }
@@ -83,6 +89,23 @@ export function seedFakeData() {
         ],
       },
     ],
+  });
+}
+
+// Stands in for the real plugin's postMessage round-trip: intercepts messages
+// the UI sends outward (see figma.ts's postRawMessageToPlugin) and answers the
+// ones the edit-line-path panel depends on, using the map seeded above and the
+// same pure computation ConnectionController.handleGetLinePath uses on the real side.
+export function installFakeBackend() {
+  window.addEventListener('message', event => {
+    const msg: UIToPluginMessage | undefined = event.data?.pluginMessage?.msg;
+    if (!msg || msg.type !== 'get-line-path') return;
+    if (!seededState) return;
+
+    const data = getLinePathData(seededState, msg.lineId);
+    if (!data) return;
+
+    send({ type: 'line-path-data', ...data });
   });
 }
 
@@ -130,7 +153,7 @@ export function simulateSelectionCleared() {
 export function simulateRoadSnap() {
   send({
     type: 'road-creation-snap-update',
-    startSnap: { nodeId: nodeId('node-1'), name: 'Central Junction' },
-    endSnap: { nodeId: nodeId('node-2'), name: 'North Yard' },
+    startSnap: { kind: 'node', nodeId: nodeId('node-1'), name: 'Central Junction' },
+    endSnap: { kind: 'node', nodeId: nodeId('node-2'), name: 'North Yard' },
   });
 }
