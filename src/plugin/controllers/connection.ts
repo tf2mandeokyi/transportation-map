@@ -1,7 +1,7 @@
-import { LineId, RoadId, RoadSectionId, StationId } from "@/common/types";
-import { Station, linePathsToData } from "../models/structures";
+import { LineId } from "@/common/types";
+import { Station } from "../models/structures";
 import { postMessageToUI } from "../figma";
-import { buildDisplayEntries } from "../utils/display-entries";
+import { getLinePathData } from "../utils/get-line-path-data";
 import { BaseController } from "./base";
 import { UIMessageRouter } from "./router";
 
@@ -13,25 +13,10 @@ export class ConnectionController extends BaseController {
   // ── Line path handler ────────────────────────────────────────────────────────
 
   public async handleGetLinePath(lineId: LineId): Promise<void> {
-    const line = this.model.state.getLine(lineId);
-    if (!line) { console.error("Line not found:", lineId); return; }
+    const data = getLinePathData(this.model.state, lineId);
+    if (!data) { console.error("Line not found:", lineId); return; }
 
-    const stationNames: Record<StationId, string> = {};
-    const stationRoadIds: Record<StationId, RoadId | null> = {};
-    const stationSectionIds: Record<StationId, RoadSectionId | null> = {};
-
-    for (const group of line.paths) {
-      for (const stop of group.stationStops) {
-        const station = stop.station;
-        stationNames[station.id] = station.name;
-        stationRoadIds[station.id] = station.parentRoadSection?.parentRoad?.id ?? null;
-        stationSectionIds[station.id] = station.parentRoadSection?.getRoadSectionId() ?? null;
-      }
-    }
-
-    const displayEntries = buildDisplayEntries(line.paths);
-
-    postMessageToUI({ type: 'line-path-data', lineId, paths: linePathsToData(line.paths), stationNames, stationRoadIds, stationSectionIds, displayEntries });
+    postMessageToUI({ type: 'line-path-data', ...data });
   }
 
   public insertStationIntoLine(lineId: LineId, newStation: Station, relativeToStation: Station, insertAfter: boolean): boolean {
