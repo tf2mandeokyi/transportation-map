@@ -216,6 +216,7 @@ const PathEditor = forwardRef<PathEditorHandle>((_props, ref) => {
             onSelectStation={(stationId) => postMessageToPlugin({ type: 'select-station', stationId })}
             onToggleStops={handleToggleStops}
             onToggleDirection={handleToggleDirection}
+            onInsertRoad={startRseMode}
           />
           {inactive && <RoadInsertButton onClick={() => startRseMode(lastGroupAddress(linePaths))} />}
         </div>

@@ -27,6 +27,13 @@ export function buildDisplayEntries(paths: readonly LinePath[]): DisplayEntry[] 
   let travSection: RoadSection | null = null;
   let travDir: 'ascending' | 'descending' | null = null;
 
+  // The road section we're physically standing in after the last processed RSE
+  // or stop — tracked independently of travSection (which resets on every
+  // flush). Used purely to detect discontinuities: an RSE whose exiting side
+  // doesn't match where we last were, or a stop that lands on a different
+  // section than expected, both mean a road section is missing from the path.
+  let currentSection: RoadSection | null = null;
+
   // Emit the current traversal group.
   // cutByUturn: true when this traversal is being cut short by a virtual U-turn —
   // the whole remaining section extent (down to the far boundary) is padded in as
@@ -99,6 +106,15 @@ export function buildDisplayEntries(paths: readonly LinePath[]): DisplayEntry[] 
   const processRse = (rse: RoadSectionChange) => {
     emitTraversal(); // no look-ahead extension at explicit RSE boundaries
 
+    // The exiting side should always be the section we were last standing in.
+    // A mismatch means an earlier RSE's entering section was never actually
+    // reached — a road section is missing between the two crossings.
+    if (currentSection !== null && rse.exiting && rse.exiting.section !== currentSection) {
+      displayEntries.push({ kind: 'invalid-jump' });
+      prevLastSortedIdx = null;
+    }
+    currentSection = rse.entering ? rse.entering.section : null;
+
     const isUturn = !!(rse.exiting && rse.exiting.section === rse.entering?.section);
     displayEntries.push({
       kind: 'rse',
@@ -117,7 +133,14 @@ export function buildDisplayEntries(paths: readonly LinePath[]): DisplayEntry[] 
     const section = stop.station.parentRoadSection;
     const dir     = stop.direction;
 
-    if (travDir !== null && travSection === section && travDir !== dir) {
+    if (currentSection !== null && currentSection !== section) {
+      // Stop lands on a different section than the last RSE/stop left us in,
+      // with no RSE in between — invalid data; flush and surface it so the
+      // UI can offer a fix (inserting the missing road section here).
+      emitTraversal();
+      displayEntries.push({ kind: 'invalid-jump' });
+      prevLastSortedIdx = null;
+    } else if (travDir !== null && travSection === section && travDir !== dir) {
       // Direction reversal on the same section without an RSC = virtual U-turn.
       // Pad the segment on both sides out to the section's boundary as greyed
       // pass-throughs, showing the line physically receding toward the reversal point.
@@ -125,13 +148,11 @@ export function buildDisplayEntries(paths: readonly LinePath[]): DisplayEntry[] 
       displayEntries.push({ kind: 'virtual-uturn' });
       pendingStartExtend = true;
       // prevLastSortedIdx is preserved through the virtual U-turn (set by emitTraversal).
-    } else if (travSection !== null && travSection !== section) {
-      // Section changed without RSC — shouldn't happen in valid data; just flush.
-      emitTraversal();
     }
 
-    travSection = section;
-    travDir     = dir;
+    currentSection = section;
+    travSection    = section;
+    travDir        = dir;
     travStops.push(stop);
   };
 

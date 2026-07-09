@@ -1,8 +1,7 @@
 import { Line, MapState, RoadSectionChange, StationStop } from "../../models/structures";
 import { StationRenderer } from "../station";
 import { hexToRgb } from "@/common/utils/color";
-import { SegmentResult } from "./segment-path";
-import { isInvalidJump, buildSegmentPath } from "./path-builder";
+import { buildSegmentPieces, SegmentPiece } from "./path-builder";
 import { createDashedLine, bezierPathToSegments } from "./segment-nodes";
 
 type IndexedStop = { stop: StationStop; groupIndex: number; stopIndex: number };
@@ -47,21 +46,31 @@ export class LineRenderer {
   public async renderLine(line: Line): Promise<void> {
     await cleanupOldLineGroup(line);
 
-    const segmentNodes: SceneNode[] = [];
     const color = hexToRgb(line.color);
     const stops = collectStops(line);
 
+    // Collected across every station pair so the whole line's solid stretches
+    // become one path (outline + main) and its dashed jumps become one more —
+    // Figma's dashPattern is per-node, so solid and dashed still need separate
+    // nodes, but each style no longer needs a node per segment/piece.
+    const solidPaths: string[] = [];
+    const dashedJumps: Array<{ from: Vector; to: Vector }> = [];
+
     for (let si = 0; si < stops.length - 1; si++) {
-      const result = this.renderLineSegment(line, stops[si], stops[si + 1], color);
-      if (!result) continue;
-      if (result.kind === 'normal') {
-        segmentNodes.push(
-          figma.group([result.outline], figma.currentPage),
-          figma.group([result.main],    figma.currentPage)
-        );
-      } else {
-        segmentNodes.push(figma.group([result.node], figma.currentPage));
+      const pieces = this.renderLineSegment(line, stops[si], stops[si + 1]);
+      for (const piece of pieces) {
+        if (piece.kind === 'normal') solidPaths.push(piece.path);
+        else dashedJumps.push({ from: piece.from, to: piece.to });
       }
+    }
+
+    const segmentNodes: SceneNode[] = [];
+    if (solidPaths.length > 0) {
+      const { outline, main } = bezierPathToSegments(solidPaths.join(' '), color);
+      segmentNodes.push(outline, main);
+    }
+    if (dashedJumps.length > 0) {
+      segmentNodes.push(createDashedLine(dashedJumps, color));
     }
 
     if (segmentNodes.length > 0) {
@@ -76,30 +85,27 @@ export class LineRenderer {
     line: Line,
     startStop: IndexedStop,
     endStop: IndexedStop,
-    color: RGB,
-  ): SegmentResult | null {
+  ): SegmentPiece[] {
     const startStation = startStop.stop.station;
     const endStation   = endStop.stop.station;
     const startPoint = this.stationRenderer.getConnectionPoint(startStation, line, startStop.groupIndex, startStop.stopIndex);
     const endPoint   = this.stationRenderer.getConnectionPoint(endStation,   line, endStop.groupIndex,   endStop.stopIndex);
     if (!startPoint || !endPoint) {
       console.warn(`Missing connection points for line ${line.id}`);
-      return null;
+      return [];
     }
 
     const rseBetween = collectRseBetween(line, startStop.groupIndex, endStop.groupIndex);
 
-    if (isInvalidJump(startStation, endStation, rseBetween)) {
-      return { kind: 'dashed', node: createDashedLine(startPoint, endPoint, color) };
-    }
-
-    const pathData = buildSegmentPath(
+    // Solid where the RSE chain is continuous; where it breaks, a dashed jump
+    // straight between the two nodes the chain actually splits at, so the line
+    // still traces as much of the real route as the data supports.
+    return buildSegmentPieces(
       line,
       startStop.stop, startStop.groupIndex, startStop.stopIndex,
       endStop.stop,   endStop.groupIndex,   endStop.stopIndex,
       rseBetween, startPoint, endPoint,
     );
-    return { ...bezierPathToSegments(pathData, color), kind: 'normal' };
   }
 
   // Re-appending each line group moves it to the top of its parent's z-order,

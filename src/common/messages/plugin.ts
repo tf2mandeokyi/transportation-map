@@ -34,6 +34,10 @@ export type DisplayEntry =
   | {
       // Direction reversal within a section with no junction RSC.
       kind: 'virtual-uturn';
+    }
+  | {
+      // Section changed between consecutive stops with no junction RSC.
+      kind: 'invalid-jump';
     };
 
 export type PluginToUIMessage =

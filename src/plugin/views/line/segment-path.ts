@@ -5,10 +5,6 @@ import { appendGapCurve } from "../../utils/curves";
 import { PathBuilder } from "../../utils/path";
 import { OffsetT } from "../../utils/offset-t";
 
-export type SegmentResult =
-  | { kind: 'normal'; outline: VectorNode; main: VectorNode }
-  | { kind: 'dashed'; node: VectorNode };
-
 // Total lateral offset from the road centerline for this line on this section.
 export function computeTotalOffset(
   line: Line, section: RoadSection,
@@ -87,6 +83,22 @@ export function computeSectionSegs(
   }
 
   return [computeCrossingSeg(centerline, t1, t2, offsetDep, offsetArr)];
+}
+
+// Point at a section boundary (side 0 or 1), offset laterally by `offset` — using
+// the same unsigned, raw-tangent-perpendicular convention as computeCrossingSeg /
+// computeSectionSegs above. RoadSectionChange.computeStartPosition/computeEndPosition
+// (line-path/rsc.ts) use a DIFFERENT sign convention (flips for side-1/non-start
+// nodes, meant for node-facing UI like RSE handles) and will not line up with actual
+// solid-path geometry — don't substitute those here.
+export function computeBoundaryPoint(section: RoadSection, side: 0 | 1, offset: number): Vector | undefined {
+  const bezier = section.parentRoad.computeBezier();
+  if (!bezier) return undefined;
+  const t = new OffsetT(side, side === 0 ? 'positive' : 'negative');
+  const pos = t.evalBezier(bezier);
+  const tan = t.geometricTangent(bezier);
+  const len = Math.hypot(tan.x, tan.y) || 1;
+  return { x: pos.x + (-tan.y / len) * offset, y: pos.y + (tan.x / len) * offset };
 }
 
 export function appendJunctionCurve(pb: PathBuilder, prev: CubicBezierPoints, next: CubicBezierPoints): void {
