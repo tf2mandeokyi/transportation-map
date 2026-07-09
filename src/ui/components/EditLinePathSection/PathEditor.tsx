@@ -30,7 +30,8 @@ export interface PathEditorHandle {
 }
 
 const PathEditor = forwardRef<PathEditorHandle>((_props, ref) => {
-  const { currentEditingLineId } = useLinesContext();
+  const { lines, currentEditingLineId } = useLinesContext();
+  const currentLineColor = lines.find(l => l.id === currentEditingLineId)?.color;
   const { roads } = useNetworkContext();
   const manager = useMessageManager();
 
@@ -214,6 +215,7 @@ const PathEditor = forwardRef<PathEditorHandle>((_props, ref) => {
             displayEntries={displayEntries}
             linePaths={linePaths}
             inactive={inactive}
+            lineColor={currentLineColor}
             onRemoveStop={handleRemovePath}
             onRemoveRse={handleRemoveRse}
             onSelectStation={(stationId) => postMessageToPlugin({ type: 'select-station', stationId })}

@@ -15,12 +15,29 @@ interface PathItemsListProps {
   onToggleStops: (groupIndex: number, stopIndex: number, stops: boolean) => void;
   onToggleDirection: (groupIndex: number, stopIndex: number, direction: 'ascending' | 'descending') => void;
   onInsertRoad: (after: LinePathAddress, knownStartNodeId?: NodeId | null, requiredEndNodeId?: NodeId | null) => void;
+  lineColor?: string;
 }
+
+// Rail column: a marker sits over a continuous vertical line so the list reads
+// as a timeline — circles for station stops, with plain "|" runs for road-section entries.
+// Line and circle stroke share the line's own color so changing it changes both.
+const FALLBACK_RAIL_COLOR = '#a3a3a3';
+const RAIL_WIDTH = 'w-5';
+const RAIL_LINE_LEFT = 'left-[9px]';
+
+const Row: React.FC<{ marker?: React.ReactNode; children: React.ReactNode; className?: string }> = ({ marker, children, className }) => (
+  <div className={`relative z-10 flex items-center gap-1.5 ${className ?? ''}`}>
+    <div className={`flex ${RAIL_WIDTH} shrink-0 justify-center text-xs leading-none`}>{marker}</div>
+    <div className="min-w-0 flex-1">{children}</div>
+  </div>
+);
 
 const PathItemsList: React.FC<PathItemsListProps> = ({
   displayEntries, linePaths, inactive,
   onRemoveStop, onRemoveRse, onSelectStation, onToggleStops, onToggleDirection, onInsertRoad,
+  lineColor,
 }) => {
+  const railColor = lineColor ?? FALLBACK_RAIL_COLOR;
   const elements: React.ReactNode[] = [];
   // Address of the last RSE or real stop emitted so far — an invalid-jump entry
   // sits right after it (that's exactly where the gap in the underlying data
@@ -46,47 +63,40 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
       const item = rscItems[rscCursor++];
       lastAddress = { groupIndex: item.groupIndex, stopIndex: -1 };
 
-      const roadLineClass = 'overflow-hidden text-ellipsis whitespace-nowrap text-[11px] text-neutral-500';
+      const exitLabel = exitRoadName && (exitSectionLabel ? `${exitRoadName} · ${exitSectionLabel}` : exitRoadName);
+      const enterLabel = enterRoadName && (enterSectionLabel ? `${enterRoadName} · ${enterSectionLabel}` : enterRoadName);
+      const parts = [exitLabel, <strong key="node">{nodeName ?? nodeId}</strong>, enterLabel].filter(p => p !== undefined && p !== null && p !== '');
 
       elements.push(
-        <div
-          key={`rse-${ei}`}
-          className={`my-1 mb-0.5 rounded px-2 py-1.5 ${isUturn ? 'border-l-[3px] border-[#e07800] bg-[#fff8f0]' : 'border-l-[3px] border-[#18a0fb] bg-[#f0f4ff]'}`}
-        >
-          <div className={roadLineClass}>
-            {exitRoadName ?? '—'}{exitSectionLabel && <span className="text-neutral-400"> · {exitSectionLabel}</span>}
-          </div>
-          <div className="my-0.5 flex items-center gap-2">
-            <span className="text-sm">{isUturn ? '↩' : '↪'}</span>
-            <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-medium">
-              {isUturn && 'U-turn at '}<strong>{nodeName ?? nodeId}</strong>
+        <Row key={`rse-${ei}`} className="my-0.5">
+          <div className="flex items-center gap-1 py-0.5">
+            <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-xs">
+              {isUturn && <span className="text-[#e07800]">U-turn </span>}
+              {parts.map((p, i) => <React.Fragment key={i}>{i > 0 && <span className="text-neutral-400"> → </span>}{p}</React.Fragment>)}
             </span>
             {inactive && (
               <Button size="sm" onClick={() => onRemoveRse(item.groupIndex)}>X</Button>
             )}
           </div>
-          <div className={roadLineClass}>
-            {enterRoadName ?? '—'}{enterSectionLabel && <span className="text-neutral-400"> · {enterSectionLabel}</span>}
-          </div>
-        </div>
+        </Row>
       );
     } else if (entry.kind === 'virtual-uturn') {
       elements.push(
-        <div key={`vuturn-${ei}`} className="my-1 mb-0.5 flex items-center gap-2 rounded border-l-[3px] border-[#e07800] bg-[#fff8f0] px-2 py-1.5">
-          <span className="text-sm">↩</span>
-          <span className="flex-1 text-xs font-medium text-[#e07800]">U-turn</span>
-        </div>
+        <Row key={`vuturn-${ei}`} marker={<span className="text-[#e07800]">↩</span>}>
+          <span className="text-xs font-medium text-[#e07800]">U-turn</span>
+        </Row>
       );
     } else if (entry.kind === 'invalid-jump') {
       const address = lastAddress ?? START_ADDRESS;
       elements.push(
-        <div key={`invalid-jump-${ei}`} className="my-1 mb-0.5 flex items-center gap-2 rounded border-l-[3px] border-red-500 bg-red-50 px-2 py-1.5">
-          <span className="text-sm">⚠</span>
-          <span className="flex-1 text-xs font-medium text-red-600">Invalid Jump</span>
-          {inactive && (
-            <Button size="xxs" onClick={() => onInsertRoad(address, entry.fromNodeId, entry.toNodeId)}>↪ Road</Button>
-          )}
-        </div>
+        <Row key={`invalid-jump-${ei}`} marker={<span className="text-red-500">⚠</span>}>
+          <div className="flex items-center gap-2">
+            <span className="flex-1 text-xs font-medium text-red-600">Invalid Jump</span>
+            {inactive && (
+              <Button size="xxs" onClick={() => onInsertRoad(address, entry.fromNodeId, entry.toNodeId)}>↪ Road</Button>
+            )}
+          </div>
+        </Row>
       );
     } else {
       // Traversal: render each station in the order the plugin computed.
@@ -104,10 +114,9 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
           const { groupIndex, stopIndex } = item;
           lastAddress = { groupIndex, stopIndex };
           elements.push(
-            <div key={`stop-${item.flatIndex}`} className="pl-3">
+            <Row key={`stop-${item.flatIndex}`} marker={<span className="h-3 w-3 rounded-full border-2 bg-white" style={{ borderColor: railColor }} />}>
               <StationPathItem
                 name={s.name}
-                index={item.flatIndex}
                 stops={s.stops}
                 direction={dir}
                 onRemove={() => onRemoveStop(groupIndex, stopIndex)}
@@ -115,20 +124,25 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
                 onToggleStops={stops => onToggleStops(groupIndex, stopIndex, stops)}
                 onToggleDirection={() => onToggleDirection(groupIndex, stopIndex, dir === 'ascending' ? 'descending' : 'ascending')}
               />
-            </div>
+            </Row>
           );
         } else {
           elements.push(
-            <div key={`grey-${ei}-${s.stationId}`} className="flex items-center gap-2 py-0.5 pr-2 pl-5">
-              <span className="flex-1 text-[11px] text-neutral-400 italic">{s.name}</span>
-            </div>
+            <Row key={`grey-${ei}-${s.stationId}`} marker={<span className="h-3 w-3 rounded-full border-2 border-neutral-300 bg-white" />}>
+              <span className="text-[11px] text-neutral-400 italic">{s.name}</span>
+            </Row>
           );
         }
       }
     }
   }
 
-  return <div>{elements}</div>;
+  return (
+    <div className="relative">
+      <div className={`pointer-events-none absolute top-1 bottom-1 ${RAIL_LINE_LEFT} border-l-2`} style={{ borderColor: railColor }} />
+      {elements}
+    </div>
+  );
 };
 
 export default PathItemsList;

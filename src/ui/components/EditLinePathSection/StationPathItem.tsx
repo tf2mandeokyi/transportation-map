@@ -3,7 +3,6 @@ import Button from '../common/Button';
 
 export interface StationPathItemProps {
   name: string;
-  index: number;
   stops: boolean;
   direction?: 'ascending' | 'descending';
   onRemove?: () => void;
@@ -13,10 +12,9 @@ export interface StationPathItemProps {
 }
 
 const StationPathItem: React.FC<StationPathItemProps> = ({
-  name, index, stops, direction, onRemove, onSelect, onToggleStops, onToggleDirection,
+  name, stops, direction, onRemove, onSelect, onToggleStops, onToggleDirection,
 }) => (
   <div className="flex items-center gap-2 rounded border border-neutral-200 bg-white px-2 hover:bg-neutral-100">
-    <span className="mr-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#18a0fb] px-1 text-[10px] font-bold text-white">{index + 1}</span>
     {onToggleStops && (
       <input
         type="checkbox"
