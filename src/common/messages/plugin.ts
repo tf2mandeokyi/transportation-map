@@ -38,6 +38,14 @@ export type DisplayEntry =
   | {
       // Section changed between consecutive stops with no junction RSC.
       kind: 'invalid-jump';
+      // The road only has two physical endpoints, so the node we last crossed at
+      // (the prior RSE) pins down exactly which end the gap must start from.
+      fromNodeId: NodeId | null;
+      fromNodeName: string | null;
+      // The node of the next RSE right after the gap, if there is one — the chain
+      // of added roads must reach this node before it can be committed.
+      toNodeId: NodeId | null;
+      toNodeName: string | null;
     };
 
 export type PluginToUIMessage =

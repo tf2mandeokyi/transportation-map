@@ -40,6 +40,7 @@ const PathEditor = forwardRef<PathEditorHandle>((_props, ref) => {
   const [stationSectionIds, setStationSectionIds] = useState<Record<string, RoadSectionId | null>>({});
   const [displayEntries, setDisplayEntries] = useState<DisplayEntry[]>([]);
   const [addingRseAfterPathIndex, setAddingRseAfterPathIndex] = useState<LinePathAddress | null>(null);
+  const [rseNodeConstraints, setRseNodeConstraints] = useState<{ knownStartNodeId: NodeId | null; requiredEndNodeId: NodeId | null }>({ knownStartNodeId: null, requiredEndNodeId: null });
 
   const currentLineIdRef     = useRef(currentEditingLineId);
   const linePathsRef         = useRef<LinePathData[]>(linePaths);
@@ -103,14 +104,16 @@ const PathEditor = forwardRef<PathEditorHandle>((_props, ref) => {
 
   // ─── RSE adding ────────────────────────────────────────────────────────────
 
-  const startRseMode = (after: LinePathAddress) => {
+  const startRseMode = (after: LinePathAddress, knownStartNodeId: NodeId | null = null, requiredEndNodeId: NodeId | null = null) => {
     setAddingRseAfterPathIndex(after);
+    setRseNodeConstraints({ knownStartNodeId, requiredEndNodeId });
     rseSession.open(new AddingRseUISession()).start(manager);
   };
 
   const stopRseMode = () => {
     rseSession.close(s => s.stop());
     setAddingRseAfterPathIndex(null);
+    setRseNodeConstraints({ knownStartNodeId: null, requiredEndNodeId: null });
   };
 
   const commitRses = (
@@ -229,6 +232,8 @@ const PathEditor = forwardRef<PathEditorHandle>((_props, ref) => {
             afterPathIndex={addingRseAfterPathIndex}
             sourceRoadId={src.roadId}
             exitingSectionId={src.sectionId}
+            knownStartNodeId={rseNodeConstraints.knownStartNodeId}
+            requiredEndNodeId={rseNodeConstraints.requiredEndNodeId}
             onCommitRses={commitRses}
             onCancel={stopRseMode}
           />

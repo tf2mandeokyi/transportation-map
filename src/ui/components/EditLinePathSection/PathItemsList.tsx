@@ -1,5 +1,5 @@
 import React from 'react';
-import { StationId } from '@/common/types';
+import { NodeId, StationId } from '@/common/types';
 import { DisplayEntry, LinePathData } from '@/common/messages';
 import { flattenLinePathData, LinePathAddress, START_ADDRESS } from '../../utils/linePathGroups';
 import Button from '../common/Button';
@@ -14,7 +14,7 @@ interface PathItemsListProps {
   onSelectStation: (stationId: StationId) => void;
   onToggleStops: (groupIndex: number, stopIndex: number, stops: boolean) => void;
   onToggleDirection: (groupIndex: number, stopIndex: number, direction: 'ascending' | 'descending') => void;
-  onInsertRoad: (after: LinePathAddress) => void;
+  onInsertRoad: (after: LinePathAddress, knownStartNodeId?: NodeId | null, requiredEndNodeId?: NodeId | null) => void;
 }
 
 const PathItemsList: React.FC<PathItemsListProps> = ({
@@ -84,7 +84,7 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
           <span className="text-sm">⚠</span>
           <span className="flex-1 text-xs font-medium text-red-600">Invalid Jump</span>
           {inactive && (
-            <Button size="xxs" onClick={() => onInsertRoad(address)}>↪ Road</Button>
+            <Button size="xxs" onClick={() => onInsertRoad(address, entry.fromNodeId, entry.toNodeId)}>↪ Road</Button>
           )}
         </div>
       );

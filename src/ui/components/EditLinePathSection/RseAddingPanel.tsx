@@ -10,6 +10,13 @@ interface RseAddingPanelProps {
   afterPathIndex: LinePathAddress;
   sourceRoadId: RoadId | null;
   exitingSectionId: RoadSectionId | null;
+  // When set, the very first crossing is already known (e.g. closing an
+  // invalid-jump gap, where the prior RSE's node pins down the only physical
+  // way to leave the source road) — no need to prompt for it.
+  knownStartNodeId?: NodeId | null;
+  // When set, the added chain must end at this node before it can be
+  // committed (e.g. the node of the RSE right after an invalid-jump gap).
+  requiredEndNodeId?: NodeId | null;
   onCommitRses: (
     afterPathIndex: LinePathAddress,
     entries: Array<{ nodeId: NodeId; exitingSectionId: RoadSectionId | null; enteringSectionId: RoadSectionId | null }>
@@ -64,7 +71,7 @@ function narrowBackward(list: PendingRse[], fromIndex: number, pinnedNodeId: str
 }
 
 const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
-  afterPathIndex, sourceRoadId, exitingSectionId, onCommitRses, onCancel,
+  afterPathIndex, sourceRoadId, exitingSectionId, knownStartNodeId = null, requiredEndNodeId = null, onCommitRses, onCancel,
 }) => {
   const manager = useMessageManager();
   const { roads, nodes } = useNetworkContext();
@@ -101,6 +108,15 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
       return result;
     };
 
+    // For the very first entry, the caller may already know which node it must
+    // cross at (see knownStartNodeId) — narrow straight to it instead of asking,
+    // the same way narrowBackward narrows an entry once a later one pins it down.
+    const applyKnownStart = (options: NodeOption[]): NodeOption[] => {
+      if (list.length !== 0 || !knownStartNodeId) return options;
+      const known = options.find(o => o.nodeId === knownStartNodeId);
+      return known ? [known] : options;
+    };
+
     // Appends the new entry and, if its node came out immediately resolved, narrows
     // any still-ambiguous earlier entries it constrains (see narrowBackward).
     const pushEntry = (entry: Omit<PendingRse, 'originalNodeOptions' | 'nodeAutoResolved'>) => {
@@ -114,7 +130,7 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
     if (list.length === 0 && !sourceRoadId) {
       // Starting a brand-new path: nothing to cross from yet, so just pick which end
       // of the clicked road to start at — no shared-junction requirement.
-      const nodeOptions = uniqueNodeOptions([destRoad.startNodeId, destRoad.endNodeId]);
+      const nodeOptions = applyKnownStart(uniqueNodeOptions([destRoad.startNodeId, destRoad.endNodeId]));
       pushEntry({
         destRoadId,
         destRoadName: destRoad.name,
@@ -130,7 +146,7 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
 
     if (currentRoadId === destRoadId) {
       // U-turn on same road
-      const nodeOptions = uniqueNodeOptions([destRoad.startNodeId, destRoad.endNodeId]);
+      const nodeOptions = applyKnownStart(uniqueNodeOptions([destRoad.startNodeId, destRoad.endNodeId]));
       pushEntry({
         destRoadId,
         destRoadName: destRoad.name,
@@ -162,14 +178,16 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
       return;
     }
 
+    const nodeOptions = applyKnownStart(sharedNodes);
+
     pushEntry({
       destRoadId,
       destRoadName: destRoad.name,
       isUturn: false,
       isStart: false,
-      nodeOptions: sharedNodes,
+      nodeOptions,
       sections: destRoad.sections,
-      selectedNodeId: sharedNodes.length === 1 ? sharedNodes[0].nodeId : '',
+      selectedNodeId: nodeOptions.length === 1 ? nodeOptions[0].nodeId : '',
       selectedSectionIdx,
     });
   };
@@ -217,9 +235,6 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
     onCommitRses(afterPathIndex, entries);
   };
 
-  const canCommit = pendingList.length > 0 &&
-    pendingList.every(e => !!e.selectedNodeId && e.selectedSectionIdx !== '');
-
   // A road only ever has two physical endpoints, no matter how many sections it has —
   // sections are lateral lane bands along the same curve, not sequential stretches of
   // it (see RoadSection.computeOffset). So once the last entry's own entering node is
@@ -233,11 +248,25 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
     ? nodes.find(n => n.id === (lastRoad.startNodeId === lastEntry.selectedNodeId ? lastRoad.endNodeId : lastRoad.startNodeId))
     : undefined;
 
+  // When closing an invalid-jump gap, the chain isn't done just because every entry
+  // is filled in — it has to actually reach the node the existing path resumes at.
+  // impliedNextNode is exactly that "if you kept going straight, you'd land here"
+  // node, so comparing it against requiredEndNodeId catches a chain that's complete
+  // but wanders off to the wrong junction.
+  const reachedRequiredEnd = !requiredEndNodeId || impliedNextNode?.id === requiredEndNodeId;
+
+  const canCommit = pendingList.length > 0 &&
+    pendingList.every(e => !!e.selectedNodeId && e.selectedSectionIdx !== '') &&
+    reachedRequiredEnd;
+
+  const requiredEndNode = requiredEndNodeId ? nodes.find(n => n.id === requiredEndNodeId) : undefined;
+
   return (
     <div className="mt-2 rounded border-2 border-[#18a0fb] bg-neutral-100 p-3">
       <p className="mb-2 text-[11px] text-neutral-500">
         <strong>Adding roads</strong><br />
         Click roads on the canvas. Click the same road to add a U-turn.
+        {requiredEndNode && <> Must reconnect at <strong>{requiredEndNode.name ?? requiredEndNode.id}</strong>.</>}
       </p>
 
       {error && (
@@ -292,7 +321,7 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
       })}
 
       {pendingList.length > 0 && (
-        <div className="flex items-center gap-1.5 rounded border border-dashed border-neutral-300 px-2 py-1.5 text-neutral-400">
+        <div className={`flex items-center gap-1.5 rounded border border-dashed px-2 py-1.5 ${reachedRequiredEnd ? 'border-neutral-300 text-neutral-400' : 'border-red-300 text-red-400'}`}>
           <span className="text-sm">●</span>
           {impliedNextNode ? (
             <span className="flex-1 text-xs font-medium">{impliedNextNode.name ?? impliedNextNode.id}</span>

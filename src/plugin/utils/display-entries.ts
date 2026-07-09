@@ -2,9 +2,20 @@ import { DisplayEntry, DisplayStation } from "@/common/messages";
 import { LinePath, RoadSectionChange, StationStop } from "../models/structures/line-path";
 import { RoadSection } from "../models/structures/road-section";
 import { Station } from "../models/structures/station";
+import { Node } from "../models/structures/node";
 
 function getSorted(section: RoadSection): Station[] {
   return [...section.stations].sort((a, b) => a.interpT.compare(b.interpT));
+}
+
+// A road only ever has two physical endpoints (see RoadSection.computeOffset),
+// so the node opposite the one we're known to have crossed at pins down exactly
+// where travel through `section`'s road must continue toward/from.
+function otherEndpointNode(section: RoadSection, nodeId: Node['id']): Node | null {
+  const [e0, e1] = section.parentRoad.endpoints;
+  if (e0.node?.id === nodeId) return e1.node ?? null;
+  if (e1.node?.id === nodeId) return e0.node ?? null;
+  return null;
 }
 
 function sortedIdx(station: Station, sorted: Station[]): number {
@@ -33,6 +44,11 @@ export function buildDisplayEntries(paths: readonly LinePath[]): DisplayEntry[] 
   // doesn't match where we last were, or a stop that lands on a different
   // section than expected, both mean a road section is missing from the path.
   let currentSection: RoadSection | null = null;
+
+  // The node we last crossed at to arrive at currentSection (only ever set
+  // alongside it, in processRse) — lets an invalid-jump entry report exactly
+  // which node the missing road(s) must start from (see otherEndpointNode).
+  let currentNode: Node | null = null;
 
   // Emit the current traversal group.
   // cutByUturn: true when this traversal is being cut short by a virtual U-turn —
@@ -110,10 +126,18 @@ export function buildDisplayEntries(paths: readonly LinePath[]): DisplayEntry[] 
     // A mismatch means an earlier RSE's entering section was never actually
     // reached — a road section is missing between the two crossings.
     if (currentSection !== null && rse.exiting && rse.exiting.section !== currentSection) {
-      displayEntries.push({ kind: 'invalid-jump' });
+      const fromNode = currentNode ? otherEndpointNode(currentSection, currentNode.id) : null;
+      displayEntries.push({
+        kind: 'invalid-jump',
+        fromNodeId: fromNode?.id ?? null,
+        fromNodeName: fromNode?.name ?? null,
+        toNodeId: rse.node.id,
+        toNodeName: rse.node.name ?? null,
+      });
       prevLastSortedIdx = null;
     }
     currentSection = rse.entering ? rse.entering.section : null;
+    currentNode    = rse.entering ? rse.node : null;
 
     const isUturn = !!(rse.exiting && rse.exiting.section === rse.entering?.section);
     displayEntries.push({
@@ -138,7 +162,14 @@ export function buildDisplayEntries(paths: readonly LinePath[]): DisplayEntry[] 
       // with no RSE in between — invalid data; flush and surface it so the
       // UI can offer a fix (inserting the missing road section here).
       emitTraversal();
-      displayEntries.push({ kind: 'invalid-jump' });
+      const fromNode = currentNode ? otherEndpointNode(currentSection, currentNode.id) : null;
+      displayEntries.push({
+        kind: 'invalid-jump',
+        fromNodeId: fromNode?.id ?? null,
+        fromNodeName: fromNode?.name ?? null,
+        toNodeId: null,
+        toNodeName: null,
+      });
       prevLastSortedIdx = null;
     } else if (travDir !== null && travSection === section && travDir !== dir) {
       // Direction reversal on the same section without an RSC = virtual U-turn.
