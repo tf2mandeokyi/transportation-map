@@ -53,6 +53,7 @@ export class NetworkController extends BaseController {
         if (node) node.updatePassRanks(patch.changes);
         if (node) await this.emitNodeLinesData(node);
         await this.render();
+        this.reselectNode(nodeId);
         await this.save();
         break;
     }
@@ -97,6 +98,7 @@ export class NetworkController extends BaseController {
           }
         }
         await this.render();
+        this.reselectRoad(roadId);
         if (road) await this.emitRoadLinesData(road);
         break;
       }
@@ -164,6 +166,11 @@ export class NetworkController extends BaseController {
 
   public async handleSelectionChange(): Promise<void> {
     if (this.roadPlacing.isActive) return;
+    // A full render() removes and recreates the junction/marker/road-path nodes,
+    // which drops whatever was selected on canvas and fires a spurious
+    // selectionchange with an empty selection. Ignore selection changes while our
+    // own render is in flight so that doesn't get misread as the user deselecting.
+    if (this.view.isRendering) return;
 
     const selection = figma.currentPage.selection;
     const first = selection[0];
@@ -349,6 +356,22 @@ export class NetworkController extends BaseController {
       try { await this.render(); await this.save(); } finally { this.isRendering = false; }
     }
     postMessageToUI({ type: 'network-selection-cleared' });
+  }
+
+  // Re-selects the freshly-rendered figma node for a road/node after a render()
+  // that just destroyed and recreated it, so the canvas selection (and thus the
+  // road/node control overlay, via the normal selectionchange flow) comes back
+  // instead of staying empty.
+  private reselectRoad(roadId: RoadId): void {
+    const target = figma.currentPage.children.find(c =>
+      c.getPluginData(FIGMA_KEY_ROAD_ID) === roadId && c.getPluginData(FIGMA_KEY_IS_ROAD_CONTROL) !== 'true'
+    );
+    if (target) figma.currentPage.selection = [target as SceneNode];
+  }
+
+  private reselectNode(nodeId: NodeId): void {
+    const target = figma.currentPage.children.find(c => c.getPluginData(FIGMA_KEY_NODE_ID) === nodeId);
+    if (target) figma.currentPage.selection = [target as SceneNode];
   }
 
   private buildNodeElement(nodeId: NodeId): NetworkFocusedElement {
