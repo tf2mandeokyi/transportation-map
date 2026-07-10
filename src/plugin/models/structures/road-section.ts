@@ -63,12 +63,18 @@ export class RoadSection extends TransportationMapObject<SectionId> {
   }
 
   getMaxStationStopCount(): number {
-    if (this.stations.length === 0) return 0;
     // Every entry — real stop or pass-through shadow — is a distinct directed pass and
     // needs its own lane slot. A U-turn's pivot station duplicates itself this way (see
     // line-validator.ts), so counting only `stops: true` entries would under-reserve
     // width for the reversed direction's pass.
-    return Math.max(...this.stations.map(s => s.getLinePasses().length));
+    if (this.stations.length > 0) {
+      return Math.max(...this.stations.map(s => s.getLinePasses().length));
+    }
+    // A section with no stations still needs width for lines passing straight through it —
+    // every line's directed runs on this section each need their own lane slot.
+    let total = 0;
+    for (const line of this.mapState.getLines()) total += line.countPassesOnSection(this);
+    return total;
   }
 
   getWidth(): number {
