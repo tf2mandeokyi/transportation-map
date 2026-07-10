@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { LineAtNodeData, NetworkFocusedElement, NodeData, RoadCreationSnap, RoadData } from '@/common/messages';
+import { LineAtNodeData, LineAtRoadSectionData, NetworkFocusedElement, NodeData, RoadCreationSnap, RoadData } from '@/common/messages';
 import { useMessageManager } from './MessageContext';
 import { AddingRoadUISession } from '../sessions/adding-road';
 import { useUISession } from '../sessions/useUISession';
@@ -14,6 +14,7 @@ interface NetworkContextValue {
   roads: RoadData[];
   networkFocus: NetworkFocusedElement | null;
   nodeLinesData: LineAtNodeData[];
+  roadLinesData: LineAtRoadSectionData[];
   isAddingRoad: boolean;
   roadSnapState: RoadSnapState;
   roadSnapModeEnabled: boolean;
@@ -33,6 +34,7 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [roads, setRoads] = useState<RoadData[]>([]);
   const [networkFocus, setNetworkFocus] = useState<NetworkFocusedElement | null>(null);
   const [nodeLinesData, setNodeLinesData] = useState<LineAtNodeData[]>([]);
+  const [roadLinesData, setRoadLinesData] = useState<LineAtRoadSectionData[]>([]);
   const [isAddingRoad, setIsAddingRoad] = useState(false);
   const [roadSnapState, setRoadSnapState] = useState<RoadSnapState>(null);
   const [roadSnapModeEnabled, setRoadSnapModeEnabled] = useState(true);
@@ -58,7 +60,10 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const unsub6 = manager.onMessage('node-lines-data', msg => {
       setNodeLinesData(msg.lines);
     });
-    return () => { unsub1(); unsub2(); unsub3(); unsub4(); unsub5(); unsub6(); };
+    const unsub7 = manager.onMessage('road-lines-data', msg => {
+      setRoadLinesData(msg.lines);
+    });
+    return () => { unsub1(); unsub2(); unsub3(); unsub4(); unsub5(); unsub6(); unsub7(); };
   }, [manager]);
 
   const handleStartRoadCreation = useCallback(() => {
@@ -87,7 +92,7 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   return (
     <NetworkContext.Provider value={{
-      nodes, roads, networkFocus, nodeLinesData,
+      nodes, roads, networkFocus, nodeLinesData, roadLinesData,
       isAddingRoad, roadSnapState, roadSnapModeEnabled,
       handleStartRoadCreation, handleConfirmRoadCreation, handleCancelRoadCreation, handleSetRoadSnapMode,
     }}>

@@ -1,8 +1,8 @@
 import { NodeId, RoadId, RoadSectionId, SectionId } from "@/common/types";
-import { LineAtNodeData, NetworkFocusedElement, NodeData, NodePatch, RoadData, RoadPatch, RoadSectionData } from "@/common/messages";
+import { LineAtNodeData, LineAtRoadSectionData, NetworkFocusedElement, NodeData, NodePatch, RoadData, RoadPatch, RoadSectionData } from "@/common/messages";
 import { PluginSessionManager } from "../../sessions/manager";
 import { postMessageToUI } from "../../figma";
-import { Node, RoadSectionPass } from "../../models/structures";
+import { Line, Node, Road, RoadSectionPass } from "../../models/structures";
 import { Model } from "../../models";
 import { View } from "../../views";
 import { BaseController } from "../base";
@@ -82,6 +82,22 @@ export class NetworkController extends BaseController {
       case 'remove-section': {
         const section = road?.hasSection(patch.sectionId[1]) ? road.getSectionHarsh(patch.sectionId[1]) : undefined;
         if (section) this.model.removeRoadSection(section);
+        break;
+      }
+      case 'update-section-ranks': {
+        const section = road?.hasSection(patch.sectionId[1]) ? road.getSectionHarsh(patch.sectionId[1]) : undefined;
+        if (section) {
+          for (const change of patch.changes) {
+            const line = this.model.state.getLine(change.lineId);
+            const pass = line?.paths[change.passIndex];
+            if (pass && pass.section === section) {
+              if (change.end === 'from') pass.fromRank = change.rank;
+              else pass.toRank = change.rank;
+            }
+          }
+        }
+        await this.render();
+        if (road) await this.emitRoadLinesData(road);
         break;
       }
     }
@@ -192,6 +208,8 @@ export class NetworkController extends BaseController {
       await this.nodeControl.remove();
       await this.roadControl.activate(roadId);
       postMessageToUI({ type: 'network-element-focused', element: this.buildRoadElement(roadId) });
+      const road = this.model.state.getRoad(roadId);
+      if (road) await this.emitRoadLinesData(road);
       return;
     }
 
@@ -392,6 +410,51 @@ export class NetworkController extends BaseController {
       }
     }
     postMessageToUI({ type: 'node-lines-data', nodeId: node.id, lines });
+  }
+
+  // The road-panel analog of emitNodeLinesData: for every section on the road, group
+  // each line's pass by which physical side (0/1) of that section it touches, and
+  // renumber the stacking rank within each (section, side) group.
+  public async emitRoadLinesData(road: Road): Promise<void> {
+    type SideEntry = { line: Line; pass: RoadSectionPass; end: 'from' | 'to'; rank: number; passIndex: number; sectionId: RoadSectionId; side: 0 | 1 };
+    const sideGroups = new Map<string, SideEntry[]>();
+    for (const section of road.getSections()) {
+      const sectionId = section.getRoadSectionId();
+      for (const line of this.model.state.getLines()) {
+        for (const [passIndex, pass] of line.paths.entries()) {
+          if (pass.section !== section) continue;
+          const fromSide: 0 | 1 = pass.direction === 'ascending' ? 0 : 1;
+          const toSide: 0 | 1 = fromSide === 0 ? 1 : 0;
+          for (const [end, side] of [['from', fromSide], ['to', toSide]] as const) {
+            const key = `${sectionId.join(':')}:${side}`;
+            const g = sideGroups.get(key) ?? [];
+            g.push({ line, pass, end, rank: end === 'from' ? pass.fromRank : pass.toRank, passIndex, sectionId, side });
+            sideGroups.set(key, g);
+          }
+        }
+      }
+    }
+
+    let changed = false;
+    const lines: LineAtRoadSectionData[] = [];
+    for (const group of sideGroups.values()) {
+      group.sort((a, b) => {
+        if (a.rank !== b.rank) return a.rank - b.rank;
+        if (a.line.id !== b.line.id) return a.line.id < b.line.id ? -1 : 1;
+        return a.passIndex - b.passIndex;
+      });
+      group.forEach((item, i) => {
+        if (item.end === 'from' && item.pass.fromRank !== i) { item.pass.fromRank = i; changed = true; }
+        if (item.end === 'to' && item.pass.toRank !== i) { item.pass.toRank = i; changed = true; }
+        lines.push({
+          lineId: item.line.id, lineName: item.line.name, lineColor: item.line.color,
+          sectionId: item.sectionId, side: item.side, end: item.end, passIndex: item.passIndex, rank: i,
+        });
+      });
+    }
+
+    if (changed) await this.save();
+    postMessageToUI({ type: 'road-lines-data', roadId: road.id, lines });
   }
 
   private buildRoadElement(roadId: RoadId): NetworkFocusedElement {

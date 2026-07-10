@@ -1,7 +1,7 @@
 import { LineId, NodeId, RoadId, RoadSectionId, StationId } from "../types";
 import { StationParams, LineAtStationData } from "./station";
 import { LineData, RoadSectionPassData } from "./line";
-import { LineAtNodeData, NodeData, RoadData, NetworkFocusedElement } from "./network";
+import { LineAtNodeData, LineAtRoadSectionData, NodeData, RoadData, NetworkFocusedElement } from "./network";
 
 // Where a road-creation endpoint handle currently resolves to, for the UI's live label.
 export type RoadCreationSnap =
@@ -62,4 +62,5 @@ export type PluginToUIMessage =
   | { type: 'road-creation-exited' }
   | { type: 'road-clicked'; roadId: RoadId; sectionId: RoadSectionId | null }
   | { type: 'node-lines-data'; nodeId: NodeId; lines: LineAtNodeData[] }
+  | { type: 'road-lines-data'; roadId: RoadId; lines: LineAtRoadSectionData[] }
   | { type: 'map-data'; data: string };

@@ -23,13 +23,27 @@ export type LineAtNodeData = {
   enterRank: number;
 };
 
+// A line's stacking rank on one physical side (0/1, matching the road's endpoints)
+// of one section — the road-panel analog of LineAtNodeData's exit/enter arms.
+export type LineAtRoadSectionData = {
+  lineId: LineId;
+  lineName: string;
+  lineColor: string;
+  sectionId: RoadSectionId;
+  side: 0 | 1;
+  end: 'from' | 'to';
+  passIndex: number;
+  rank: number;
+};
+
 export type NodePatch =
   | { op: 'update-name'; name: string | undefined }
   | { op: 'update-pass-ranks'; changes: Array<{ lineId: LineId; passIndex: number; end: 'from' | 'to'; rank: number }> };
 
 export type RoadPatch =
   | { op: 'add-section'; section: { name?: string; index: number } }
-  | { op: 'remove-section'; sectionId: RoadSectionId };
+  | { op: 'remove-section'; sectionId: RoadSectionId }
+  | { op: 'update-section-ranks'; sectionId: RoadSectionId; side: 0 | 1; changes: Array<{ lineId: LineId; passIndex: number; end: 'from' | 'to'; rank: number }> };
 
 export type UIToPluginNetworkMessage =
   | { type: 'remove-node'; nodeId: NodeId }
