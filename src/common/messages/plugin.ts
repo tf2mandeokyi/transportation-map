@@ -1,6 +1,6 @@
 import { LineId, NodeId, RoadId, RoadSectionId, StationId } from "../types";
 import { StationParams, LineAtStationData } from "./station";
-import { LineData, LinePathData } from "./line";
+import { LineData, RoadSectionPassData } from "./line";
 import { LineAtNodeData, NodeData, RoadData, NetworkFocusedElement } from "./network";
 
 // Where a road-creation endpoint handle currently resolves to, for the UI's live label.
@@ -13,18 +13,22 @@ export type DisplayStation = {
   stationId: StationId;
   name: string;
   stops: boolean;    // whether the line stops here (vs pass-through)
+  passIndex: number; // self-describing address — which pass this station belongs to
 };
 
 export type DisplayEntry =
   | {
-      kind: 'rse';
+      // The junction between two adjacent passes (or before-the-first/after-the-last
+      // pass, uniformly — every pass boundary is a real node now, never dangling).
+      kind: 'boundary';
+      boundaryIndex: number;
       isUturn: boolean;
-      nodeId: NodeId;
+      nodeId: NodeId | null;
       nodeName: string | null;
-      exitRoadName: string | null;
-      enterRoadName: string | null;
-      exitSectionLabel: string | null;
-      enterSectionLabel: string | null;
+      fromRoadName: string | null;
+      toRoadName: string | null;
+      fromSectionLabel: string | null;
+      toSectionLabel: string | null;
     }
   | {
       kind: 'traversal';
@@ -32,18 +36,15 @@ export type DisplayEntry =
       stations: DisplayStation[];
     }
   | {
-      // Direction reversal within a section with no junction RSC.
-      kind: 'virtual-uturn';
-    }
-  | {
-      // Section changed between consecutive stops with no junction RSC.
+      // Adjacent passes don't connect (pass[i].toNode !== pass[i+1].fromNode) — missing road data.
       kind: 'invalid-jump';
-      // The road only has two physical endpoints, so the node we last crossed at
-      // (the prior RSE) pins down exactly which end the gap must start from.
+      boundaryIndex: number;
+      // The road only has two physical endpoints, so the node the prior pass ends at
+      // pins down exactly which end the gap must start from.
       fromNodeId: NodeId | null;
       fromNodeName: string | null;
-      // The node of the next RSE right after the gap, if there is one — the chain
-      // of added roads must reach this node before it can be committed.
+      // The node the next pass starts at, if there is one — the chain of added
+      // passes must reach this node before it can be committed.
       toNodeId: NodeId | null;
       toNodeName: string | null;
     };
@@ -52,7 +53,7 @@ export type PluginToUIMessage =
   | { type: 'session-created'; sessionId: string }
   | { type: 'station-clicked'; stationId: StationId; station: StationParams; lines: Array<LineAtStationData> }
   | ({ type: 'line-added' } & LineData)
-  | { type: 'line-path-data'; lineId: LineId; paths: LinePathData[]; stationNames: Record<StationId, string>; stationRoadIds: Record<StationId, RoadId | null>; stationSectionIds: Record<StationId, RoadSectionId | null>; displayEntries: DisplayEntry[] }
+  | { type: 'line-path-data'; lineId: LineId; paths: RoadSectionPassData[]; stationNames: Record<StationId, string>; stationRoadIds: Record<StationId, RoadId | null>; stationSectionIds: Record<StationId, RoadSectionId | null>; displayEntries: DisplayEntry[] }
   | { type: 'station-removed-from-line' }
   | { type: 'network-data'; nodes: NodeData[]; roads: RoadData[] }
   | { type: 'network-element-focused'; element: NetworkFocusedElement }

@@ -1,197 +1,57 @@
-import { DisplayEntry, DisplayStation } from "@/common/messages";
-import { LinePath, RoadSectionChange, StationStop } from "../models/structures/line-path";
-import { RoadSection } from "../models/structures/road-section";
-import { Station } from "../models/structures/station";
+import { DisplayEntry } from "@/common/messages";
+import { RoadSectionPass } from "../models/structures/line-path";
 import { Node } from "../models/structures/node";
 
-function getSorted(section: RoadSection): Station[] {
-  return [...section.stations].sort((a, b) => a.interpT.compare(b.interpT));
-}
-
-// A road only ever has two physical endpoints (see RoadSection.computeOffset),
-// so the node opposite the one we're known to have crossed at pins down exactly
-// where travel through `section`'s road must continue toward/from.
-function otherEndpointNode(section: RoadSection, nodeId: Node['id']): Node | null {
-  const [e0, e1] = section.parentRoad.endpoints;
-  if (e0.node?.id === nodeId) return e1.node ?? null;
-  if (e1.node?.id === nodeId) return e0.node ?? null;
-  return null;
-}
-
-function sortedIdx(station: Station, sorted: Station[]): number {
-  return sorted.findIndex(s => s === station);
-}
-
-export function buildDisplayEntries(paths: readonly LinePath[]): DisplayEntry[] {
-  const displayEntries: DisplayEntry[] = [];
-  let prevLastSortedIdx: number | null = null;
-
-  // Set to true right after a virtual U-turn; consumed by the *next* emitTraversal
-  // call so the group starting after the U-turn is padded all the way out to the
-  // section's far boundary — symmetric with extendToSi padding the group before
-  // it out to the same boundary. This shows the full section extent (greyed)
-  // receding from view on both sides of every U-turn, not just the pivot station.
-  let pendingStartExtend = false;
-
-  // Current traversal accumulator — all stops share one direction and section.
-  let travStops: StationStop[] = [];
-  let travSection: RoadSection | null = null;
-  let travDir: 'ascending' | 'descending' | null = null;
-
-  // The road section we're physically standing in after the last processed RSE
-  // or stop — tracked independently of travSection (which resets on every
-  // flush). Used purely to detect discontinuities: an RSE whose exiting side
-  // doesn't match where we last were, or a stop that lands on a different
-  // section than expected, both mean a road section is missing from the path.
-  let currentSection: RoadSection | null = null;
-
-  // The node we last crossed at to arrive at currentSection (only ever set
-  // alongside it, in processRse) — lets an invalid-jump entry report exactly
-  // which node the missing road(s) must start from (see otherEndpointNode).
-  let currentNode: Node | null = null;
-
-  // Emit the current traversal group.
-  // cutByUturn: true when this traversal is being cut short by a virtual U-turn —
-  // the whole remaining section extent (down to the far boundary) is padded in as
-  // greyed stations, showing the line physically receding toward the reversal point
-  // even past whatever station triggered it.
-  const emitTraversal = (cutByUturn: boolean = false) => {
-    if (travStops.length === 0 || travSection === null || travDir === null) return;
-
-    const section = travSection;
-    const dir = travDir;
-    const sorted = getSorted(section);
-
-    const stopsWithIdx = travStops.map(stop => ({
-      stop,
-      si: sortedIdx(stop.station, sorted),
-    }));
-    stopsWithIdx.sort((a, b) => dir === 'ascending' ? a.si - b.si : b.si - a.si);
-
-    const firstSi = stopsWithIdx[0].si;
-    const lastSi  = stopsWithIdx[stopsWithIdx.length - 1].si;
-
-    const startExtend = pendingStartExtend;
-    pendingStartExtend = false;
-
-    let lo: number, hi: number;
-    if (dir === 'ascending') {
-      lo = firstSi;
-      if (prevLastSortedIdx !== null) lo = Math.min(lo, prevLastSortedIdx);
-      // Pad all the way down to the section's start (mirrors the U-turn on the other side).
-      if (startExtend) lo = 0;
-      hi = lastSi;
-      // Pad all the way up to the section's end, toward the reversal point.
-      if (cutByUturn) hi = sorted.length - 1;
-    } else {
-      hi = firstSi;
-      if (prevLastSortedIdx !== null) hi = Math.max(hi, prevLastSortedIdx);
-      // Pad all the way up to the section's end (mirrors the U-turn on the other side).
-      if (startExtend) hi = sorted.length - 1;
-      lo = lastSi;
-      // Pad all the way down to the section's start, toward the reversal point.
-      if (cutByUturn) lo = 0;
-    }
-
-    const stopMap = new Map<Station, boolean>();
-    for (const stop of travStops) stopMap.set(stop.station, stop.stops);
-
-    const indices = dir === 'ascending'
-      ? Array.from({ length: hi - lo + 1 }, (_, k) => lo + k)
-      : Array.from({ length: hi - lo + 1 }, (_, k) => hi - k);
-
-    const stations: DisplayStation[] = [];
-    for (const i of indices) {
-      const st = sorted[i];
-      if (!st) continue;
-      stations.push({
-        stationId: st.id,
-        name: st.name,
-        stops: stopMap.get(st) ?? false,
-      });
-    }
-
-    if (stations.length > 0) displayEntries.push({ kind: 'traversal', direction: dir, stations });
-    prevLastSortedIdx = lastSi;
-
-    travStops   = [];
-    travSection = null;
-    travDir     = null;
+// The boundary between `fromPass` and `toPass` (either may be null, at the true start
+// or end of the path — no longer a special case, just an entry with nothing on that
+// side). isUturn is a same-section adjacency, replacing the old RSC.isUturn flag.
+function boundaryEntry(boundaryIndex: number, fromPass: RoadSectionPass | null, toPass: RoadSectionPass | null): DisplayEntry {
+  const node: Node | null = fromPass ? fromPass.toNode : toPass ? toPass.fromNode : null;
+  const isUturn = !!(fromPass && toPass && fromPass.section === toPass.section);
+  return {
+    kind: 'boundary',
+    boundaryIndex,
+    isUturn,
+    nodeId: node?.id ?? null,
+    nodeName: node?.name ?? null,
+    fromRoadName: fromPass?.section.parentRoad.name ?? null,
+    toRoadName: toPass?.section.parentRoad.name ?? null,
+    fromSectionLabel: fromPass ? (fromPass.section.name ?? `section #${fromPass.section.id}`) : null,
+    toSectionLabel: toPass ? (toPass.section.name ?? `section #${toPass.section.id}`) : null,
   };
+}
 
-  const processRse = (rse: RoadSectionChange) => {
-    emitTraversal(); // no look-ahead extension at explicit RSE boundaries
+export function buildDisplayEntries(passes: readonly RoadSectionPass[]): DisplayEntry[] {
+  const entries: DisplayEntry[] = [];
 
-    // The exiting side should always be the section we were last standing in.
-    // A mismatch means an earlier RSE's entering section was never actually
-    // reached — a road section is missing between the two crossings.
-    if (currentSection !== null && rse.exiting && rse.exiting.section !== currentSection) {
-      const fromNode = currentNode ? otherEndpointNode(currentSection, currentNode.id) : null;
-      displayEntries.push({
-        kind: 'invalid-jump',
-        fromNodeId: fromNode?.id ?? null,
-        fromNodeName: fromNode?.name ?? null,
-        toNodeId: rse.node.id,
-        toNodeName: rse.node.name ?? null,
-      });
-      prevLastSortedIdx = null;
-    }
-    currentSection = rse.entering ? rse.entering.section : null;
-    currentNode    = rse.entering ? rse.node : null;
+  passes.forEach((pass, i) => {
+    if (i === 0) entries.push(boundaryEntry(0, null, pass));
 
-    const isUturn = !!(rse.exiting && rse.exiting.section === rse.entering?.section);
-    displayEntries.push({
-      kind: 'rse',
-      isUturn,
-      nodeId: rse.node.id,
-      nodeName: rse.node.name ?? null,
-      exitRoadName:  rse.exiting?.section.parentRoad.name  ?? null,
-      enterRoadName: rse.entering?.section.parentRoad.name ?? null,
-      exitSectionLabel:  rse.exiting  ? (rse.exiting.section.name  ?? `section #${rse.exiting.section.id}`)  : null,
-      enterSectionLabel: rse.entering ? (rse.entering.section.name ?? `section #${rse.entering.section.id}`) : null,
+    entries.push({
+      kind: 'traversal',
+      direction: pass.direction,
+      stations: pass.stops.map(s => ({ stationId: s.station.id, name: s.station.name, stops: s.stops, passIndex: i })),
     });
-    if (!isUturn) prevLastSortedIdx = null;
-  };
 
-  const processStop = (stop: StationStop) => {
-    const section = stop.station.parentRoadSection;
-    const dir     = stop.direction;
-
-    if (currentSection !== null && currentSection !== section) {
-      // Stop lands on a different section than the last RSE/stop left us in,
-      // with no RSE in between — invalid data; flush and surface it so the
-      // UI can offer a fix (inserting the missing road section here).
-      emitTraversal();
-      const fromNode = currentNode ? otherEndpointNode(currentSection, currentNode.id) : null;
-      displayEntries.push({
-        kind: 'invalid-jump',
-        fromNodeId: fromNode?.id ?? null,
-        fromNodeName: fromNode?.name ?? null,
-        toNodeId: null,
-        toNodeName: null,
-      });
-      prevLastSortedIdx = null;
-    } else if (travDir !== null && travSection === section && travDir !== dir) {
-      // Direction reversal on the same section without an RSC = virtual U-turn.
-      // Pad the segment on both sides out to the section's boundary as greyed
-      // pass-throughs, showing the line physically receding toward the reversal point.
-      emitTraversal(true);
-      displayEntries.push({ kind: 'virtual-uturn' });
-      pendingStartExtend = true;
-      // prevLastSortedIdx is preserved through the virtual U-turn (set by emitTraversal).
+    const next = passes[i + 1];
+    if (next) {
+      // Adjacent passes don't connect — missing road data between them.
+      if (pass.toNode !== next.fromNode) {
+        entries.push({
+          kind: 'invalid-jump',
+          boundaryIndex: i + 1,
+          fromNodeId: pass.toNode.id,
+          fromNodeName: pass.toNode.name ?? null,
+          toNodeId: next.fromNode.id,
+          toNodeName: next.fromNode.name ?? null,
+        });
+      } else {
+        entries.push(boundaryEntry(i + 1, pass, next));
+      }
+    } else {
+      entries.push(boundaryEntry(passes.length, pass, null));
     }
+  });
 
-    currentSection = section;
-    travSection    = section;
-    travDir        = dir;
-    travStops.push(stop);
-  };
-
-  for (const group of paths) {
-    if (group.fromRoadSectionChange) processRse(group.fromRoadSectionChange);
-    for (const stop of group.stationStops) processStop(stop);
-  }
-
-  emitTraversal();
-  return displayEntries;
+  return entries;
 }

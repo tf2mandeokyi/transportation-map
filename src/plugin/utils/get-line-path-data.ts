@@ -17,8 +17,8 @@ export function getLinePathData(state: Readonly<MapState>, lineId: LineId): Omit
   const stationRoadIds: Record<StationId, RoadId | null> = {};
   const stationSectionIds: Record<StationId, RoadSectionId | null> = {};
 
-  for (const group of line.paths) {
-    for (const stop of group.stationStops) {
+  for (const pass of line.paths) {
+    for (const stop of pass.stops) {
       const station = stop.station;
       stationNames[station.id] = station.name;
       stationRoadIds[station.id] = station.parentRoadSection?.parentRoad?.id ?? null;

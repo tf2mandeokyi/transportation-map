@@ -30,13 +30,13 @@ async function main() {
     await controller.refresh();
   } else {
     console.log("Creating demo map");
-    await createDemoMap(controller, model);
+    await createDemoMap(model);
     await controller.refresh();
     figma.viewport.scrollAndZoomIntoView(figma.currentPage.children);
   }
 }
 
-async function createDemoMap(controller: Controller, model: Model) {
+async function createDemoMap(model: Model) {
   const n1Pos = { x: 100, y: 300 };
   const n2Pos = { x: 400, y: 300 };
   const n3Pos = { x: 700, y: 300 };
@@ -92,14 +92,28 @@ async function createDemoMap(controller: Controller, model: Model) {
   const redLine = model.addLine({ name: 'Red Line', color: '#ff0000', isCircular: false, paths: [] });
   const blueLine = model.addLine({ name: 'Blue Line', color: '#0000ff', isCircular: false, paths: [] });
 
-  // Red line: West → Central → North
-  controller.connectStationsWithLine(redLine.id, sWest, sCentral);
-  controller.connectStationsWithLine(redLine.id, sCentral, sNorth);
+  // Red line: West → Central (sec1, ascending n1→n2) → North (sec3, ascending n2→n4)
+  redLine.replacePaths([
+    { sectionId: sec1.getRoadSectionId(), direction: 'ascending', fromRank: 0, toRank: 0, stops: [
+      { stationId: sWest.id, rank: 0, stops: true },
+      { stationId: sCentral.id, rank: 0, stops: true },
+    ] },
+    { sectionId: sec3.getRoadSectionId(), direction: 'ascending', fromRank: 0, toRank: 0, stops: [
+      { stationId: sNorth.id, rank: 0, stops: true },
+    ] },
+  ]);
 
-  // Blue line: West → Central → Mid → East
-  controller.connectStationsWithLine(blueLine.id, sWest, sCentral);
-  controller.connectStationsWithLine(blueLine.id, sCentral, sMid);
-  controller.connectStationsWithLine(blueLine.id, sMid, sEast);
+  // Blue line: West → Central (sec1, ascending n1→n2) → Mid → East (sec2, ascending n2→n3)
+  blueLine.replacePaths([
+    { sectionId: sec1.getRoadSectionId(), direction: 'ascending', fromRank: 0, toRank: 0, stops: [
+      { stationId: sWest.id, rank: 0, stops: true },
+      { stationId: sCentral.id, rank: 0, stops: true },
+    ] },
+    { sectionId: sec2.getRoadSectionId(), direction: 'ascending', fromRank: 0, toRank: 0, stops: [
+      { stationId: sMid.id, rank: 0, stops: true },
+      { stationId: sEast.id, rank: 0, stops: true },
+    ] },
+  ]);
 }
 
 main();

@@ -115,8 +115,8 @@ export function simulateStationClick() {
     stationId: stationId('station-1'),
     station: { name: 'Sample Station', textAlign: 'right', textHAlign: 'left', textRotation: 0, flipped: false },
     lines: [
-      { id: lineId('line-1'), name: 'Red Line', color: '#e63946', groupIndex: 0, stopIndex: 0, rank: 0, facing: 'left', stops: true },
-      { id: lineId('line-2'), name: 'Blue Line', color: '#1d3557', groupIndex: 0, stopIndex: 1, rank: 1, facing: 'right', stops: false },
+      { id: lineId('line-1'), name: 'Red Line', color: '#e63946', passIndex: 0, rank: 0, facing: 'left', stops: true },
+      { id: lineId('line-2'), name: 'Blue Line', color: '#1d3557', passIndex: 0, rank: 1, facing: 'right', stops: false },
     ],
   });
 }
@@ -127,7 +127,7 @@ export function simulateNodeFocus() {
     type: 'node-lines-data',
     nodeId: nodeId('node-1'),
     lines: [
-      { lineId: lineId('line-1'), lineName: 'Red Line', lineColor: '#e63946', groupIndex: 0, exitingSectionId: sectionId('road-1', 'section-1'), enteringSectionId: sectionId('road-2', 'section-2'), exitRank: 0, enterRank: 0 },
+      { lineId: lineId('line-1'), lineName: 'Red Line', lineColor: '#e63946', exitingPassIndex: 0, enteringPassIndex: 1, exitingSectionId: sectionId('road-1', 'section-1'), enteringSectionId: sectionId('road-2', 'section-2'), exitRank: 0, enterRank: 0 },
     ],
   });
 }

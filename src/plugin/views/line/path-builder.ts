@@ -1,52 +1,41 @@
-import { Line, Road, RoadSection, RoadSectionChange, Station, StationStop } from "../../models/structures";
+import { Line, PassStop, Road, RoadSection, RoadSectionPass, Station } from "../../models/structures";
 import { CubicBezierPoints } from "../../utils/bezier";
 import { PathBuilder } from "../../utils/path";
 import { OffsetT } from "../../utils/offset-t";
-import { appendJunctionCurve, computeBoundaryPoint, computeCrossingSeg, computeSectionSegs, computeTotalOffset } from "./segment-path";
+import { appendJunctionCurve, computeSectionSegs, computeTotalOffset } from "./segment-path";
 
-// Indices (0-based, into the n+1 traversals implied by rseBetween — see buildTraversals)
-// of traversals whose geometry is fabricated: the RSE chain doesn't actually
-// connect through them, so a road section is missing between two crossings even
-// though RSEs exist on both sides of the gap. Traversal j spans boundary[j] to
-// boundary[j+1], where boundary[0] is the start station, boundary[n+1] is the end
-// station, and boundary[k] for 1<=k<=n is rseBetween[k-1].node.
-function findBreaks(
-  startSection: RoadSection,
-  rseBetween: RoadSectionChange[],
-  endSection: RoadSection,
-): Set<number> {
-  const breaks = new Set<number>();
-  let currentSection: RoadSection | null = startSection;
-  rseBetween.forEach((rsc, i) => {
-    if (currentSection !== null && rsc.exiting && rsc.exiting.section !== currentSection) breaks.add(i);
-    currentSection = rsc.entering ? rsc.entering.section : null;
-  });
-  if (currentSection !== null && currentSection !== endSection) breaks.add(rseBetween.length);
-  return breaks;
+function depOffset(station: Station, direction: 'ascending' | 'descending'): OffsetT {
+  return station.interpT.withBias(direction === 'ascending' ? 'positive' : 'negative');
 }
 
+function arrOffset(station: Station, direction: 'ascending' | 'descending'): OffsetT {
+  return station.interpT.withBias(direction === 'ascending' ? 'negative' : 'positive');
+}
+
+// Passes strictly between startPass and endPass, in travel order — line.paths.slice
+// (startPassIndex+1, endPassIndex). Empty when the two stops share a pass or sit on
+// directly adjacent passes.
 export function isInvalidJump(
-  startStation: Station,
-  endStation: Station,
-  rseBetween: RoadSectionChange[],
+  startPass: RoadSectionPass,
+  passesBetween: RoadSectionPass[],
+  endPass: RoadSectionPass,
 ): boolean {
-  const startSection = startStation.parentRoadSection;
-  const endSection   = endStation.parentRoadSection;
-
-  if (rseBetween.length === 0) {
-    // No crossing recorded — only valid if it's a same-road, cross-section hop
-    // (handled by buildSegmentPath's single crossing segment).
-    return startSection.parentRoad !== endSection.parentRoad;
+  const chain = [startPass, ...passesBetween, endPass];
+  for (let i = 0; i < chain.length - 1; i++) {
+    if (chain[i].toNode !== chain[i + 1].fromNode) return true;
   }
-
-  return findBreaks(startSection, rseBetween, endSection).size > 0;
+  return false;
 }
 
 // ── Traversal builder ─────────────────────────────────────────────────────────
+// Every entry of `chain` (built from startPass/passesBetween/endPass) is already
+// one full RoadSectionPass, so it maps 1:1 onto one RoadTraversal — no more
+// indirection between "crossings" and "road stretches" the way the old RSC chain
+// needed.
 
 type RoadTraversal = {
   road: Road;
-  section: RoadSection | null;
+  section: RoadSection;
   entryT: OffsetT;
   exitT: OffsetT;
   offsetDep: number;
@@ -55,66 +44,26 @@ type RoadTraversal = {
 
 function buildTraversals(
   line: Line,
-  rseBetween: RoadSectionChange[],
-  startStop: StationStop,
-  startGroupIndex: number,
-  startStopIndex: number,
-  endStop: StationStop,
-  endGroupIndex: number,
-  endStopIndex: number,
+  chain: RoadSectionPass[],
+  startStation: Station, startPassIndex: number,
+  endStation: Station, endPassIndex: number,
 ): RoadTraversal[] {
-  const startStation = startStop.station;
-  const endStation   = endStop.station;
-  const startSection = startStation.parentRoadSection;
-  const endSection   = endStation.parentRoadSection;
-  const startRoad    = startSection.parentRoad;
-  const startT       = startStop.end().offset;
-  const endT         = endStop.start().offset;
+  return chain.map((pass, j) => {
+    const isFirst = j === 0;
+    const isLast = j === chain.length - 1;
 
-  const traversals: RoadTraversal[] = [];
+    const entryT = isFirst ? depOffset(startStation, pass.direction) : pass.start().offset;
+    const exitT = isLast ? arrOffset(endStation, pass.direction) : pass.end().offset;
 
-  const firstRsc = rseBetween[0];
-  traversals.push({
-    road: startRoad,
-    section: startSection,
-    entryT: startT,
-    exitT: firstRsc.node === startRoad.endpoints[1].node ? new OffsetT(1, 'negative') : new OffsetT(0, 'positive'),
-    offsetDep: computeTotalOffset(line, startSection, startStation, startGroupIndex, startStopIndex),
-    offsetArr: computeTotalOffset(line, startSection, undefined, undefined, undefined, firstRsc.exitRank),
+    const offsetDep = isFirst
+      ? computeTotalOffset(line, pass.section, startStation, startPassIndex)
+      : computeTotalOffset(line, pass.section, undefined, undefined, pass.fromRank);
+    const offsetArr = isLast
+      ? computeTotalOffset(line, pass.section, endStation, endPassIndex)
+      : computeTotalOffset(line, pass.section, undefined, undefined, pass.toRank);
+
+    return { road: pass.section.parentRoad, section: pass.section, entryT, exitT, offsetDep, offsetArr };
   });
-
-  for (let k = 0; k < rseBetween.length - 1; k++) {
-    const rsc     = rseBetween[k];
-    const nextRsc = rseBetween[k + 1];
-    if (!rsc.entering) return traversals;
-    const road    = rsc.entering.section.parentRoad;
-    const section = rsc.entering.section;
-    traversals.push({
-      road,
-      section,
-      entryT: rsc.node === road.endpoints[0].node ? new OffsetT(0, 'positive') : new OffsetT(1, 'negative'),
-      exitT:  nextRsc.node === road.endpoints[1].node ? new OffsetT(1, 'negative') : new OffsetT(0, 'positive'),
-      offsetDep: computeTotalOffset(line, section, undefined, undefined, undefined, rsc.enterRank),
-      offsetArr: computeTotalOffset(line, section, undefined, undefined, undefined, nextRsc.exitRank),
-    });
-  }
-
-  const lastRsc = rseBetween[rseBetween.length - 1];
-  if (!lastRsc.entering) return traversals;
-  const lastRoad = lastRsc.entering.section.parentRoad;
-  // For a U-turn RSC (same section on both sides), use the arrival stop's rank at the
-  // turning point — the RSC's enterRank defaults to 0 and doesn't reflect the return lane.
-  const isUTurnRsc = lastRsc.exiting !== null && lastRsc.exiting.section === lastRsc.entering.section;
-  traversals.push({
-    road: lastRoad,
-    section: endSection,
-    entryT: lastRsc.node === lastRoad.endpoints[0].node ? new OffsetT(0, 'positive') : new OffsetT(1, 'negative'),
-    exitT: endT,
-    offsetDep: computeTotalOffset(line, endSection, undefined, undefined, undefined, isUTurnRsc ? endStop.rank : lastRsc.enterRank),
-    offsetArr: computeTotalOffset(line, endSection, endStation, endGroupIndex, endStopIndex),
-  });
-
-  return traversals;
 }
 
 function chainBezierEntries(entries: CubicBezierPoints[][]): string {
@@ -130,29 +79,20 @@ function chainBezierEntries(entries: CubicBezierPoints[][]): string {
 
 export function buildSegmentPath(
   line: Line,
-  startStop: StationStop,
-  startGroupIndex: number,
-  startStopIndex: number,
-  endStop: StationStop,
-  endGroupIndex: number,
-  endStopIndex: number,
-  rseBetween: RoadSectionChange[],
+  startStop: PassStop, startPass: RoadSectionPass, startPassIndex: number,
+  endStop: PassStop, endPass: RoadSectionPass, endPassIndex: number,
+  passesBetween: RoadSectionPass[],
   headCanvas: Vector,
   tailCanvas: Vector,
 ): string {
   const startStation = startStop.station;
-  const endStation   = endStop.station;
-  const startSection = startStation.parentRoadSection;
-  const endSection   = endStation.parentRoadSection;
-  const startRoad    = startSection.parentRoad;
-  const startT       = startStop.end().offset;
-  const endT         = endStop.start().offset;
+  const endStation = endStop.station;
   const fallback = new PathBuilder().moveTo(headCanvas).lineTo(tailCanvas).build();
 
   if (startStation === endStation) {
-    const centerline = startRoad.computeBezier();
+    const centerline = startPass.section.parentRoad.computeBezier();
     if (!centerline) return fallback;
-    const tangent = centerline.evalTangent(startStop.start().offset);
+    const tangent = centerline.evalTangent(arrOffset(startStation, startPass.direction));
     const tlen = Math.hypot(tangent.x, tangent.y);
     if (tlen < 0.001) return fallback;
     const chord = Math.hypot(tailCanvas.x - headCanvas.x, tailCanvas.y - headCanvas.y);
@@ -166,27 +106,17 @@ export function buildSegmentPath(
   const depRankOverride = !startStop.stops ? startStop.rank : undefined;
   const arrRankOverride = !endStop.stops   ? endStop.rank   : undefined;
 
-  if (rseBetween.length === 0) {
-    if (startSection === endSection) {
-      const offsetDep = computeTotalOffset(line, startSection, startStation, startGroupIndex, startStopIndex, depRankOverride);
-      const offsetArr = computeTotalOffset(line, endSection,   endStation,   endGroupIndex,   endStopIndex,   arrRankOverride);
-      const segs = computeSectionSegs(startRoad, startT, endT, offsetDep, offsetArr);
-      return segs.length === 0 ? fallback : new PathBuilder().beziers(segs).build();
-    }
-    // Different sections on the same road — single crossing segment.
-    const centerline = startRoad.computeBezier();
-    if (!centerline) return fallback;
-    const offsetDep = computeTotalOffset(line, startSection, startStation, startGroupIndex, startStopIndex, depRankOverride);
-    const offsetArr = computeTotalOffset(line, endSection,   endStation,   endGroupIndex,   endStopIndex,   arrRankOverride);
-    const seg = computeCrossingSeg(centerline, startT, endT, offsetDep, offsetArr);
-    return new PathBuilder().beziers([seg]).build();
+  if (startPass === endPass) {
+    const offsetDep = computeTotalOffset(line, startPass.section, startStation, startPassIndex, depRankOverride);
+    const offsetArr = computeTotalOffset(line, endPass.section, endStation, endPassIndex, arrRankOverride);
+    const segs = computeSectionSegs(startPass.section.parentRoad, depOffset(startStation, startPass.direction), arrOffset(endStation, endPass.direction), offsetDep, offsetArr);
+    return segs.length === 0 ? fallback : new PathBuilder().beziers(segs).build();
   }
 
-  // Multi-road path.
-  const traversals = buildTraversals(line, rseBetween, startStop, startGroupIndex, startStopIndex, endStop, endGroupIndex, endStopIndex);
+  const chain = [startPass, ...passesBetween, endPass];
+  const traversals = buildTraversals(line, chain, startStation, startPassIndex, endStation, endPassIndex);
   const entries: CubicBezierPoints[][] = [];
   for (const tr of traversals) {
-    if (tr.section === null) continue;
     const segs = computeSectionSegs(tr.road, tr.entryT, tr.exitT, tr.offsetDep, tr.offsetArr);
     if (segs.length > 0) entries.push(segs);
   }
@@ -194,83 +124,38 @@ export function buildSegmentPath(
   return entries.length === 0 ? fallback : chainBezierEntries(entries);
 }
 
-// ── Segment pieces (handles breaks in the RSE chain) ──────────────────────────
+// ── Segment pieces (handles gaps in the pass chain) ────────────────────────────
 
 export type SegmentPiece =
   | { kind: 'normal'; path: string }
   | { kind: 'dashed'; from: Vector; to: Vector };
 
-// Builds the solid/dashed pieces for a station-to-station segment. When the RSE
-// chain is fully continuous this is just the one solid piece from buildSegmentPath.
-// When it's broken, each valid stretch is rendered solid and each break is a
-// dashed jump straight between the two nodes where the chain actually splits —
-// not a single dashed line from station to station.
+// Builds the solid/dashed pieces for a station-to-station segment. Every pass in
+// the chain is independently valid (it's real, validated data), so unlike the old
+// RSC-chain version, no traversal geometry is ever discarded — a gap only means the
+// JUNCTION CURVE between two adjacent passes is unreliable, so that one junction is
+// drawn as a straight dashed line between the two real (but disconnected) endpoints
+// instead of a smooth curve, and the run is split there.
 export function buildSegmentPieces(
   line: Line,
-  startStop: StationStop,
-  startGroupIndex: number,
-  startStopIndex: number,
-  endStop: StationStop,
-  endGroupIndex: number,
-  endStopIndex: number,
-  rseBetween: RoadSectionChange[],
+  startStop: PassStop, startPass: RoadSectionPass, startPassIndex: number,
+  endStop: PassStop, endPass: RoadSectionPass, endPassIndex: number,
+  passesBetween: RoadSectionPass[],
   headCanvas: Vector,
   tailCanvas: Vector,
 ): SegmentPiece[] {
   const startStation = startStop.station;
-  const endStation   = endStop.station;
-  const startSection = startStation.parentRoadSection;
-  const endSection   = endStation.parentRoadSection;
+  const endStation = endStop.station;
 
-  if (rseBetween.length === 0) {
-    // No crossing recorded at all — only routable if it's a same-road hop
-    // (buildSegmentPath handles that); otherwise there's nothing to jump through.
-    if (startSection.parentRoad !== endSection.parentRoad) {
-      return [{ kind: 'dashed', from: headCanvas, to: tailCanvas }];
-    }
+  if (startPass === endPass) {
     return [{ kind: 'normal', path: buildSegmentPath(
-      line, startStop, startGroupIndex, startStopIndex, endStop, endGroupIndex, endStopIndex,
-      rseBetween, headCanvas, tailCanvas,
+      line, startStop, startPass, startPassIndex, endStop, endPass, endPassIndex,
+      passesBetween, headCanvas, tailCanvas,
     ) }];
   }
 
-  const breaks = findBreaks(startSection, rseBetween, endSection);
-  if (breaks.size === 0) {
-    return [{ kind: 'normal', path: buildSegmentPath(
-      line, startStop, startGroupIndex, startStopIndex, endStop, endGroupIndex, endStopIndex,
-      rseBetween, headCanvas, tailCanvas,
-    ) }];
-  }
-
-  const traversals = buildTraversals(line, rseBetween, startStop, startGroupIndex, startStopIndex, endStop, endGroupIndex, endStopIndex);
-
-  // Where the solid piece just before/after traversal j actually terminates —
-  // matches buildTraversals' own offsetDep/offsetArr conventions: a traversal
-  // starts at the ENTERING-side offset of the previous RSC and ends at the
-  // EXITING-side offset of the next RSC (the two sides can land at different
-  // points even at the same node, same as the junction curve between two valid
-  // traversals bridges). So the dash's "from" must match the preceding solid
-  // piece's own end (exiting side of rseBetween[j-1]) and its "to" must match
-  // the following solid piece's own start (entering side of rseBetween[j]).
-  // Computed via computeBoundaryPoint (matches computeSectionSegs' own
-  // convention) rather than RoadSectionChange.computeStartPosition/EndPosition,
-  // whose sign flips for side-1 nodes and doesn't match actual line geometry —
-  // see computeBoundaryPoint's doc comment. Falls back to the raw node position
-  // if the RSC is missing the corresponding side.
-  const traversalStart = (j: number): Vector => {
-    if (j === 0) return headCanvas;
-    const rsc = rseBetween[j - 1];
-    if (!rsc.exiting) return rsc.node.position;
-    const offset = computeTotalOffset(line, rsc.exiting.section, undefined, undefined, undefined, rsc.exitRank);
-    return computeBoundaryPoint(rsc.exiting.section, rsc.exiting.side, offset) ?? rsc.node.position;
-  };
-  const traversalEnd = (j: number): Vector => {
-    if (j === rseBetween.length) return tailCanvas;
-    const rsc = rseBetween[j];
-    if (!rsc.entering) return rsc.node.position;
-    const offset = computeTotalOffset(line, rsc.entering.section, undefined, undefined, undefined, rsc.enterRank);
-    return computeBoundaryPoint(rsc.entering.section, rsc.entering.side, offset) ?? rsc.node.position;
-  };
+  const chain = [startPass, ...passesBetween, endPass];
+  const traversals = buildTraversals(line, chain, startStation, startPassIndex, endStation, endPassIndex);
 
   const pieces: SegmentPiece[] = [];
   let run: CubicBezierPoints[][] = [];
@@ -279,13 +164,14 @@ export function buildSegmentPieces(
     run = [];
   };
 
-  traversals.forEach((tr, j) => {
-    if (breaks.has(j)) {
+  chain.forEach((pass, j) => {
+    if (j > 0 && chain[j - 1].toNode !== pass.fromNode) {
       flushRun();
-      pieces.push({ kind: 'dashed', from: traversalStart(j), to: traversalEnd(j) });
-      return;
+      const from = chain[j - 1].computeToPosition() ?? chain[j - 1].toNode.position;
+      const to = pass.computeFromPosition() ?? pass.fromNode.position;
+      pieces.push({ kind: 'dashed', from, to });
     }
-    if (tr.section === null) return;
+    const tr = traversals[j];
     const segs = computeSectionSegs(tr.road, tr.entryT, tr.exitT, tr.offsetDep, tr.offsetArr);
     if (segs.length > 0) run.push(segs);
   });

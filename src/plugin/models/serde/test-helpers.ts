@@ -22,7 +22,11 @@ export function sideKey(section: RoadSection, side: 0 | 1): SectionSideKey {
   return `${section.parentRoad.id}:${section.id}:${side}`;
 }
 
-export function collectRscRanks(state: MapState): Map<SectionSideKey, { enterRanks: number[]; exitRanks: number[] }> {
+// enterRanks = every pass's own fromRank at (section, side-of-fromNode); exitRanks =
+// every pass's own toRank at (section, side-of-toNode) — the same two numbers a
+// RoadSectionChange used to carry as entering.rank/exiting.rank, just relocated onto
+// the pass that actually owns each boundary instead of a separate crossing object.
+export function collectPassRanks(state: MapState): Map<SectionSideKey, { enterRanks: number[]; exitRanks: number[] }> {
   const map = new Map<SectionSideKey, { enterRanks: number[]; exitRanks: number[] }>();
 
   const getOrCreate = (k: SectionSideKey) => {
@@ -32,15 +36,11 @@ export function collectRscRanks(state: MapState): Map<SectionSideKey, { enterRan
   };
 
   for (const line of state.getLines()) {
-    for (const group of line.paths) {
-      const p = group.fromRoadSectionChange;
-      if (!p) continue;
-      if (p.entering) {
-        getOrCreate(sideKey(p.entering.section, p.entering.side)).enterRanks.push(p.enterRank);
-      }
-      if (p.exiting) {
-        getOrCreate(sideKey(p.exiting.section, p.exiting.side)).exitRanks.push(p.exitRank);
-      }
+    for (const pass of line.paths) {
+      const fromSide: 0 | 1 = pass.direction === 'ascending' ? 0 : 1;
+      const toSide: 0 | 1 = fromSide === 0 ? 1 : 0;
+      getOrCreate(sideKey(pass.section, fromSide)).enterRanks.push(pass.fromRank);
+      getOrCreate(sideKey(pass.section, toSide)).exitRanks.push(pass.toRank);
     }
   }
 
@@ -51,4 +51,3 @@ export function applyOffset(pos: { x: number; y: number }, tan: { x: number; y: 
   const len = Math.hypot(tan.x, tan.y) || 1;
   return { x: pos.x + (-tan.y / len) * offset, y: pos.y + (tan.x / len) * offset };
 }
-

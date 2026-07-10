@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Model } from './index';
-import { RoadSectionChange } from './structures';
+import { RoadSectionPass } from './structures';
 
 // Straight-line road (bezierMidPoint at the exact midpoint) so eval(t) is a plain lerp
 // and expected positions/interpT remaps are easy to reason about by hand.
@@ -60,7 +60,7 @@ describe('Model.splitRoad', () => {
     expect(posS2After.y).toBeCloseTo(posS2Before.y, 5);
   });
 
-  it('auto-inserts a junction crossing at the split point for a line spanning both halves', () => {
+  it('splits a single pass spanning both halves into two passes joined at the split node', () => {
     const model = new Model();
     const { road, section } = buildStraightRoad(model);
 
@@ -74,23 +74,23 @@ describe('Model.splitRoad', () => {
     });
 
     const line = model.addLine({ name: 'Line 1', color: '#ff0000', isCircular: false, paths: [] });
-    line.appendStationStop({ stationId: s1.id, direction: 'ascending', rank: 0, stops: true });
-    line.appendStationStop({ stationId: s2.id, direction: 'ascending', rank: 0, stops: true });
+    const pass = new RoadSectionPass();
+    pass.section = section;
+    pass.direction = 'ascending';
+    pass.fromRank = 0;
+    pass.toRank = 0;
+    pass.stops = [{ station: s1, rank: 0, stops: true }, { station: s2, rank: 0, stops: true }];
+    line.paths = [pass];
 
     const splitNode = model.splitRoad(road, 0.5, 8);
 
-    const entries = line.paths.flatMap(g => [
-      ...(g.fromRoadSectionChange ? [g.fromRoadSectionChange] : []),
-      ...g.stationStops,
-    ]);
-
-    const rscs = entries.filter((e): e is RoadSectionChange => e instanceof RoadSectionChange);
-    expect(rscs).toHaveLength(1);
-    expect(rscs[0].node).toBe(splitNode);
-    expect(rscs[0].exiting?.section).toBe(s1.parentRoadSection);
-    expect(rscs[0].entering?.section).toBe(s2.parentRoadSection);
-
-    const stopStationIds = entries.filter(e => !(e instanceof RoadSectionChange)).map(e => (e as { station: { id: string } }).station.id);
-    expect(stopStationIds).toEqual([s1.id, s2.id]);
+    expect(line.paths).toHaveLength(2);
+    const [p1, p2] = line.paths;
+    expect(p1.section).toBe(s1.parentRoadSection);
+    expect(p2.section).toBe(s2.parentRoadSection);
+    expect(p1.toNode).toBe(splitNode);
+    expect(p2.fromNode).toBe(splitNode);
+    expect(p1.stops.map(s => s.station.id)).toEqual([s1.id]);
+    expect(p2.stops.map(s => s.station.id)).toEqual([s2.id]);
   });
 });

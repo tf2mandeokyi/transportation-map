@@ -1,31 +1,24 @@
-import { Line, MapState, RoadSectionChange, StationStop } from "../../models/structures";
+import { Line, MapState, PassStop, RoadSectionPass } from "../../models/structures";
 import { StationRenderer } from "../station";
 import { hexToRgb } from "@/common/utils/color";
 import { buildSegmentPieces, SegmentPiece } from "./path-builder";
 import { createDashedLine, bezierPathToSegments } from "./segment-nodes";
 
-type IndexedStop = { stop: StationStop; groupIndex: number; stopIndex: number };
+type IndexedStop = { stop: PassStop; pass: RoadSectionPass; passIndex: number };
 
 function collectStops(line: Line): IndexedStop[] {
   const result: IndexedStop[] = [];
-  line.paths.forEach((group, groupIndex) => {
-    group.stationStops.forEach((stop, stopIndex) => {
-      result.push({ stop, groupIndex, stopIndex });
+  line.paths.forEach((pass, passIndex) => {
+    pass.stops.forEach(stop => {
+      result.push({ stop, pass, passIndex });
     });
   });
   return result;
 }
 
-// RSCs strictly between two stops, in order — every group's RSC from just after
-// the start stop's group through the end stop's group (inclusive) always sits
-// before that group's own stops, so it lies between the two addressed stops.
-function collectRseBetween(line: Line, startGroupIndex: number, endGroupIndex: number): RoadSectionChange[] {
-  const result: RoadSectionChange[] = [];
-  for (let gi = startGroupIndex + 1; gi <= endGroupIndex; gi++) {
-    const rsc = line.paths[gi]?.fromRoadSectionChange;
-    if (rsc) result.push(rsc);
-  }
-  return result;
+// Passes strictly between two stops, in order.
+function collectPassesBetween(line: Line, startPassIndex: number, endPassIndex: number): RoadSectionPass[] {
+  return line.paths.slice(startPassIndex + 1, endPassIndex);
 }
 
 async function cleanupOldLineGroup(line: Line): Promise<void> {
@@ -88,23 +81,23 @@ export class LineRenderer {
   ): SegmentPiece[] {
     const startStation = startStop.stop.station;
     const endStation   = endStop.stop.station;
-    const startPoint = this.stationRenderer.getConnectionPoint(startStation, line, startStop.groupIndex, startStop.stopIndex);
-    const endPoint   = this.stationRenderer.getConnectionPoint(endStation,   line, endStop.groupIndex,   endStop.stopIndex);
+    const startPoint = this.stationRenderer.getConnectionPoint(startStation, line, startStop.passIndex);
+    const endPoint   = this.stationRenderer.getConnectionPoint(endStation,   line, endStop.passIndex);
     if (!startPoint || !endPoint) {
       console.warn(`Missing connection points for line ${line.id}`);
       return [];
     }
 
-    const rseBetween = collectRseBetween(line, startStop.groupIndex, endStop.groupIndex);
+    const passesBetween = collectPassesBetween(line, startStop.passIndex, endStop.passIndex);
 
-    // Solid where the RSE chain is continuous; where it breaks, a dashed jump
+    // Solid where the pass chain is continuous; where it breaks, a dashed jump
     // straight between the two nodes the chain actually splits at, so the line
     // still traces as much of the real route as the data supports.
     return buildSegmentPieces(
       line,
-      startStop.stop, startStop.groupIndex, startStop.stopIndex,
-      endStop.stop,   endStop.groupIndex,   endStop.stopIndex,
-      rseBetween, startPoint, endPoint,
+      startStop.stop, startStop.pass, startStop.passIndex,
+      endStop.stop,   endStop.pass,   endStop.passIndex,
+      passesBetween, startPoint, endPoint,
     );
   }
 

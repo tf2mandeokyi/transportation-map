@@ -2,9 +2,7 @@ import { HVAlign, StationId } from "@/common/types";
 import { LineAtStationData } from "@/common/messages";
 import { TransportationMapObject } from './types';
 import type { RoadSection, LinePass } from './road-section';
-import { StationStop } from "./line-path";
 import { Line } from "./line";
-import { own, Owned } from "@/common/utils/ownership";
 import { OffsetT } from "@/plugin/utils/offset-t";
 
 export interface SerializedStation {
@@ -92,21 +90,6 @@ export class Station extends TransportationMapObject<StationId> {
     };
   }
 
-  // Builds a stop at this station traveling in `direction`. `stops` defaults to true
-  // (a real, user-authored stop); pass-throughs are built via makePassThroughStop.
-  generateStop(direction: 'ascending' | 'descending', rank = 0, stops = true): Owned<StationStop> {
-    const ss = new StationStop();
-    ss.station = this;
-    ss.rank = rank;
-    ss.stops = stops;
-    ss.direction = direction;
-    return own(ss);
-  }
-
-  makePassThroughStop(rank: number, direction: 'ascending' | 'descending'): Owned<StationStop> {
-    return this.generateStop(direction, rank, false);
-  }
-
   serialize(): SerializedStation {
     return {
       n: this.name,
@@ -125,12 +108,9 @@ export class Station extends TransportationMapObject<StationId> {
   getLinePasses(): LinePass[] {
     const passes: Array<LinePass & { rank: number }> = [];
     for (const line of this.mapState.getLines()) {
-      for (const [groupIndex, group] of line.paths.entries()) {
-        for (const [stopIndex, p] of group.stationStops.entries()) {
-          if (p.station === this) {
-            passes.push({ line, groupIndex, stopIndex, rank: p.rank, stops: p.stops });
-          }
-        }
+      for (const [passIndex, pass] of line.paths.entries()) {
+        const stop = pass.stops.find(s => s.station === this);
+        if (stop) passes.push({ line, passIndex, stationId: this.id, rank: stop.rank, stops: stop.stops });
       }
     }
     passes.sort((a, b) => {
@@ -143,37 +123,41 @@ export class Station extends TransportationMapObject<StationId> {
   // Collects every stop this line makes at this station, normalizes their ranks to a
   // dense 0..n-1 stacking order (breaking ties deterministically), and drops stops that
   // can't currently be positioned (e.g. incomplete road data).
-  getStopsAcrossLines(): Array<{ line: Line; groupIndex: number; stopIndex: number; rank: number; stops: boolean; facing: 'left' | 'right'; position: Vector }> {
-    const entries: Array<{ path: StationStop; line: Line; groupIndex: number; stopIndex: number }> = [];
+  getStopsAcrossLines(): Array<{ line: Line; passIndex: number; rank: number; stops: boolean; facing: 'left' | 'right'; position: Vector }> {
+    const entries: Array<{ rank: number; line: Line; passIndex: number; direction: 'ascending' | 'descending' }> = [];
     for (const line of this.mapState.getLines()) {
-      for (const [groupIndex, group] of line.paths.entries()) {
-        for (const [stopIndex, path] of group.stationStops.entries()) {
-          if (path.station === this) entries.push({ path, line, groupIndex, stopIndex });
-        }
+      for (const [passIndex, pass] of line.paths.entries()) {
+        const stop = pass.stops.find(s => s.station === this);
+        if (stop) entries.push({ rank: stop.rank, line, passIndex, direction: pass.direction });
       }
     }
 
     entries.sort((a, b) =>
-      (a.path.rank - b.path.rank)
+      (a.rank - b.rank)
       || (a.line.id < b.line.id ? -1 : a.line.id > b.line.id ? 1 : 0)
-      || (a.groupIndex - b.groupIndex)
-      || (a.stopIndex - b.stopIndex)
+      || (a.passIndex - b.passIndex)
     );
-    entries.forEach(({ path }, rank) => { path.rank = rank; });
+    entries.forEach((entry, rank) => {
+      const stop = entry.line.paths[entry.passIndex]?.stops.find(s => s.station === this);
+      if (stop) stop.rank = rank;
+      entry.rank = rank;
+    });
 
-    const result: Array<{ line: Line; groupIndex: number; stopIndex: number; rank: number; stops: boolean; facing: 'left' | 'right'; position: Vector }> = [];
-    for (const { path, line, groupIndex, stopIndex } of entries) {
-      const position = path.computePosition();
-      if (!position) continue;
-      const facing: 'left' | 'right' = path.direction === 'ascending' ? 'right' : 'left';
-      result.push({ line, groupIndex, stopIndex, rank: path.rank, stops: path.stops, facing, position });
+    const result: Array<{ line: Line; passIndex: number; rank: number; stops: boolean; facing: 'left' | 'right'; position: Vector }> = [];
+    for (const { line, passIndex, direction, rank } of entries) {
+      const pass = line.paths[passIndex];
+      const stop = pass?.stops.find(s => s.station === this);
+      const position = pass?.computeStopPosition(this.id);
+      if (!pass || !stop || !position) continue;
+      const facing: 'left' | 'right' = direction === 'ascending' ? 'right' : 'left';
+      result.push({ line, passIndex, rank, stops: stop.stops, facing, position });
     }
     return result;
   }
 
   getLinesAtStationData(): LineAtStationData[] {
-    return this.getStopsAcrossLines().map(({ line, groupIndex, stopIndex, rank, stops, facing }) => ({
-      id: line.id, name: line.name, color: line.color, groupIndex, stopIndex, rank, facing, stops,
+    return this.getStopsAcrossLines().map(({ line, passIndex, rank, stops, facing }) => ({
+      id: line.id, name: line.name, color: line.color, passIndex, rank, facing, stops,
     }));
   }
 
@@ -196,12 +180,10 @@ export class Station extends TransportationMapObject<StationId> {
     return { x: pos.x + (-tangent.y / len) * offset, y: pos.y + (tangent.x / len) * offset };
   }
 
-  updateStopRanks(stops: Array<{ line: Line; groupIndex: number; stopIndex: number; rank: number }>): void {
-    for (const { line, groupIndex, stopIndex, rank } of stops) {
-      const path = line.paths[groupIndex]?.stationStops[stopIndex];
-      if (path && path.station === this) {
-        path.rank = rank;
-      }
+  updateStopRanks(stops: Array<{ line: Line; passIndex: number; rank: number }>): void {
+    for (const { line, passIndex, rank } of stops) {
+      const stop = line.paths[passIndex]?.stops.find(s => s.station === this);
+      if (stop) stop.rank = rank;
     }
   }
 }

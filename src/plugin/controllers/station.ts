@@ -172,13 +172,13 @@ export class StationController extends BaseController {
 
   private async handleUpdateStationStopRanks(
     stationId: StationId,
-    stops: Array<{ lineId: LineId; groupIndex: number; stopIndex: number; rank: number }>
+    stops: Array<{ lineId: LineId; passIndex: number; rank: number }>
   ): Promise<void> {
     const station = this.model.state.getStation(stationId);
     if (!station) return;
-    const resolvedStops = stops.flatMap(({ lineId, groupIndex, stopIndex, rank }) => {
+    const resolvedStops = stops.flatMap(({ lineId, passIndex, rank }) => {
       const line = this.model.state.getLine(lineId);
-      return line ? [{ line, groupIndex, stopIndex, rank }] : [];
+      return line ? [{ line, passIndex, rank }] : [];
     });
     station.updateStopRanks(resolvedStops);
     await this.render();
@@ -217,14 +217,16 @@ export class StationController extends BaseController {
     const station = this.model.state.getStation(stationId);
     if (!station) { console.warn(`Station ${stationId} not found`); return; }
 
-    const newStation = this.model.addStation(station.createCopyProps());
-
-    if (this.connectionController) {
-      const linesAtStation = station.getStopsAcrossLines();
-      for (const { line } of linesAtStation) {
-        this.connectionController.insertStationIntoLine(line.id, newStation, station, direction === 'forwards');
-      }
-    }
+    // Nudge the copy to one side of the original within its movable range so it
+    // doesn't exactly coincide and sorts on the correct side. Every line already
+    // traveling through this section picks the new station up automatically as a
+    // pass-through candidate on the next validation — no explicit insertion needed.
+    const range = station.getMovableRange();
+    const nudgedInterpT = direction === 'forwards'
+      ? (station.rawInterpT + range.max) / 2
+      : (station.rawInterpT + range.min) / 2;
+    const newStation = this.model.addStation({ ...station.createCopyProps(), interpT: nudgedInterpT });
+    this.model.validateAllLinePaths();
 
     await this.view.stationRenderer.renderStation(newStation);
     await this.save();
@@ -241,8 +243,8 @@ export class StationController extends BaseController {
     }
 
     for (const line of this.model.state.getLines()) {
-      for (const group of line.paths) {
-        for (const stop of group.stationStops) {
+      for (const pass of line.paths) {
+        for (const stop of pass.stops) {
           if (stop.station === sourceStation) stop.station = targetStation;
         }
       }

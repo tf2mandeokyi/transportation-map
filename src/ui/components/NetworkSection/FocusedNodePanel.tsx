@@ -112,7 +112,7 @@ const NodeArmList: React.FC<NodeArmListProps> = ({ label, nodeId, items }) => (
     <div className="mt-1">
       <DraggableLineList
         items={items}
-        getKey={item => `${item.line.lineId}-${item.line.groupIndex}-${item.role}`}
+        getKey={item => `${item.line.lineId}-${item.role === 'exit' ? item.line.exitingPassIndex : item.line.enteringPassIndex}-${item.role}`}
         getLineColor={item => item.line.lineColor}
         getLineName={item => item.line.lineName}
         showRank
@@ -122,13 +122,15 @@ const NodeArmList: React.FC<NodeArmListProps> = ({ label, nodeId, items }) => (
           </span>
         )}
         onCommit={items => {
-          const changes = items.map((it, i) => ({
-            lineId: it.line.lineId,
-            groupIndex: it.line.groupIndex,
-            exitRank: it.role === 'exit' ? i : it.line.exitRank,
-            enterRank: it.role === 'enter' ? i : it.line.enterRank,
-          }));
-          postMessageToPlugin({ type: 'patch-node', nodeId, patch: { op: 'update-rsc-ranks', changes } });
+          const changes: Array<{ lineId: typeof items[number]['line']['lineId']; passIndex: number; end: 'from' | 'to'; rank: number }> = [];
+          items.forEach((it, i) => {
+            if (it.role === 'exit' && it.line.exitingPassIndex !== null) {
+              changes.push({ lineId: it.line.lineId, passIndex: it.line.exitingPassIndex, end: 'to', rank: i });
+            } else if (it.role === 'enter' && it.line.enteringPassIndex !== null) {
+              changes.push({ lineId: it.line.lineId, passIndex: it.line.enteringPassIndex, end: 'from', rank: i });
+            }
+          });
+          postMessageToPlugin({ type: 'patch-node', nodeId, patch: { op: 'update-pass-ranks', changes } });
         }}
       />
     </div>

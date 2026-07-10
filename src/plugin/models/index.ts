@@ -1,5 +1,5 @@
 import { LineId, NodeId, RoadId, RoadSectionId, SectionId, StationId } from "@/common/types";
-import { Line, LineProps, MapState, Node, NodeProps, Road, RoadProps, RoadSection, RoadSectionProps, Station, StationProps } from "./structures";
+import { Line, LineProps, MapState, Node, NodeProps, PassStop, Road, RoadProps, RoadSection, RoadSectionProps, RoadSectionPass, Station, StationProps } from "./structures";
 import { deserializeMapState, serializeMapState } from "./serde";
 import { validateLinePaths } from "../utils/line-validator";
 import { own } from "@/common/utils/ownership";
@@ -73,11 +73,9 @@ export class Model {
   // Splits `road` at bezier parameter `t` into two roads joined by a new junction node.
   // Every section is cloned onto both halves (by name/index), stations are reparented to
   // whichever half they now fall on with interpT remapped to that half's local param, and
-  // any line's existing junction crossing into/out of one of the old sections is repointed
-  // at the matching new section — the same side (0/1), since each half keeps the original
-  // endpoint node on that side. New crossings needed right at the split point (for lines
-  // whose stops now straddle two roads where there used to be one) are picked up afterward
-  // by validateAllLinePaths, which auto-inserts them via Road.findSharedNode.
+  // any line's existing pass through one of the old sections is split in two — one pass
+  // per half, in the same travel direction, each keeping whichever real stops now fall on
+  // its side — with a fresh (placeholder-rank) boundary at the new split node in between.
   public splitRoad(road: Road, t: number, junctionRadius: number): Node {
     const bezier = road.computeBezier();
     if (!bezier) throw new Error('Cannot split a road without both endpoints');
@@ -130,21 +128,36 @@ export class Model {
       }
     }
 
-    // Repoint any existing junction crossing (elsewhere on the map) that referenced one of
-    // the original road's sections — same side, on whichever new section replaced it.
+    // Split any existing pass through one of the original road's sections into two
+    // passes — one per half, in the same travel direction — since stations have
+    // already been reparented above (so `station.parentRoadSection` already tells
+    // us which half each stop now belongs to).
     for (const line of this.state.getLines()) {
-      for (const group of line.paths) {
-        const rsc = group.fromRoadSectionChange;
-        if (!rsc) continue;
-        if (rsc.exiting) {
-          const mapped = sectionMap.get(rsc.exiting.section);
-          if (mapped) rsc.exiting = { section: rsc.exiting.side === 0 ? mapped.left : mapped.right, side: rsc.exiting.side };
-        }
-        if (rsc.entering) {
-          const mapped = sectionMap.get(rsc.entering.section);
-          if (mapped) rsc.entering = { section: rsc.entering.side === 0 ? mapped.left : mapped.right, side: rsc.entering.side };
-        }
+      const newPaths: RoadSectionPass[] = [];
+      let changed = false;
+      for (const pass of line.paths) {
+        const mapped = sectionMap.get(pass.section);
+        if (!mapped) { newPaths.push(pass); continue; }
+        changed = true;
+
+        const leftStops  = pass.stops.filter(s => s.station.parentRoadSection === mapped.left);
+        const rightStops = pass.stops.filter(s => s.station.parentRoadSection === mapped.right);
+        // Ascending means traveling from the original road's endpoint[0] (left's far
+        // node) toward endpoint[1] (right's far node) — same order the halves keep
+        // their original outer endpoints in.
+        const ordered = pass.direction === 'ascending' ? [mapped.left, mapped.right] : [mapped.right, mapped.left];
+        ordered.forEach((section, i) => {
+          const stops: PassStop[] = section === mapped.left ? leftStops : rightStops;
+          const p = new RoadSectionPass();
+          p.section = section;
+          p.direction = pass.direction;
+          p.fromRank = i === 0 ? pass.fromRank : 0; // 0 = placeholder at the new split-node boundary
+          p.toRank = i === ordered.length - 1 ? pass.toRank : 0;
+          p.stops = stops;
+          newPaths.push(p);
+        });
       }
+      if (changed) line.paths = newPaths;
     }
 
     for (const node of this.state.getNodes()) {
@@ -176,17 +189,12 @@ export class Model {
   private _removeRoadFromLines(road: Road): void {
     const sectionSet = new Set(road.getSections());
     for (const line of this.state.getLines()) {
-      let changed = false;
-      for (const group of line.paths) {
-        const rsc = group.fromRoadSectionChange;
-        if (!rsc) continue;
-        if ((rsc.exiting !== null && sectionSet.has(rsc.exiting.section)) ||
-            (rsc.entering !== null && sectionSet.has(rsc.entering.section))) {
-          group.fromRoadSectionChange = undefined;
-          changed = true;
-        }
-      }
-      if (changed) line.paths = validateLinePaths(line);
+      const before = line.paths.length;
+      // Removing a pass outright (rather than nulling a field) is the direct
+      // equivalent now — any resulting discontinuity with its neighbors surfaces
+      // as an invalid-jump the next time displayEntries are built, same as before.
+      line.paths = line.paths.filter(pass => !sectionSet.has(pass.section));
+      if (line.paths.length !== before) line.paths = validateLinePaths(line);
     }
   }
 
@@ -218,10 +226,10 @@ export class Model {
     }
     for (const line of this.state.getLines()) {
       let changed = false;
-      for (const group of line.paths) {
-        const before = group.stationStops.length;
-        group.stationStops = group.stationStops.filter(s => s.station !== station);
-        if (group.stationStops.length !== before) changed = true;
+      for (const pass of line.paths) {
+        const before = pass.stops.length;
+        pass.stops = pass.stops.filter(s => s.station !== station);
+        if (pass.stops.length !== before) changed = true;
       }
       if (changed) line.paths = validateLinePaths(line);
     }

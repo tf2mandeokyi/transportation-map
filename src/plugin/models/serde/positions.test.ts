@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as fs from 'node:fs';
 import { MapState } from '../structures/map-state';
-import { RoadSection } from '../structures/road-section';
 import { computeTotalOffset } from '../../views/line/segment-path';
 import { DATA_PATH, fixtureExists, initState, applyOffset } from './test-helpers';
 import { lineOffsetInSection } from '@/plugin/utils/constants';
@@ -15,33 +14,32 @@ beforeAll(() => {
 });
 
 // ── Position consistency ──────────────────────────────────────────────────────
-// For each StationStop and RoadSectionChange, the position derived from the
-// stored rank must equal the position the renderer derives from
-// getLinesForSection / computeTotalOffset. A mismatch means the station dot
-// and the line segment endpoint are visually disconnected.
+// For each stop and pass boundary, the position derived from the stored rank must
+// equal the position the renderer derives from getLinesForSection / computeTotalOffset.
+// A mismatch means the station dot and the line segment endpoint are visually disconnected.
 
-describe.skipIf(!fixtureExists)('line end positions match station/RSC positions', () => {
+describe.skipIf(!fixtureExists)('line end positions match station/pass positions', () => {
   it('station stop: rank-based position matches pass-index-based position', () => {
     for (const line of state.getLines()) {
-      for (const [groupIndex, group] of line.paths.entries()) {
-        for (const [stopIndex, p] of group.stationStops.entries()) {
-          const section = p.station.parentRoadSection;
+      for (const [passIndex, pass] of line.paths.entries()) {
+        for (const s of pass.stops) {
+          const section = s.station.parentRoadSection;
           const road = section.parentRoad;
           const bezier = road.computeBezier();
           if (!bezier) continue;
 
-          const pos = p.station.interpT.evalBezier(bezier);
-          const tan = p.station.interpT.evalBezierTangent(bezier);
+          const pos = s.station.interpT.evalBezier(bezier);
+          const tan = s.station.interpT.evalBezierTangent(bezier);
 
           const totalSlots = section.getMaxStationStopCount();
-          const effectiveCount = Math.max(totalSlots, p.rank + 1);
-          const offsetA = section.computeOffset() + lineOffsetInSection(p.rank, effectiveCount);
+          const effectiveCount = Math.max(totalSlots, s.rank + 1);
+          const offsetA = section.computeOffset() + lineOffsetInSection(s.rank, effectiveCount);
           const posA = applyOffset(pos, tan, offsetA);
 
-          const offsetB = computeTotalOffset(line, section, p.station, groupIndex, stopIndex);
+          const offsetB = computeTotalOffset(line, section, s.station, passIndex);
           const posB = applyOffset(pos, tan, offsetB);
 
-          const label = `line "${line.id}" stop "${p.station.id}"`;
+          const label = `line "${line.id}" stop "${s.station.id}"`;
           expect(posA.x, `${label} x`).toBeCloseTo(posB.x, 3);
           expect(posA.y, `${label} y`).toBeCloseTo(posB.y, 3);
         }
@@ -49,23 +47,21 @@ describe.skipIf(!fixtureExists)('line end positions match station/RSC positions'
     }
   });
 
-  it('RSC rank positions: rank-based and force-rank positions agree', () => {
+  it('pass boundary rank positions: rank-based and force-rank positions agree', () => {
     for (const line of state.getLines()) {
-      for (const group of line.paths) {
-        const p = group.fromRoadSectionChange;
-        if (!p) continue;
+      for (const pass of line.paths) {
+        const section = pass.section;
+        const road = section.parentRoad;
+        const bezier = road.computeBezier();
+        if (!bezier) continue;
 
         const sides = [
-          p.exiting  ? { section: p.exiting.section,  rank: p.exitRank,  label: 'exit'  } : null,
-          p.entering ? { section: p.entering.section, rank: p.enterRank, label: 'enter' } : null,
-        ].filter((x): x is { section: RoadSection; rank: number; label: string } => x !== null);
+          { node: pass.fromNode, rank: pass.fromRank, label: 'from' },
+          { node: pass.toNode,   rank: pass.toRank,   label: 'to' },
+        ];
 
-        for (const { section, rank, label: side } of sides) {
-          const road = section.parentRoad;
-          const bezier = road.computeBezier();
-          if (!bezier) continue;
-
-          const isStart = road.endpoints[0].node === p.node;
+        for (const { node, rank, label: side } of sides) {
+          const isStart = road.endpoints[0].node === node;
           const ep = road.computeEndpointPos(isStart ? 0 : 1);
           const tan = bezier.evalTangent(isStart ? 0 : 1);
           const sign = isStart ? 1 : -1;
@@ -75,10 +71,10 @@ describe.skipIf(!fixtureExists)('line end positions match station/RSC positions'
           const offsetA = section.computeOffset() + lineOffsetInSection(rank, effectiveCount);
           const posA = applyOffset(ep, tan, offsetA * sign);
 
-          const offsetB = computeTotalOffset(line, section, undefined, undefined, undefined, rank);
+          const offsetB = computeTotalOffset(line, section, undefined, undefined, rank);
           const posB = applyOffset(ep, tan, offsetB * sign);
 
-          const label = `line "${line.id}" RSC at node "${p.node.id}" ${side} rank ${rank}`;
+          const label = `line "${line.id}" pass at node "${node.id}" ${side} rank ${rank}`;
           expect(posA.x, `${label} x`).toBeCloseTo(posB.x, 3);
           expect(posA.y, `${label} y`).toBeCloseTo(posB.y, 3);
         }
@@ -114,7 +110,7 @@ describe.skipIf(!fixtureExists)('no overlapping line end positions', () => {
 
   it('no two lines share the same end position at a junction', () => {
     for (const node of state.getNodes()) {
-      const entries = node.getRscEntries();
+      const entries = node.getPassBoundaryEntries();
       for (let i = 0; i < entries.length; i++) {
         for (let j = i + 1; j < entries.length; j++) {
           const a = entries[i].position;

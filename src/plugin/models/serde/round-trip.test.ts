@@ -19,20 +19,16 @@ describe.skipIf(!fixtureExists)('normalize → serialize → deserialize round-t
 
     for (const line of state.getLines()) {
       const line2 = state2.getLineHarsh(line.id);
-      for (let gi = 0; gi < line.paths.length; gi++) {
-        const g = line.paths[gi];
-        const g2 = line2.paths[gi];
-        const rsc = g.fromRoadSectionChange;
-        const rsc2 = g2.fromRoadSectionChange;
-        if (rsc && rsc2) {
-          expect(rsc2.enterRank, `line "${line.id}" group ${gi} enterRank`).toBe(rsc.enterRank);
-          expect(rsc2.exitRank,  `line "${line.id}" group ${gi} exitRank`).toBe(rsc.exitRank);
-        }
-        for (let si = 0; si < g.stationStops.length; si++) {
-          const p = g.stationStops[si];
-          const p2 = g2.stationStops[si];
-          expect(p2.rank,  `line "${line.id}" group ${gi} stop ${si} station stop rank`).toBe(p.rank);
-          expect(p2.stops, `line "${line.id}" group ${gi} stop ${si} station stop stops`).toBe(p.stops);
+      for (let pi = 0; pi < line.paths.length; pi++) {
+        const p = line.paths[pi];
+        const p2 = line2.paths[pi];
+        expect(p2.fromRank, `line "${line.id}" pass ${pi} fromRank`).toBe(p.fromRank);
+        expect(p2.toRank,   `line "${line.id}" pass ${pi} toRank`).toBe(p.toRank);
+        for (let si = 0; si < p.stops.length; si++) {
+          const s = p.stops[si];
+          const s2 = p2.stops[si];
+          expect(s2.rank,  `line "${line.id}" pass ${pi} stop ${si} station stop rank`).toBe(s.rank);
+          expect(s2.stops, `line "${line.id}" pass ${pi} stop ${si} station stop stops`).toBe(s.stops);
         }
       }
     }

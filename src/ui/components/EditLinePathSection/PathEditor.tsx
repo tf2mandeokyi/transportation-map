@@ -1,10 +1,6 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { NodeId, RoadId, RoadSectionId } from '@/common/types';
-import { DisplayEntry, LinePathData } from '@/common/messages';
-import {
-  LinePathAddress, START_ADDRESS, isStartAddress, flattenLinePathData,
-  lastAddress as lastGroupAddress, insertGroupsAfter, removeRsc,
-} from '../../utils/linePathGroups';
+import { NodeId, RoadId, RoadSectionId, StationId } from '@/common/types';
+import { DisplayEntry, RoadSectionPassData } from '@/common/messages';
 import { postMessageToPlugin } from '../../figma';
 import Button from '../common/Button';
 import { useLinesContext } from '../../contexts/LinesContext';
@@ -35,16 +31,13 @@ const PathEditor = forwardRef<PathEditorHandle>((_props, ref) => {
   const { roads } = useNetworkContext();
   const manager = useMessageManager();
 
-  const [linePaths, setLinePaths]           = useState<LinePathData[]>([]);
-  const [, setStationNames]     = useState<Record<string, string>>({});
-  const [stationRoadIds, setStationRoadIds] = useState<Record<string, RoadId | null>>({});
-  const [stationSectionIds, setStationSectionIds] = useState<Record<string, RoadSectionId | null>>({});
+  const [linePaths, setLinePaths]           = useState<RoadSectionPassData[]>([]);
   const [displayEntries, setDisplayEntries] = useState<DisplayEntry[]>([]);
-  const [addingRseAfterPathIndex, setAddingRseAfterPathIndex] = useState<LinePathAddress | null>(null);
+  const [addingRseAtBoundary, setAddingRseAtBoundary] = useState<number | null>(null);
   const [rseNodeConstraints, setRseNodeConstraints] = useState<{ knownStartNodeId: NodeId | null; requiredEndNodeId: NodeId | null }>({ knownStartNodeId: null, requiredEndNodeId: null });
 
   const currentLineIdRef     = useRef(currentEditingLineId);
-  const linePathsRef         = useRef<LinePathData[]>(linePaths);
+  const linePathsRef         = useRef<RoadSectionPassData[]>(linePaths);
   const pendingToggleRef     = useRef(false);
   const rseSession           = useUISession<AddingRseUISession>();
 
@@ -54,9 +47,6 @@ const PathEditor = forwardRef<PathEditorHandle>((_props, ref) => {
   useEffect(() => {
     const unsub1 = manager.onMessage('line-path-data', msg => {
       setLinePaths(msg.paths);
-      setStationNames(msg.stationNames);
-      setStationRoadIds(msg.stationRoadIds);
-      setStationSectionIds(msg.stationSectionIds);
       setDisplayEntries(msg.displayEntries);
     });
     const unsub2 = manager.onMessage('station-removed-from-line', () => {
@@ -89,100 +79,86 @@ const PathEditor = forwardRef<PathEditorHandle>((_props, ref) => {
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
 
-  const getSourceAt = (address: LinePathAddress): { roadId: RoadId | null; sectionId: RoadSectionId | null } => {
-    if (isStartAddress(address)) return { roadId: null, sectionId: null };
-    const group = linePaths[address.groupIndex];
-    if (!group) return { roadId: null, sectionId: null };
-    if (address.stopIndex === -1) {
-      const sectionId = group.entering ? group.entering.sectionId : null;
-      const roadId = sectionId ? (roads.find(r => r.id === sectionId[0])?.id ?? null) : null;
-      return { roadId, sectionId };
-    }
-    const stop = group.stationStops[address.stopIndex];
-    if (!stop) return { roadId: null, sectionId: null };
-    return { roadId: stationRoadIds[stop.stationId] ?? null, sectionId: stationSectionIds[stop.stationId] ?? null };
+  // The road/section a newly inserted chain continues from — the pass ending right
+  // before this boundary, if any (null at the very start of the path).
+  const getSourceAt = (boundaryIndex: number): { roadId: RoadId | null; sectionId: RoadSectionId | null } => {
+    const fromPass = boundaryIndex > 0 ? linePaths[boundaryIndex - 1] : null;
+    if (!fromPass) return { roadId: null, sectionId: null };
+    return { roadId: fromPass.sectionId[0], sectionId: fromPass.sectionId };
   };
 
   // ─── RSE adding ────────────────────────────────────────────────────────────
 
-  const startRseMode = (after: LinePathAddress, knownStartNodeId: NodeId | null = null, requiredEndNodeId: NodeId | null = null) => {
-    setAddingRseAfterPathIndex(after);
+  const startRseMode = (boundaryIndex: number, knownStartNodeId: NodeId | null = null, requiredEndNodeId: NodeId | null = null) => {
+    setAddingRseAtBoundary(boundaryIndex);
     setRseNodeConstraints({ knownStartNodeId, requiredEndNodeId });
     rseSession.open(new AddingRseUISession()).start(manager);
   };
 
   const stopRseMode = () => {
     rseSession.close(s => s.stop());
-    setAddingRseAfterPathIndex(null);
+    setAddingRseAtBoundary(null);
     setRseNodeConstraints({ knownStartNodeId: null, requiredEndNodeId: null });
   };
 
   const commitRses = (
-    after: LinePathAddress,
+    boundaryIndex: number,
     entries: Array<{ nodeId: NodeId; exitingSectionId: RoadSectionId | null; enteringSectionId: RoadSectionId | null }>
   ) => {
     if (!currentEditingLineId) return;
-    // A section's side (0/1) records which end of its road the junction node sits at —
-    // it must match the node the RSC actually crosses at, not always default to 0,
-    // or validateLinePaths mis-infers the line's direction there (see autoInsertRSCTo).
-    const sideAt = (sectionId: RoadSectionId | null, nodeId: NodeId): 0 | 1 => {
-      const road = sectionId ? roads.find(r => r.id === sectionId[0]) : undefined;
-      return road?.endNodeId === nodeId ? 1 : 0;
+    // A pass's direction is 'ascending' iff it's entered from the road's start node —
+    // must match the node the chain actually crosses at, not always default to
+    // ascending, or the pass would face the wrong way.
+    const directionAt = (sectionId: RoadSectionId, nodeId: NodeId): 'ascending' | 'descending' => {
+      const road = roads.find(r => r.id === sectionId[0]);
+      return road?.startNodeId === nodeId ? 'ascending' : 'descending';
     };
-    const newGroups: LinePathData[] = entries.map(e => ({
-      fromNodeId: e.nodeId,
-      exiting: e.exitingSectionId ? { sectionId: e.exitingSectionId, side: sideAt(e.exitingSectionId, e.nodeId), rank: 0 } : null,
-      entering: e.enteringSectionId ? { sectionId: e.enteringSectionId, side: sideAt(e.enteringSectionId, e.nodeId), rank: 0 } : null,
-      stationStops: [],
-    }));
+    const newPasses: RoadSectionPassData[] = entries.flatMap(e => {
+      if (!e.enteringSectionId) return [];
+      return [{
+        sectionId: e.enteringSectionId,
+        direction: directionAt(e.enteringSectionId, e.nodeId),
+        fromRank: 0,
+        toRank: 0,
+        stops: [],
+      }];
+    });
     flushPendingToggles();
-    const newPaths = insertGroupsAfter(linePathsRef.current, after, newGroups);
-    postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'update-path', paths: newPaths } });
+    postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'insert-passes', boundaryIndex, passes: newPasses } });
     postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
     stopRseMode();
   };
 
   // ─── Remove / rotate ───────────────────────────────────────────────────────
 
-  const handleRemovePath = (groupIndex: number, stopIndex: number) => {
+  const handleRemoveStop = (passIndex: number, stationId: StationId) => {
     if (!currentEditingLineId) return;
     flushPendingToggles();
-    postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'remove-station', groupIndex, stopIndex } });
+    postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'remove-station', passIndex, stationId } });
   };
 
   // Only updates local state — deferred to a single update-path patch (see
   // flushPendingToggles) so toggling a checkbox doesn't trigger a canvas
   // re-render on every click.
-  const handleToggleStops = (groupIndex: number, stopIndex: number, stops: boolean) => {
+  const handleToggleStops = (passIndex: number, stationId: StationId, stops: boolean) => {
     if (!currentEditingLineId) return;
-    const stationId = linePaths[groupIndex]?.stationStops[stopIndex]?.stationId;
-    const nextPaths = linePaths.map((g, gi) => gi !== groupIndex ? g : {
-      ...g,
-      stationStops: g.stationStops.map((s, si) => si !== stopIndex ? s : { ...s, stops }),
+    const nextPaths = linePaths.map((p, pi) => pi !== passIndex ? p : {
+      ...p,
+      stops: p.stops.map(s => s.stationId !== stationId ? s : { ...s, stops }),
     });
     linePathsRef.current = nextPaths;
     setLinePaths(nextPaths);
     pendingToggleRef.current = true;
-    if (stationId) {
-      setDisplayEntries(prev => prev.map(entry => entry.kind !== 'traversal' ? entry : {
-        ...entry,
-        stations: entry.stations.map(s => s.stationId === stationId ? { ...s, stops } : s),
-      }));
-    }
+    setDisplayEntries(prev => prev.map(entry => entry.kind !== 'traversal' ? entry : {
+      ...entry,
+      stations: entry.stations.map(s => s.stationId === stationId && s.passIndex === passIndex ? { ...s, stops } : s),
+    }));
   };
 
-  const handleToggleDirection = (groupIndex: number, stopIndex: number, direction: 'ascending' | 'descending') => {
+  const handleRemovePass = (passIndex: number) => {
     if (!currentEditingLineId) return;
     flushPendingToggles();
-    postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'toggle-direction', groupIndex, stopIndex, direction } });
-    postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
-  };
-
-  const handleRemoveRse = (groupIndex: number) => {
-    if (!currentEditingLineId) return;
-    flushPendingToggles();
-    const newPaths = removeRsc(linePaths, groupIndex);
-    postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'update-path', paths: newPaths } });
+    postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'remove-pass', passIndex } });
     postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
   };
 
@@ -195,9 +171,9 @@ const PathEditor = forwardRef<PathEditorHandle>((_props, ref) => {
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
-  const inactive = addingRseAfterPathIndex === null;
-  const isEmpty = flattenLinePathData(linePaths).length === 0;
-  const stationStopCount = linePaths.reduce((n, g) => n + g.stationStops.length, 0);
+  const inactive = addingRseAtBoundary === null;
+  const isEmpty = linePaths.length === 0;
+  const realStopCount = linePaths.reduce((n, p) => n + p.stops.filter(s => s.stops).length, 0);
 
   return (
     <div className="flex flex-col gap-2">
@@ -206,32 +182,26 @@ const PathEditor = forwardRef<PathEditorHandle>((_props, ref) => {
       {isEmpty ? (
         <div>
           <p className="p-2 text-[11px] text-neutral-500">No stops in path</p>
-          {inactive && <RoadInsertButton onClick={() => startRseMode(START_ADDRESS)} />}
+          {inactive && <RoadInsertButton onClick={() => startRseMode(0)} />}
         </div>
       ) : (
-        <div>
-          {inactive && <RoadInsertButton onClick={() => startRseMode(START_ADDRESS)} />}
-          <PathItemsList
-            displayEntries={displayEntries}
-            linePaths={linePaths}
-            inactive={inactive}
-            lineColor={currentLineColor}
-            onRemoveStop={handleRemovePath}
-            onRemoveRse={handleRemoveRse}
-            onSelectStation={(stationId) => postMessageToPlugin({ type: 'select-station', stationId })}
-            onToggleStops={handleToggleStops}
-            onToggleDirection={handleToggleDirection}
-            onInsertRoad={startRseMode}
-          />
-          {inactive && <RoadInsertButton onClick={() => startRseMode(lastGroupAddress(linePaths))} />}
-        </div>
+        <PathItemsList
+          displayEntries={displayEntries}
+          inactive={inactive}
+          lineColor={currentLineColor}
+          onRemoveStop={handleRemoveStop}
+          onRemovePass={handleRemovePass}
+          onSelectStation={(stationId) => postMessageToPlugin({ type: 'select-station', stationId })}
+          onToggleStops={handleToggleStops}
+          onInsertRoad={startRseMode}
+        />
       )}
 
-      {addingRseAfterPathIndex !== null && (() => {
-        const src = getSourceAt(addingRseAfterPathIndex);
+      {addingRseAtBoundary !== null && (() => {
+        const src = getSourceAt(addingRseAtBoundary);
         return (
           <RseAddingPanel
-            afterPathIndex={addingRseAfterPathIndex}
+            afterPathIndex={addingRseAtBoundary}
             sourceRoadId={src.roadId}
             exitingSectionId={src.sectionId}
             knownStartNodeId={rseNodeConstraints.knownStartNodeId}
@@ -242,7 +212,7 @@ const PathEditor = forwardRef<PathEditorHandle>((_props, ref) => {
         );
       })()}
 
-      {inactive && stationStopCount > 1 && (
+      {inactive && realStopCount > 1 && (
         <div className="mt-1 flex justify-end gap-2">
           <Button onClick={() => handleRotatePath(1)} title="Rotate path by 1">↻</Button>
         </div>

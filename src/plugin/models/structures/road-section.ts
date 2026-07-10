@@ -3,14 +3,14 @@ import type { Road } from './road';
 import type { Station } from './station';
 import { TransportationMapObject } from "./types";
 import { Line } from "./line";
-import { RoadSectionChange } from "./line-path";
+import { RoadSectionPass } from "./line-path";
 import { SECTION_GAP, sectionBandWidth } from "@/plugin/utils/constants";
 
 // A single directed pass of a line through a section.
 export type LinePass = {
   line: Line;
-  groupIndex: number;    // group index of the station-stop entry at the reference station (-1 if none)
-  stopIndex: number;     // stop index within that group (-1 if none)
+  passIndex: number;         // pass index in line.paths (-1 if none)
+  stationId: StationId | null; // the reference station this pass is anchored to (null if none)
   stops: boolean;
 };
 
@@ -24,7 +24,7 @@ export interface RoadSectionProps {
   name?: string;
   index: number;
 }
-  
+
 export class RoadSection extends TransportationMapObject<SectionId> {
   name?: string;
   index!: number;
@@ -61,7 +61,7 @@ export class RoadSection extends TransportationMapObject<SectionId> {
       s: this.stations.map(station => station.id),
     };
   }
-  
+
   getMaxStationStopCount(): number {
     if (this.stations.length === 0) return 0;
     // Every entry — real stop or pass-through shadow — is a distinct directed pass and
@@ -104,40 +104,36 @@ export class RoadSection extends TransportationMapObject<SectionId> {
     for (const line of this.mapState.getLines()) {
       const count = line.countPassesOnSection(this);
       for (let i = 0; i < count; i++) {
-        allPasses.push({ line, groupIndex: -1, stopIndex: -1, stops: true });
+        allPasses.push({ line, passIndex: -1, stationId: null, stops: true });
       }
     }
     return allPasses;
   }
 
-
-  getLineStackingRanks(side: 0 | 1): Array<{ line: Line; groupIndex: number; rank: number }> {
-    const rscs: Array<{ rsc: RoadSectionChange; line: Line; groupIndex: number; rank: number }> = [];
+  // Stacking rank (0..n-1) among every line's pass touching this section on `side`
+  // (0/1, matching the road's physical endpoints) — a pass touches a side via its
+  // fromRank (if its fromNode is on that side) and/or its toRank (if its toNode is).
+  // Renumbers ranks in place (mutating the passes) and returns the fresh ordering.
+  getLineStackingRanks(side: 0 | 1): Array<{ line: Line; passIndex: number; rank: number }> {
+    const entries: Array<{ pass: RoadSectionPass; end: 'from' | 'to'; line: Line; passIndex: number; rank: number }> = [];
     for (const line of this.mapState.getLines()) {
-      for (const [groupIndex, group] of line.paths.entries()) {
-        const p = group.fromRoadSectionChange;
-        if (!p) continue;
-        if (p.entering?.section === this && p.entering.side === side) {
-          rscs.push({ rsc: p, line, groupIndex, rank: p.enterRank });
-        }
-        if (p.exiting?.section === this && p.exiting.side === side) {
-          rscs.push({ rsc: p, line, groupIndex, rank: p.exitRank });
-        }
+      for (const [passIndex, pass] of line.paths.entries()) {
+        if (pass.section !== this) continue;
+        const fromSide = pass.direction === 'ascending' ? 0 : 1;
+        const toSide = fromSide === 0 ? 1 : 0;
+        if (fromSide === side) entries.push({ pass, end: 'from', line, passIndex, rank: pass.fromRank });
+        if (toSide === side) entries.push({ pass, end: 'to', line, passIndex, rank: pass.toRank });
       }
     }
-    rscs.sort((a, b) => {
+    entries.sort((a, b) => {
       if (a.rank !== b.rank) return a.rank - b.rank;
       if (a.line.id !== b.line.id) return a.line.id < b.line.id ? -1 : 1;
-      return a.groupIndex - b.groupIndex;
+      return a.passIndex - b.passIndex;
     });
-    rscs.forEach((entry, index) => {
-      if (entry.rsc.entering?.section === this && entry.rsc.entering.side === side) {
-        entry.rsc.enterRank = index;
-      }
-      if (entry.rsc.exiting?.section === this && entry.rsc.exiting.side === side) {
-        entry.rsc.exitRank = index;
-      }
+    entries.forEach((entry, index) => {
+      if (entry.end === 'from') entry.pass.fromRank = index;
+      else entry.pass.toRank = index;
     });
-    return rscs.map(({ line, groupIndex, rank }) => ({ line, groupIndex, rank }));
+    return entries.map(({ line, passIndex, rank }) => ({ line, passIndex, rank }));
   }
 }

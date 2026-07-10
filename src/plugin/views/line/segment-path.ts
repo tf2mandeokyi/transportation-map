@@ -9,8 +9,7 @@ import { OffsetT } from "../../utils/offset-t";
 export function computeTotalOffset(
   line: Line, section: RoadSection,
   referenceStation?: Station,
-  pathGroupIndex?: number,
-  pathStopIndex?: number,
+  passIndex?: number,
   forceRank?: number,
 ): number {
   const sectionOffset = section.computeOffset();
@@ -19,10 +18,10 @@ export function computeTotalOffset(
   let effectiveIdx: number;
   if (forceRank === undefined) {
     const passes = referenceStation ? referenceStation.getLinePasses() : section.getLines();
-    const passIndex = pathGroupIndex === undefined
+    const idx = passIndex === undefined
       ? passes.findIndex(lp => lp.line === line)
-      : passes.findIndex(lp => lp.line === line && lp.groupIndex === pathGroupIndex && lp.stopIndex === pathStopIndex);
-    effectiveIdx = passIndex >= 0 ? passIndex : totalSlots;
+      : passes.findIndex(lp => lp.line === line && lp.passIndex === passIndex && lp.stationId === (referenceStation?.id ?? null));
+    effectiveIdx = idx >= 0 ? idx : totalSlots;
   } else {
     effectiveIdx = forceRank;
   }
@@ -87,10 +86,10 @@ export function computeSectionSegs(
 
 // Point at a section boundary (side 0 or 1), offset laterally by `offset` — using
 // the same unsigned, raw-tangent-perpendicular convention as computeCrossingSeg /
-// computeSectionSegs above. RoadSectionChange.computeStartPosition/computeEndPosition
-// (line-path/rsc.ts) use a DIFFERENT sign convention (flips for side-1/non-start
-// nodes, meant for node-facing UI like RSE handles) and will not line up with actual
-// solid-path geometry — don't substitute those here.
+// computeSectionSegs above. RoadSectionPass.computeFromPosition/computeToPosition
+// (line-path/pass.ts) use a DIFFERENT sign convention (flips for side-1/non-start
+// nodes, meant for node-facing UI like junction handles) and will not line up with
+// actual solid-path geometry — don't substitute those here.
 export function computeBoundaryPoint(section: RoadSection, side: 0 | 1, offset: number): Vector | undefined {
   const bezier = section.parentRoad.computeBezier();
   if (!bezier) return undefined;

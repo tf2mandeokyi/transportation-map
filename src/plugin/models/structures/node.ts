@@ -1,7 +1,7 @@
 import { LineId, NodeId } from "@/common/types";
 import { TransportationMapObject } from './types';
 import type { Road } from './road';
-import { RoadSectionChange } from "./line-path";
+import { RoadSectionPass } from "./line-path";
 import { Line } from "./line";
 
 export interface SerializedNode {
@@ -63,28 +63,35 @@ export class Node extends TransportationMapObject<NodeId> {
     this.name = name;
   }
 
-  getRscEntries(): Array<{ line: Line; path: RoadSectionChange; groupIndex: number; position: Vector }> {
-    const result: Array<{ line: Line; path: RoadSectionChange; groupIndex: number; position: Vector }> = [];
+  // Every pass whose fromNode or toNode is this node — a "crossing" at this node is
+  // just the boundary between two such entries (or a single dangling one at the true
+  // start/end of a line's path, which is no longer a special case, just an entry with
+  // nothing on the other side).
+  getPassBoundaryEntries(): Array<{ line: Line; pass: RoadSectionPass; passIndex: number; end: 'from' | 'to'; position: Vector }> {
+    const result: Array<{ line: Line; pass: RoadSectionPass; passIndex: number; end: 'from' | 'to'; position: Vector }> = [];
     for (const line of this.mapState.getLines()) {
-      for (const [groupIndex, group] of line.paths.entries()) {
-        const p = group.fromRoadSectionChange;
-        if (!p || p.node !== this) continue;
-        const position = p.computeEndPosition() ?? p.computeStartPosition();
-        if (position) result.push({ line, path: p, groupIndex, position });
+      for (const [passIndex, pass] of line.paths.entries()) {
+        if (pass.fromNode === this) {
+          const position = pass.computeFromPosition();
+          if (position) result.push({ line, pass, passIndex, end: 'from', position });
+        }
+        if (pass.toNode === this) {
+          const position = pass.computeToPosition();
+          if (position) result.push({ line, pass, passIndex, end: 'to', position });
+        }
       }
     }
     return result;
   }
 
-  updateRscRanks(changes: Array<{ lineId: LineId; groupIndex: number; exitRank: number; enterRank: number }>): void {
-    for (const { lineId, groupIndex, exitRank, enterRank } of changes) {
+  updatePassRanks(changes: Array<{ lineId: LineId; passIndex: number; end: 'from' | 'to'; rank: number }>): void {
+    for (const { lineId, passIndex, end, rank } of changes) {
       const line = this.mapState.getLineHarsh(lineId);
       if (!line) continue;
-      const rsc = line.paths[groupIndex]?.fromRoadSectionChange;
-      if (rsc && rsc.node === this) {
-        rsc.exitRank = exitRank;
-        rsc.enterRank = enterRank;
-      }
+      const pass = line.paths[passIndex];
+      if (!pass) continue;
+      if (end === 'from' && pass.fromNode === this) pass.fromRank = rank;
+      if (end === 'to' && pass.toNode === this) pass.toRank = rank;
     }
   }
 }

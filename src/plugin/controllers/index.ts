@@ -1,5 +1,3 @@
-import { LineId } from "@/common/types";
-import { Station } from "../models/structures";
 import { setUIMessageHandler } from "../figma";
 import { Model } from "../models";
 import { View } from "../views";
@@ -116,10 +114,6 @@ export class Controller {
   private async handleGetMapData(): Promise<void> {
     const data = figma.root.getPluginData('mapState') || '';
     figma.ui.postMessage({ type: 'map-data', data });
-  }
-
-  public connectStationsWithLine(lineId: LineId, startStation: Station, endStation: Station): void {
-    this.connectionController.connectStationsWithLine(lineId, startStation, endStation);
   }
 
   public syncLinesToUI(): void {

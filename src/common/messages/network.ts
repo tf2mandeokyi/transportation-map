@@ -12,7 +12,11 @@ export type LineAtNodeData = {
   lineId: LineId;
   lineName: string;
   lineColor: string;
-  groupIndex: number;
+  // A crossing at a node is the boundary between two adjacent passes — the pass
+  // ending here (toNode side) and the pass starting here (fromNode side). Either
+  // side is null at the true start/end of a line's path.
+  exitingPassIndex: number | null;
+  enteringPassIndex: number | null;
   exitingSectionId: RoadSectionId | null;
   enteringSectionId: RoadSectionId | null;
   exitRank: number;
@@ -21,7 +25,7 @@ export type LineAtNodeData = {
 
 export type NodePatch =
   | { op: 'update-name'; name: string | undefined }
-  | { op: 'update-rsc-ranks'; changes: Array<{ lineId: LineId; groupIndex: number; exitRank: number; enterRank: number }> };
+  | { op: 'update-pass-ranks'; changes: Array<{ lineId: LineId; passIndex: number; end: 'from' | 'to'; rank: number }> };
 
 export type RoadPatch =
   | { op: 'add-section'; section: { name?: string; index: number } }

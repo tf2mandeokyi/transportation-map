@@ -17,12 +17,12 @@ describe.skipIf(!fixtureExists)('station stop ranks', () => {
     for (const station of state.getStations()) {
       const ranksPerSection = new Map<RoadSection, number[]>();
       for (const line of state.getLines()) {
-        for (const group of line.paths) {
-          for (const p of group.stationStops) {
-            if (p.station !== station) continue;
-            const sec = p.station.parentRoadSection as RoadSection;
+        for (const pass of line.paths) {
+          for (const s of pass.stops) {
+            if (s.station !== station) continue;
+            const sec = s.station.parentRoadSection as RoadSection;
             const list = ranksPerSection.get(sec) ?? [];
-            list.push(p.rank);
+            list.push(s.rank);
             ranksPerSection.set(sec, list);
           }
         }
@@ -38,12 +38,12 @@ describe.skipIf(!fixtureExists)('station stop ranks', () => {
     for (const station of state.getStations()) {
       const ranksPerSection = new Map<RoadSection, number[]>();
       for (const line of state.getLines()) {
-        for (const group of line.paths) {
-          for (const p of group.stationStops) {
-            if (p.station !== station) continue;
-            const sec = p.station.parentRoadSection as RoadSection;
+        for (const pass of line.paths) {
+          for (const s of pass.stops) {
+            if (s.station !== station) continue;
+            const sec = s.station.parentRoadSection as RoadSection;
             const list = ranksPerSection.get(sec) ?? [];
-            list.push(p.rank);
+            list.push(s.rank);
             ranksPerSection.set(sec, list);
           }
         }

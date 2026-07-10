@@ -1,20 +1,20 @@
-import { LineId, NodeId, RoadSectionId, StationId } from "../types"
+import { LineId, RoadSectionId, StationId } from "../types"
 
-export interface LinePathStationStopData {
+export interface RoadSectionPassStopData {
   stationId: StationId;
-  direction: 'ascending' | 'descending';
-  rank?: number;
-  stops?: boolean;
+  rank: number;
+  stops: boolean;
 }
 
-// Groups a run of the line's path — one optional junction crossing followed by
-// the station stops that follow it — mirroring how SerializedLinePath groups
-// a RoadSectionChange with its owned stationStops.
-export interface LinePathData {
-  fromNodeId?: NodeId;
-  entering: { sectionId: RoadSectionId; side: 0 | 1, rank: number } | null;
-  exiting: { sectionId: RoadSectionId; side: 0 | 1, rank: number } | null;
-  stationStops: LinePathStationStopData[];
+// One full traversal of a single RoadSection between its two physical endpoints.
+// Carries the full merged (real + pass-through) stop list — the UI needs pass-through
+// candidates to render/toggle, unlike the persisted/disk form which only keeps real stops.
+export interface RoadSectionPassData {
+  sectionId: RoadSectionId;
+  direction: 'ascending' | 'descending';
+  fromRank: number;
+  toRank: number;
+  stops: RoadSectionPassStopData[];
 }
 
 export type LineData = { id: LineId; name: string; color: string };
@@ -22,11 +22,12 @@ export type LineData = { id: LineId; name: string; color: string };
 export type LinePatch =
   | { op: 'update-name'; name: string }
   | { op: 'update-color'; color: string }
-  | { op: 'update-path'; paths: LinePathData[] }
+  | { op: 'update-path'; paths: RoadSectionPassData[] }
+  | { op: 'insert-passes'; boundaryIndex: number; passes: RoadSectionPassData[] }
+  | { op: 'remove-pass'; passIndex: number }
   | { op: 'rotate-path'; steps: number }
-  | { op: 'remove-station'; groupIndex: number; stopIndex: number }
-  | { op: 'toggle-stops'; groupIndex: number; stopIndex: number; stops: boolean }
-  | { op: 'toggle-direction'; groupIndex: number; stopIndex: number; direction: 'ascending' | 'descending' };
+  | { op: 'remove-station'; passIndex: number; stationId: StationId }
+  | { op: 'toggle-stops'; passIndex: number; stationId: StationId; stops: boolean };
 
 export type UIToPluginLineMessage =
   | { type: 'add-line'; line: { name: string; color: string; isCircular?: boolean } }

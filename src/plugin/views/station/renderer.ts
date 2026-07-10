@@ -12,7 +12,7 @@ async function renderStationWithTemplate(
   parentFrame: FrameNode,
   station: Station,
   tangentAngle: number,
-): Promise<{ line: Line; groupIndex: number; stopIndex: number; node: SceneNode; passThrough: boolean }[]> {
+): Promise<{ line: Line; passIndex: number; node: SceneNode; passThrough: boolean }[]> {
   const flipLR = (f: 'left' | 'right'): 'left' | 'right' => f === 'left' ? 'right' : 'left';
 
   const section = station.parentRoadSection as RoadSection | undefined;
@@ -21,10 +21,9 @@ async function renderStationWithTemplate(
   const lines = getLinesForStation(station);
   const effectiveNoRef = Math.max(noRefCount, lines.length);
 
-  const indicators = lines.map(({ line, groupIndex, stopIndex, facing, passThrough }) => ({
+  const indicators = lines.map(({ line, passIndex, facing, passThrough }) => ({
     line,
-    groupIndex,
-    stopIndex,
+    passIndex,
     passThrough,
     result: renderStationLine({
       text: line.name,
@@ -69,8 +68,8 @@ async function renderStationWithTemplate(
   }).intoNode();
 
   parentFrame.appendChild(stationElement);
-  return indicators.map(({ line, groupIndex, stopIndex, passThrough, result }) => ({
-    line, groupIndex, stopIndex, passThrough, node: result.node,
+  return indicators.map(({ line, passIndex, passThrough, result }) => ({
+    line, passIndex, passThrough, node: result.node,
   }));
 }
 
@@ -119,20 +118,20 @@ export class StationRenderer {
 
   private storeLineConnectionPoints(
     station: Station,
-    lines: Array<{ line: Line; groupIndex: number; stopIndex: number; node: SceneNode; passThrough: boolean }>,
+    lines: Array<{ line: Line; passIndex: number; node: SceneNode; passThrough: boolean }>,
   ): void {
-    for (const { line, node, groupIndex, stopIndex } of lines) {
+    for (const { line, node, passIndex } of lines) {
       const transform = node.absoluteTransform;
       const width  = node.width;
       const height = node.height;
 
       const center = applyTransform(transform, { x: width / 2, y: height / 2 });
-      this.lineConnectionPoints.set(`${station.id}-${line.id}-${groupIndex}-${stopIndex}`, center);
+      this.lineConnectionPoints.set(`${station.id}-${line.id}-${passIndex}`, center);
     }
   }
 
-  public getConnectionPoint(station: Station, line: Line, groupIndex: number, stopIndex: number): Vector | undefined {
-    return this.lineConnectionPoints.get(`${station.id}-${line.id}-${groupIndex}-${stopIndex}`);
+  public getConnectionPoint(station: Station, line: Line, passIndex: number): Vector | undefined {
+    return this.lineConnectionPoints.get(`${station.id}-${line.id}-${passIndex}`);
   }
 
   public clearConnectionPoints(): void {

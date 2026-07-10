@@ -1,13 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { NodeId, RoadId, RoadSectionId } from '@/common/types';
 import { RoadSectionData } from '@/common/messages';
-import { LinePathAddress } from '../../utils/linePathGroups';
 import { useMessageManager } from '../../contexts/MessageContext';
 import { useNetworkContext } from '../../contexts/NetworkContext';
 import Button from '../common/Button';
 
 interface RseAddingPanelProps {
-  afterPathIndex: LinePathAddress;
+  afterPathIndex: number;
   sourceRoadId: RoadId | null;
   exitingSectionId: RoadSectionId | null;
   // When set, the very first crossing is already known (e.g. closing an
@@ -18,7 +17,7 @@ interface RseAddingPanelProps {
   // committed (e.g. the node of the RSE right after an invalid-jump gap).
   requiredEndNodeId?: NodeId | null;
   onCommitRses: (
-    afterPathIndex: LinePathAddress,
+    afterPathIndex: number,
     entries: Array<{ nodeId: NodeId; exitingSectionId: RoadSectionId | null; enteringSectionId: RoadSectionId | null }>
   ) => void;
   onCancel: () => void;

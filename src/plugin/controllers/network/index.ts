@@ -2,7 +2,7 @@ import { NodeId, RoadId, RoadSectionId, SectionId } from "@/common/types";
 import { LineAtNodeData, NetworkFocusedElement, NodeData, NodePatch, RoadData, RoadPatch, RoadSectionData } from "@/common/messages";
 import { PluginSessionManager } from "../../sessions/manager";
 import { postMessageToUI } from "../../figma";
-import { Node, RoadSectionChange } from "../../models/structures";
+import { Node, RoadSectionPass } from "../../models/structures";
 import { Model } from "../../models";
 import { View } from "../../views";
 import { BaseController } from "../base";
@@ -49,8 +49,8 @@ export class NetworkController extends BaseController {
         await this.save();
         this.syncNetworkToUI();
         break;
-      case 'update-rsc-ranks':
-        if (node) node.updateRscRanks(patch.changes);
+      case 'update-pass-ranks':
+        if (node) node.updatePassRanks(patch.changes);
         if (node) await this.emitNodeLinesData(node);
         await this.render();
         await this.save();
@@ -342,23 +342,15 @@ export class NetworkController extends BaseController {
   }
 
   public async emitNodeLinesData(node: Node): Promise<void> {
-    const entries = node.getRscEntries();
+    const entries = node.getPassBoundaryEntries();
 
-    type ArmEntry = { rsc: RoadSectionChange; role: 'exit' | 'enter'; rank: number; lineId: string; groupIndex: number };
+    type ArmEntry = { pass: RoadSectionPass; end: 'from' | 'to'; rank: number; lineId: string; passIndex: number };
     const sectionGroups = new Map<string, ArmEntry[]>();
-    for (const { line, path: rsc, groupIndex } of entries) {
-      if (rsc.exiting) {
-        const key = rsc.exiting.section.id;
-        const g = sectionGroups.get(key) ?? [];
-        g.push({ rsc, role: 'exit', rank: rsc.exitRank, lineId: line.id, groupIndex });
-        sectionGroups.set(key, g);
-      }
-      if (rsc.entering) {
-        const key = rsc.entering.section.id;
-        const g = sectionGroups.get(key) ?? [];
-        g.push({ rsc, role: 'enter', rank: rsc.enterRank, lineId: line.id, groupIndex });
-        sectionGroups.set(key, g);
-      }
+    for (const { line, pass, passIndex, end } of entries) {
+      const key = pass.section.id;
+      const g = sectionGroups.get(key) ?? [];
+      g.push({ pass, end, rank: end === 'from' ? pass.fromRank : pass.toRank, lineId: line.id, passIndex });
+      sectionGroups.set(key, g);
     }
 
     let changed = false;
@@ -366,22 +358,39 @@ export class NetworkController extends BaseController {
       group.sort((a, b) => {
         if (a.rank !== b.rank) return a.rank - b.rank;
         if (a.lineId !== b.lineId) return a.lineId < b.lineId ? -1 : 1;
-        return a.groupIndex - b.groupIndex;
+        return a.passIndex - b.passIndex;
       });
       group.forEach((item, i) => {
-        if (item.role === 'exit' && item.rsc.exitRank !== i) { item.rsc.exitRank = i; changed = true; }
-        if (item.role === 'enter' && item.rsc.enterRank !== i) { item.rsc.enterRank = i; changed = true; }
+        if (item.end === 'from' && item.pass.fromRank !== i) { item.pass.fromRank = i; changed = true; }
+        if (item.end === 'to' && item.pass.toRank !== i) { item.pass.toRank = i; changed = true; }
       });
     }
 
     if (changed) await this.save();
 
-    const lines: LineAtNodeData[] = entries.map(({ line, path: p, groupIndex }) => ({
-      lineId: line.id, lineName: line.name, lineColor: line.color, groupIndex,
-      exitingSectionId: p.exiting?.section.getRoadSectionId() ?? null,
-      enteringSectionId: p.entering?.section.getRoadSectionId() ?? null,
-      exitRank: p.exitRank, enterRank: p.enterRank,
-    }));
+    // Pair each pass-boundary (a pass ending here / the next pass starting here) into
+    // one row per crossing — either side may be absent at the true start/end of a
+    // line's path, or when an invalid-jump gap happens to land on this node from only
+    // one side.
+    const lines: LineAtNodeData[] = [];
+    for (const line of this.model.state.getLines()) {
+      for (let i = 0; i <= line.paths.length; i++) {
+        const fromPass = i > 0 ? line.paths[i - 1] : null;
+        const toPass = i < line.paths.length ? line.paths[i] : null;
+        const fromTouches = fromPass?.toNode === node;
+        const toTouches = toPass?.fromNode === node;
+        if (!fromTouches && !toTouches) continue;
+        lines.push({
+          lineId: line.id, lineName: line.name, lineColor: line.color,
+          exitingPassIndex: fromTouches ? i - 1 : null,
+          enteringPassIndex: toTouches ? i : null,
+          exitingSectionId: fromTouches ? fromPass!.section.getRoadSectionId() : null,
+          enteringSectionId: toTouches ? toPass!.section.getRoadSectionId() : null,
+          exitRank: fromTouches ? fromPass!.toRank : 0,
+          enterRank: toTouches ? toPass!.fromRank : 0,
+        });
+      }
+    }
     postMessageToUI({ type: 'node-lines-data', nodeId: node.id, lines });
   }
 
