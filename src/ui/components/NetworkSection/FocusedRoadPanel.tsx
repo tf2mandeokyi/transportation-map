@@ -53,14 +53,16 @@ const FocusedRoadPanel: React.FC<{
       {element.sections.length > 0 && (
         <div className="mt-2 border-t border-[#d0e4f7] pt-2">
           <label className="mb-1 block text-[11px] text-neutral-500">Line Ranks</label>
+          <div className="grid grid-cols-2 gap-2">
+            <span className="truncate text-[11px] text-neutral-400">{startNode?.name ?? `junction #${element.startNodeId}`}</span>
+            <span className="truncate text-[11px] text-neutral-400">{endNode?.name ?? `junction #${element.endNodeId}`}</span>
+          </div>
           {element.sections.map(section => (
             <SectionRankLists
               key={sectionIdKey(section.id)}
               roadId={element.roadId}
               sectionId={section.id}
               sectionLabel={section.name ?? `Section ${section.index}`}
-              startLabel={startNode?.name ?? `junction #${element.startNodeId}`}
-              endLabel={endNode?.name ?? `junction #${element.endNodeId}`}
               lines={lines.filter(l => sectionIdKey(l.sectionId) === sectionIdKey(section.id))}
             />
           ))}
@@ -74,20 +76,23 @@ interface SectionRankListsProps {
   roadId: RoadId;
   sectionId: RoadSectionId;
   sectionLabel: string;
-  startLabel: string;
-  endLabel: string;
   lines: LineAtRoadSectionData[];
 }
 
-const SectionRankLists: React.FC<SectionRankListsProps> = ({ roadId, sectionId, sectionLabel, startLabel, endLabel, lines }) => (
-  <>
-    {([0, 1] as const).map(side => {
-      const items = lines.filter(l => l.side === side).sort((a, b) => a.rank - b.rank);
-      if (items.length === 0) return null;
-      return (
-        <div className="mt-2" key={side}>
-          <label className="text-neutral-600">{sectionLabel} — {side === 0 ? startLabel : endLabel} side (drag to reorder)</label>
-          <div className="mt-1">
+const SectionRankLists: React.FC<SectionRankListsProps> = ({ roadId, sectionId, sectionLabel, lines }) => {
+  const sides = ([0, 1] as const).map(side => ({
+    side,
+    items: lines.filter(l => l.side === side).sort((a, b) => a.rank - b.rank),
+  })).filter(s => s.items.length > 0);
+
+  if (sides.length === 0) return null;
+
+  return (
+    <div className="mt-2">
+      <label className="text-neutral-600">{sectionLabel} (drag to reorder)</label>
+      <div className="mt-1 grid grid-cols-2 gap-2">
+        {sides.map(({ side, items }) => (
+          <div key={side}>
             <DraggableLineList
               items={items}
               getKey={item => `${item.lineId}-${item.passIndex}-${item.end}`}
@@ -100,10 +105,10 @@ const SectionRankLists: React.FC<SectionRankListsProps> = ({ roadId, sectionId, 
               }}
             />
           </div>
-        </div>
-      );
-    })}
-  </>
-);
+        ))}
+      </div>
+    </div>
+  );
+};
 
 export default FocusedRoadPanel;
