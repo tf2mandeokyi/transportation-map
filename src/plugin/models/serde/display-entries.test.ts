@@ -33,14 +33,14 @@ function buildNetwork(state: MapState) {
   const secCN = new RoadSection(state, 'sCN' as SectionId).applyProps(roadCN, { index: 0 });
   const secWC = new RoadSection(state, 'sWC' as SectionId).applyProps(roadWC, { index: 0 });
 
-  const north = new Station(state, 'north' as StationId).applyProps({ name: 'North Station', textAlign: 'left', textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.8, roadSection: secCN });
+  const north = new Station(state, 'north' as StationId).applyProps({ name: 'North Station', textAlign: 'left', textHAlign: 'left', textVAlign: 'center', textRotation: 0, flipped: false, interpT: 0.8, roadSection: secCN });
   north.setParent(secCN);
   secCN.stations = [north];
   state.addStation(north);
 
-  const west    = new Station(state, 'west' as StationId).applyProps({ name: 'West Station', textAlign: 'left', textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.2, roadSection: secWC });
-  const central = new Station(state, 'central' as StationId).applyProps({ name: 'Central Station', textAlign: 'left', textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.5, roadSection: secWC });
-  const cityHall = new Station(state, 'cityHall' as StationId).applyProps({ name: 'City Hall West', textAlign: 'left', textHAlign: 'left', textRotation: 0, flipped: false, interpT: 0.8, roadSection: secWC });
+  const west    = new Station(state, 'west' as StationId).applyProps({ name: 'West Station', textAlign: 'left', textHAlign: 'left', textVAlign: 'center', textRotation: 0, flipped: false, interpT: 0.2, roadSection: secWC });
+  const central = new Station(state, 'central' as StationId).applyProps({ name: 'Central Station', textAlign: 'left', textHAlign: 'left', textVAlign: 'center', textRotation: 0, flipped: false, interpT: 0.5, roadSection: secWC });
+  const cityHall = new Station(state, 'cityHall' as StationId).applyProps({ name: 'City Hall West', textAlign: 'left', textHAlign: 'left', textVAlign: 'center', textRotation: 0, flipped: false, interpT: 0.8, roadSection: secWC });
   [west, central, cityHall].forEach(s => { s.setParent(secWC); state.addStation(s); });
   secWC.stations = [west, central, cityHall];
 

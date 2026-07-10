@@ -111,12 +111,12 @@ export class StationController extends BaseController {
     figma.currentPage.selection = [handle];
   }
 
-  public async confirmPlacingMode({ name, textAlign, textHAlign, textRotation, flipped }: StationParams): Promise<void> {
+  public async confirmPlacingMode({ name, textAlign, textHAlign, textVAlign, textRotation, flipped }: StationParams): Promise<void> {
     if (!this.placingState) return;
     const snap = this.placingState.snap;
     await this.cancelPlacingMode();
 
-    const station = this.model.addStation({ name, textAlign, textHAlign, textRotation, flipped, interpT: snap?.interpT ?? 0.5, roadSection: snap?.section ?? null });
+    const station = this.model.addStation({ name, textAlign, textHAlign, textVAlign, textRotation, flipped, interpT: snap?.interpT ?? 0.5, roadSection: snap?.section ?? null });
     await this.view.stationRenderer.renderStation(station);
     await this.save();
   }
@@ -135,9 +135,9 @@ export class StationController extends BaseController {
 
   // ── Message handlers ──────────────────────────────────────────────────────
 
-  public async handleAddStation({ name, textAlign, textHAlign, textRotation, flipped, roadSectionId, interpT }: StationParams & { roadSectionId: RoadSectionId | null; interpT: number }): Promise<void> {
+  public async handleAddStation({ name, textAlign, textHAlign, textVAlign, textRotation, flipped, roadSectionId, interpT }: StationParams & { roadSectionId: RoadSectionId | null; interpT: number }): Promise<void> {
     const roadSection = roadSectionId ? this.model.findSection(roadSectionId) : null;
-    const station = this.model.addStation({ name, textAlign, textHAlign, textRotation, flipped, interpT, roadSection });
+    const station = this.model.addStation({ name, textAlign, textHAlign, textVAlign, textRotation, flipped, interpT, roadSection });
     await this.view.stationRenderer.renderStation(station);
     await this.save();
   }
@@ -165,7 +165,7 @@ export class StationController extends BaseController {
     postMessageToUI({
       type: 'station-clicked',
       stationId,
-      station: { name: station.name, textAlign: station.textAlign, textHAlign: station.textHAlign, textRotation: station.textRotation, flipped: station.flipped },
+      station: { name: station.name, textAlign: station.textAlign, textHAlign: station.textHAlign, textVAlign: station.textVAlign, textRotation: station.textRotation, flipped: station.flipped },
       lines: station.getLinesAtStationData(),
     });
   }
@@ -186,13 +186,14 @@ export class StationController extends BaseController {
     await this.handleGetStationInfo(stationId);
   }
 
-  private async handleUpdateStation(stationId: StationId, { name, textAlign, textHAlign, textRotation, flipped }: StationParams): Promise<void> {
+  private async handleUpdateStation(stationId: StationId, { name, textAlign, textHAlign, textVAlign, textRotation, flipped }: StationParams): Promise<void> {
     const station = this.model.state.getStation(stationId);
     if (!station) { console.warn(`Station ${stationId} not found`); return; }
 
     station.name = name;
     station.textAlign = textAlign;
     station.textHAlign = textHAlign;
+    station.textVAlign = textVAlign;
     station.textRotation = textRotation;
     station.flipped = flipped;
 

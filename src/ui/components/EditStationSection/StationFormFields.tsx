@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { HVAlign, StationId, TextHAlign } from '@/common/types';
+import { HVAlign, StationId, TextHAlign, TextVAlign } from '@/common/types';
 import { postMessageToPlugin } from '../../figma';
 import Button from '../common/Button';
 
@@ -8,6 +8,7 @@ interface Props {
   stationName: string;
   stationTextAlign: HVAlign;
   stationTextHAlign: TextHAlign;
+  stationTextVAlign: TextVAlign;
   stationTextRotation: number;
   stationFlipped: boolean;
   isCombiningMode: boolean;
@@ -17,20 +18,21 @@ interface Props {
 
 const StationFormFields: React.FC<Props> = ({
   stationId, stationName,
-  stationTextAlign, stationTextHAlign, stationTextRotation, stationFlipped,
+  stationTextAlign, stationTextHAlign, stationTextVAlign, stationTextRotation, stationFlipped,
   isCombiningMode, setIsCombiningMode,
   onClose,
 }) => {
   const [name, setName]               = useState(stationName);
   const [textAlign, setTextAlign]     = useState(stationTextAlign);
   const [textHAlign, setTextHAlign]   = useState(stationTextHAlign);
+  const [textVAlign, setTextVAlign]   = useState(stationTextVAlign);
   const [textRotation, setTextRotation] = useState(stationTextRotation);
   const [flipped, setFlipped]         = useState(stationFlipped);
 
   const nameUpdateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const onUpdateStation = (name: string, textAlign: HVAlign, textHAlign: TextHAlign, textRotation: number, flipped: boolean) => {
-    postMessageToPlugin({ type: 'patch-station', stationId, patch: { op: 'update', station: { name, textAlign, textHAlign, textRotation, flipped } } });
+  const onUpdateStation = (name: string, textAlign: HVAlign, textHAlign: TextHAlign, textVAlign: TextVAlign, textRotation: number, flipped: boolean) => {
+    postMessageToPlugin({ type: 'patch-station', stationId, patch: { op: 'update', station: { name, textAlign, textHAlign, textVAlign, textRotation, flipped } } });
   };
 
   // Sync local state when server state changes (different station selected while panel is open)
@@ -38,32 +40,37 @@ const StationFormFields: React.FC<Props> = ({
     setName(stationName);
     setTextAlign(stationTextAlign);
     setTextHAlign(stationTextHAlign);
+    setTextVAlign(stationTextVAlign);
     setTextRotation(stationTextRotation);
     setFlipped(stationFlipped);
-  }, [stationName, stationTextAlign, stationTextHAlign, stationTextRotation, stationFlipped]);
+  }, [stationName, stationTextAlign, stationTextHAlign, stationTextVAlign, stationTextRotation, stationFlipped]);
 
   useEffect(() => {
     if (nameUpdateTimerRef.current) clearTimeout(nameUpdateTimerRef.current);
     if (name !== stationName) {
-      nameUpdateTimerRef.current = setTimeout(() => { onUpdateStation(name, textAlign, textHAlign, textRotation, flipped); }, 500);
+      nameUpdateTimerRef.current = setTimeout(() => { onUpdateStation(name, textAlign, textHAlign, textVAlign, textRotation, flipped); }, 500);
     }
     return () => { if (nameUpdateTimerRef.current) clearTimeout(nameUpdateTimerRef.current); };
   }, [name]);
 
   useEffect(() => {
-    if (textAlign !== stationTextAlign) onUpdateStation(name, textAlign, textHAlign, textRotation, flipped);
+    if (textAlign !== stationTextAlign) onUpdateStation(name, textAlign, textHAlign, textVAlign, textRotation, flipped);
   }, [textAlign]);
 
   useEffect(() => {
-    if (textHAlign !== stationTextHAlign) onUpdateStation(name, textAlign, textHAlign, textRotation, flipped);
+    if (textHAlign !== stationTextHAlign) onUpdateStation(name, textAlign, textHAlign, textVAlign, textRotation, flipped);
   }, [textHAlign]);
 
   useEffect(() => {
-    if (textRotation !== stationTextRotation) onUpdateStation(name, textAlign, textHAlign, textRotation, flipped);
+    if (textVAlign !== stationTextVAlign) onUpdateStation(name, textAlign, textHAlign, textVAlign, textRotation, flipped);
+  }, [textVAlign]);
+
+  useEffect(() => {
+    if (textRotation !== stationTextRotation) onUpdateStation(name, textAlign, textHAlign, textVAlign, textRotation, flipped);
   }, [textRotation]);
 
   useEffect(() => {
-    if (flipped !== stationFlipped) onUpdateStation(name, textAlign, textHAlign, textRotation, flipped);
+    if (flipped !== stationFlipped) onUpdateStation(name, textAlign, textHAlign, textVAlign, textRotation, flipped);
   }, [flipped]);
 
   return (
@@ -93,18 +100,33 @@ const StationFormFields: React.FC<Props> = ({
           <option value="bottom">Bottom</option>
         </select>
       </div>
-      <div className="mb-2">
-        <label htmlFor="edit-station-text-halign" className="mb-1 block font-medium select-none">Text Alignment</label>
-        <select
-          className="w-full rounded border border-neutral-300 px-2 py-1 text-xs"
-          id="edit-station-text-halign"
-          value={textHAlign}
-          onChange={(e) => setTextHAlign(e.target.value as TextHAlign)}
-        >
-          <option value="left">Left</option>
-          <option value="center">Center</option>
-          <option value="right">Right</option>
-        </select>
+      <div className="mb-2 grid grid-cols-2 gap-2">
+        <div>
+          <label htmlFor="edit-station-text-halign" className="mb-1 block font-medium select-none">Text Alignment</label>
+          <select
+            className="w-full rounded border border-neutral-300 px-2 py-1 text-xs"
+            id="edit-station-text-halign"
+            value={textHAlign}
+            onChange={(e) => setTextHAlign(e.target.value as TextHAlign)}
+          >
+            <option value="left">Left</option>
+            <option value="center">Center</option>
+            <option value="right">Right</option>
+          </select>
+        </div>
+        <div>
+          <label htmlFor="edit-station-text-valign" className="mb-1 block font-medium select-none">Text Anchor</label>
+          <select
+            className="w-full rounded border border-neutral-300 px-2 py-1 text-xs"
+            id="edit-station-text-valign"
+            value={textVAlign}
+            onChange={(e) => setTextVAlign(e.target.value as TextVAlign)}
+          >
+            <option value="top">Top</option>
+            <option value="center">Middle</option>
+            <option value="bottom">Bottom</option>
+          </select>
+        </div>
       </div>
       <div className="mb-2">
         <label htmlFor="edit-station-text-rotation" className="mb-1 block font-medium select-none">Text Rotation (°)</label>

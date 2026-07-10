@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { LineAtStationData } from '@/common/messages';
-import { HVAlign, StationId, TextHAlign } from '@/common/types';
+import { HVAlign, StationId, TextHAlign, TextVAlign } from '@/common/types';
 import { postMessageToPlugin } from '../../figma';
 import { useMessageManager } from '../../contexts/MessageContext';
 import Button from '../common/Button';
@@ -14,6 +14,7 @@ const EditStationSection: React.FC = () => {
   const [stationName, setStationName]                 = useState<string | null>(null);
   const [stationTextAlign, setStationTextAlign]       = useState<HVAlign | null>(null);
   const [stationTextHAlign, setStationTextHAlign]     = useState<TextHAlign | null>(null);
+  const [stationTextVAlign, setStationTextVAlign]     = useState<TextVAlign | null>(null);
   const [stationTextRotation, setStationTextRotation] = useState<number | null>(null);
   const [stationFlipped, setStationFlipped]           = useState<boolean | null>(null);
   const [linesAtStation, setLinesAtStation]           = useState<Array<LineAtStationData>>([]);
@@ -30,6 +31,7 @@ const EditStationSection: React.FC = () => {
     setStationName(null);
     setStationTextAlign(null);
     setStationTextHAlign(null);
+    setStationTextVAlign(null);
     setStationTextRotation(null);
     setStationFlipped(null);
     setLinesAtStation([]);
@@ -46,6 +48,7 @@ const EditStationSection: React.FC = () => {
         setStationName(msg.station.name);
         setStationTextAlign(msg.station.textAlign);
         setStationTextHAlign(msg.station.textHAlign);
+        setStationTextVAlign(msg.station.textVAlign);
         setStationTextRotation(msg.station.textRotation);
         setStationFlipped(msg.station.flipped);
         setLinesAtStation(msg.lines);
@@ -55,7 +58,7 @@ const EditStationSection: React.FC = () => {
     return unsubscribe;
   }, [manager, onClose]);
 
-  if (!stationId || stationName === null || stationTextAlign === null || stationTextHAlign === null || stationTextRotation === null || stationFlipped === null) {
+  if (!stationId || stationName === null || stationTextAlign === null || stationTextHAlign === null || stationTextVAlign === null || stationTextRotation === null || stationFlipped === null) {
     return (
       <div className="mb-4 border-b border-neutral-200 pb-4">
         <h3 className="mb-3 text-sm font-semibold">Edit Station</h3>
@@ -75,6 +78,7 @@ const EditStationSection: React.FC = () => {
         stationName={stationName}
         stationTextAlign={stationTextAlign}
         stationTextHAlign={stationTextHAlign}
+        stationTextVAlign={stationTextVAlign}
         stationTextRotation={stationTextRotation}
         stationFlipped={stationFlipped}
         isCombiningMode={isCombiningMode}

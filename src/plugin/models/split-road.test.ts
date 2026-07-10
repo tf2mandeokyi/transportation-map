@@ -24,11 +24,11 @@ describe('Model.splitRoad', () => {
     const { road, section } = buildStraightRoad(model);
 
     const s1 = model.addStation({
-      name: 'S1', textAlign: 'left', textHAlign: 'left', textRotation: 0, flipped: false,
+      name: 'S1', textAlign: 'left', textHAlign: 'left', textVAlign: 'center', textRotation: 0, flipped: false,
       interpT: 0.3, roadSection: section,
     });
     const s2 = model.addStation({
-      name: 'S2', textAlign: 'left', textHAlign: 'left', textRotation: 0, flipped: false,
+      name: 'S2', textAlign: 'left', textHAlign: 'left', textVAlign: 'center', textRotation: 0, flipped: false,
       interpT: 0.7, roadSection: section,
     });
 
@@ -65,11 +65,11 @@ describe('Model.splitRoad', () => {
     const { road, section } = buildStraightRoad(model);
 
     const s1 = model.addStation({
-      name: 'S1', textAlign: 'left', textHAlign: 'left', textRotation: 0, flipped: false,
+      name: 'S1', textAlign: 'left', textHAlign: 'left', textVAlign: 'center', textRotation: 0, flipped: false,
       interpT: 0.3, roadSection: section,
     });
     const s2 = model.addStation({
-      name: 'S2', textAlign: 'left', textHAlign: 'left', textRotation: 0, flipped: false,
+      name: 'S2', textAlign: 'left', textHAlign: 'left', textVAlign: 'center', textRotation: 0, flipped: false,
       interpT: 0.7, roadSection: section,
     });
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { HVAlign, TextHAlign } from '@/common/types';
+import { HVAlign, TextHAlign, TextVAlign } from '@/common/types';
 import Button from './common/Button';
 import { useMessageManager } from '../contexts/MessageContext';
 import { PlacingStationUISession } from '../sessions/placing-station';
@@ -13,6 +13,7 @@ const StationsSection: React.FC = () => {
   const [stationName, setStationName] = useState('');
   const [textAlign, setTextAlign] = useState<HVAlign>('right');
   const [textHAlign, setTextHAlign] = useState<TextHAlign>('left');
+  const [textVAlign, setTextVAlign] = useState<TextVAlign>('center');
 
   const handleStartPlacing = () => {
     open(new PlacingStationUISession()).start(manager);
@@ -20,7 +21,7 @@ const StationsSection: React.FC = () => {
   };
 
   const handleConfirm = () => {
-    close(s => s.confirm({ name: stationName, textAlign, textHAlign, textRotation: 0, flipped: false }));
+    close(s => s.confirm({ name: stationName, textAlign, textHAlign, textVAlign, textRotation: 0, flipped: false }));
     setIsPlacing(false);
     setStationName('');
   };
@@ -76,17 +77,34 @@ const StationsSection: React.FC = () => {
               <option value="top">Top</option>
               <option value="bottom">Bottom</option>
             </select>
-            <label htmlFor="station-text-halign" className="mt-2 mb-1 block font-medium select-none">Text Alignment</label>
-            <select
-              className="w-full rounded border border-neutral-300 px-2 py-1 text-xs"
-              id="station-text-halign"
-              value={textHAlign}
-              onChange={(e) => setTextHAlign(e.target.value as TextHAlign)}
-            >
-              <option value="left">Left</option>
-              <option value="center">Center</option>
-              <option value="right">Right</option>
-            </select>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <div>
+                <label htmlFor="station-text-halign" className="mb-1 block font-medium select-none">Text Alignment</label>
+                <select
+                  className="w-full rounded border border-neutral-300 px-2 py-1 text-xs"
+                  id="station-text-halign"
+                  value={textHAlign}
+                  onChange={(e) => setTextHAlign(e.target.value as TextHAlign)}
+                >
+                  <option value="left">Left</option>
+                  <option value="center">Center</option>
+                  <option value="right">Right</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="station-text-valign" className="mb-1 block font-medium select-none">Text Anchor</label>
+                <select
+                  className="w-full rounded border border-neutral-300 px-2 py-1 text-xs"
+                  id="station-text-valign"
+                  value={textVAlign}
+                  onChange={(e) => setTextVAlign(e.target.value as TextVAlign)}
+                >
+                  <option value="top">Top</option>
+                  <option value="center">Middle</option>
+                  <option value="bottom">Bottom</option>
+                </select>
+              </div>
+            </div>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2">

@@ -23,6 +23,7 @@ function buildSection(state: MapState, positions: Record<string, number>): { sec
       name,
       textAlign: 'left',
       textHAlign: 'left',
+      textVAlign: 'center',
       textRotation: 0,
       flipped: false,
       interpT,

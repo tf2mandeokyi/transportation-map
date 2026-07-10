@@ -113,7 +113,7 @@ export function simulateStationClick() {
   send({
     type: 'station-clicked',
     stationId: stationId('station-1'),
-    station: { name: 'Sample Station', textAlign: 'right', textHAlign: 'left', textRotation: 0, flipped: false },
+    station: { name: 'Sample Station', textAlign: 'right', textHAlign: 'left', textVAlign: 'center', textRotation: 0, flipped: false },
     lines: [
       { id: lineId('line-1'), name: 'Red Line', color: '#e63946', passIndex: 0, rank: 0, facing: 'left', stops: true },
       { id: lineId('line-2'), name: 'Blue Line', color: '#1d3557', passIndex: 0, rank: 1, facing: 'right', stops: false },

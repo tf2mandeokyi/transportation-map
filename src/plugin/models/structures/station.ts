@@ -1,24 +1,44 @@
-import { HVAlign, StationId } from "@/common/types";
+import { HVAlign, StationId, TextHAlign, TextVAlign } from "@/common/types";
 import { LineAtStationData } from "@/common/messages";
 import { TransportationMapObject } from './types';
 import type { RoadSection, LinePass } from './road-section';
 import { Line } from "./line";
 import { OffsetT } from "@/plugin/utils/offset-t";
 
+type SerializedHVAlign = 'l' | 'r' | 't' | 'b';
+type SerializedTextHAlign = 'l' | 'c' | 'r';
+type SerializedTextVAlign = 't' | 'c' | 'b';
+
+const HV_ALIGN_CODES: Record<HVAlign, SerializedHVAlign> = { left: 'l', right: 'r', top: 't', bottom: 'b' };
+const HV_ALIGN_VALUES: Record<SerializedHVAlign, HVAlign> = { l: 'left', r: 'right', t: 'top', b: 'bottom' };
+const TEXT_H_ALIGN_CODES: Record<TextHAlign, SerializedTextHAlign> = { left: 'l', center: 'c', right: 'r' };
+const TEXT_H_ALIGN_VALUES: Record<SerializedTextHAlign, TextHAlign> = { l: 'left', c: 'center', r: 'right' };
+const TEXT_V_ALIGN_CODES: Record<TextVAlign, SerializedTextVAlign> = { top: 't', center: 'c', bottom: 'b' };
+const TEXT_V_ALIGN_VALUES: Record<SerializedTextVAlign, TextVAlign> = { t: 'top', c: 'center', b: 'bottom' };
+
+// Decode helpers accept either the current single-char code or a legacy full-word value.
+function decodeHVAlign(v: SerializedHVAlign | HVAlign): HVAlign { return HV_ALIGN_VALUES[v as SerializedHVAlign] ?? (v as HVAlign); }
+function decodeTextHAlign(v: SerializedTextHAlign | TextHAlign): TextHAlign { return TEXT_H_ALIGN_VALUES[v as SerializedTextHAlign] ?? (v as TextHAlign); }
+function decodeTextVAlign(v: SerializedTextVAlign | TextVAlign): TextVAlign { return TEXT_V_ALIGN_VALUES[v as SerializedTextVAlign] ?? (v as TextVAlign); }
+
+// Older documents were saved with full-word values (e.g. "right") before these were
+// abbreviated to single-char codes; decoders below must accept either.
 export interface SerializedStation {
-  n: string;                        // name
-  f: string | null;                 // figmaNodeId
-  t: HVAlign;                       // textAlign
-  h?: 'left' | 'center' | 'right';  // textHAlign (absent → 'left')
-  r?: number;                       // textRotation (absent → 0)
-  l?: boolean;                      // flipped (absent → false)
-  p: number;                        // interpT
+  n: string;                             // name
+  f: string | null;                      // figmaNodeId
+  t: SerializedHVAlign | HVAlign;         // textAlign
+  h?: SerializedTextHAlign | TextHAlign;  // textHAlign (absent → 'l')
+  v?: SerializedTextVAlign | TextVAlign;  // textVAlign (absent → 'c')
+  r?: number;                            // textRotation (absent → 0)
+  l?: boolean;                           // flipped (absent → false)
+  p: number;                             // interpT
 }
 
 export interface StationProps {
   name: string;
   textAlign: HVAlign;
-  textHAlign: 'left' | 'center' | 'right';
+  textHAlign: TextHAlign;
+  textVAlign: TextVAlign;
   textRotation: number;
   flipped: boolean;
   interpT: number;
@@ -29,7 +49,8 @@ export class Station extends TransportationMapObject<StationId> {
   name!: string;
   figmaNodeId: string | null = null;
   textAlign!: HVAlign;
-  textHAlign!: 'left' | 'center' | 'right';
+  textHAlign!: TextHAlign;
+  textVAlign!: TextVAlign;
   textRotation!: number;
   flipped!: boolean;
   private _interpT!: number;
@@ -41,6 +62,7 @@ export class Station extends TransportationMapObject<StationId> {
     this.name = props.name;
     this.textAlign = props.textAlign;
     this.textHAlign = props.textHAlign;
+    this.textVAlign = props.textVAlign;
     this.textRotation = props.textRotation;
     this.flipped = props.flipped;
     this._interpT = props.interpT;
@@ -49,8 +71,9 @@ export class Station extends TransportationMapObject<StationId> {
 
   applySerialized(ser: SerializedStation): this {
     this.name = ser.n;
-    this.textAlign = ser.t;
-    this.textHAlign = ser.h ?? 'left';
+    this.textAlign = decodeHVAlign(ser.t);
+    this.textHAlign = decodeTextHAlign(ser.h ?? 'l');
+    this.textVAlign = decodeTextVAlign(ser.v ?? 'c');
     this.textRotation = ser.r ?? 0;
     this.flipped = ser.l ?? false;
     this._interpT = ser.p;
@@ -83,6 +106,7 @@ export class Station extends TransportationMapObject<StationId> {
       name: this.name,
       textAlign: this.textAlign,
       textHAlign: this.textHAlign,
+      textVAlign: this.textVAlign,
       textRotation: this.textRotation,
       flipped: this.flipped,
       interpT: this._interpT,
@@ -94,8 +118,9 @@ export class Station extends TransportationMapObject<StationId> {
     return {
       n: this.name,
       f: this.figmaNodeId,
-      t: this.textAlign,
-      h: this.textHAlign,
+      t: HV_ALIGN_CODES[this.textAlign],
+      h: TEXT_H_ALIGN_CODES[this.textHAlign],
+      v: TEXT_V_ALIGN_CODES[this.textVAlign],
       r: this.textRotation || undefined,
       l: this.flipped || undefined,
       p: this._interpT,

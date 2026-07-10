@@ -1,5 +1,6 @@
 export type HVAlign = 'left' | 'right' | 'top' | 'bottom';
 export type TextHAlign = 'left' | 'center' | 'right';
+export type TextVAlign = 'top' | 'center' | 'bottom';
 
 export type StationId = string & { readonly __brand: 'StationId' };
 export type LineId = string & { readonly __brand: 'LineId' };

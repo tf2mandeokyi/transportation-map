@@ -54,7 +54,6 @@ async function renderStationWithTemplate(
 
   const forwardFacing: 'left' | 'right' =
     (station.textAlign === 'right' || station.textAlign === 'bottom') ? 'left' : 'right';
-  const textFrameAlignV = station.textAlign === 'top' ? 'bottom' : station.textAlign === 'bottom' ? 'top' : 'center';
   const stationElement = await renderStation({
     text: station.name,
     visible: true,
@@ -62,8 +61,8 @@ async function renderStationWithTemplate(
     textRotation: station.textRotation + tangentAngle + (station.flipped ? 180 : 0),
     children: stationChildren,
     align: `${forwardFacing},center` as const,
-    textHAlign: `${station.textHAlign},center` as const,
-    textFrameAlign: `${station.textHAlign},${textFrameAlignV}` as const,
+    textAlign: `${station.textHAlign},center` as const,
+    textFrameAlign: `${station.textHAlign},${station.textVAlign}` as const,
     textLocation: station.textAlign,
   }).intoNode();
 

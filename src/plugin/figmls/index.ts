@@ -49,12 +49,12 @@ interface StationProps {
   textRotation: number,
   textLocation: 'left' | 'right' | 'top' | 'bottom',
   align: FigmlAlignment,
-  textHAlign: FigmlAlignment,
+  textAlign: FigmlAlignment,
   textFrameAlign: FigmlAlignment,
   children: RenderResult[]
 }
-export function renderStation({ text, visible, rotation, textRotation, textLocation, align, textHAlign, textFrameAlign, children }: StationProps): RenderResult {
-  return STATION_TEMPLATE.render({ text, visible, rotation, textRotation, align, textHAlign, textFrameAlign, children }, { textLocation });
+export function renderStation({ text, visible, rotation, textRotation, textLocation, align, textAlign, textFrameAlign, children }: StationProps): RenderResult {
+  return STATION_TEMPLATE.render({ text, visible, rotation, textRotation, align, textAlign, textFrameAlign, children }, { textLocation });
 }
 
 const EDIT_HANDLE_TEMPLATE = FigmlParser.parseComponent(editHandleFigml);
