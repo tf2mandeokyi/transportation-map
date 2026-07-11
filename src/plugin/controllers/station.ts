@@ -197,6 +197,7 @@ export class StationController extends BaseController {
     station.textRotation = textRotation;
     station.flipped = flipped;
 
+    await this.render();
     await this.save();
     await this.handleGetStationInfo(stationId);
   }

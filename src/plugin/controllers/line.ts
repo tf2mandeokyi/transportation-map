@@ -42,6 +42,7 @@ export class LineController extends BaseController {
     const line = this.model.state.getLine(lineId);
     if (!line) return;
     line.name = name;
+    await this.render();
     await this.save();
     postMessageToUI({ type: 'line-added', id: lineId, name: line.name, color: line.color });
   }
@@ -50,6 +51,7 @@ export class LineController extends BaseController {
     const line = this.model.state.getLine(lineId);
     if (!line) return;
     line.color = color;
+    await this.render();
     await this.save();
     postMessageToUI({ type: 'line-added', id: lineId, name: line.name, color: line.color });
   }
