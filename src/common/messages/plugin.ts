@@ -63,4 +63,5 @@ export type PluginToUIMessage =
   | { type: 'road-clicked'; roadId: RoadId; sectionId: RoadSectionId | null }
   | { type: 'node-lines-data'; nodeId: NodeId; lines: LineAtNodeData[] }
   | { type: 'road-lines-data'; roadId: RoadId; lines: LineAtRoadSectionData[] }
-  | { type: 'map-data'; data: string };
+  | { type: 'map-data'; data: string }
+  | { type: 'undo-state'; canUndo: boolean; canRedo: boolean };

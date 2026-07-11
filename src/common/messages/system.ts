@@ -3,4 +3,6 @@ export type UIToPluginSystemMessage =
   | { type: 'request-initial-data' }
   | { type: 'validate-line-paths' }
   | { type: 'clear-plugin-data' }
-  | { type: 'get-map-data' };
+  | { type: 'get-map-data' }
+  | { type: 'undo' }
+  | { type: 'redo' };

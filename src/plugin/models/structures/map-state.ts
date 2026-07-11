@@ -72,6 +72,16 @@ export class MapState {
   hasStation(id: StationId): boolean { return this.stations.has(id); }
   hasLine(id: LineId): boolean { return this.lines.has(id); }
 
+  // Empties every slice in place (rather than swapping in a new MapState) so
+  // existing references — e.g. Model.state, held by every controller — stay valid.
+  // Used to reset before deserializing a snapshot back in (undo/redo, reload).
+  clear(): void {
+    this.nodes.clear();
+    this.roads.clear();
+    this.stations.clear();
+    this.lines.clear();
+  }
+
   normalize(): void {
     for (const road of this.getRoads()) {
       for (const section of road.getSections()) {
