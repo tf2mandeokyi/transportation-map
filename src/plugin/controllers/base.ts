@@ -23,6 +23,7 @@ export abstract class BaseController {
   }
 
   protected async render(): Promise<void> {
+    this.model.validateAllLinePaths();
     await this.view.render(this.model.state);
   }
 

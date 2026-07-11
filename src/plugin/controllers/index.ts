@@ -41,6 +41,7 @@ export class Controller {
   }
 
   public async render(): Promise<void> {
+    this.model.validateAllLinePaths();
     await this.view.render(this.model.state);
   }
 
@@ -145,7 +146,6 @@ export class Controller {
     this.model.state.clear();
     deserializeMapState(data, this.model.state);
     this.model.validateRoadSections();
-    this.model.validateAllLinePaths();
     this.model.state.normalize();
     await this.refresh();
     this.postUndoState();

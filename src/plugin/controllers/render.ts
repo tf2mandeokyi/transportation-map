@@ -23,7 +23,6 @@ export class RenderController extends BaseController {
   }
 
   public async handleRenderMap(): Promise<void> {
-    this.model.validateAllLinePaths();
     await this.render();
     await this.save();
   }
