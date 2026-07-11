@@ -4,7 +4,9 @@ import { RoadId, RoadSectionId } from '@/common/types';
 import { postMessageToPlugin } from '../../figma';
 import { useNetworkContext } from '../../contexts/NetworkContext';
 import Button from '../common/Button';
+import ConfirmButton from '../common/ConfirmButton';
 import DraggableLineList from '../DraggableLineList';
+import { useStagedOrder } from '../common/useStagedOrder';
 
 const FocusedRoadPanel: React.FC<{
   element: Extract<NetworkFocusedElement, { kind: 'road' }>;
@@ -92,21 +94,39 @@ const SectionRankLists: React.FC<SectionRankListsProps> = ({ roadId, sectionId, 
       <label className="text-neutral-600">{sectionLabel} (drag to reorder)</label>
       <div className="mt-1 grid grid-cols-2 gap-2">
         {sides.map(({ side, items }) => (
-          <div key={side}>
-            <DraggableLineList
-              items={items}
-              getKey={item => `${item.lineId}-${item.passIndex}-${item.end}`}
-              getLineColor={item => item.lineColor}
-              getLineName={item => item.lineName}
-              showRank
-              onCommit={newItems => {
-                const changes = newItems.map((it, i) => ({ lineId: it.lineId, passIndex: it.passIndex, end: it.end, rank: i }));
-                postMessageToPlugin({ type: 'patch-road', roadId, patch: { op: 'update-section-ranks', sectionId, side, changes } });
-              }}
-            />
-          </div>
+          <SideRankList key={side} roadId={roadId} sectionId={sectionId} side={side} items={items} />
         ))}
       </div>
+    </div>
+  );
+};
+
+const sideItemKey = (item: LineAtRoadSectionData) => `${item.lineId}-${item.passIndex}-${item.end}`;
+
+const SideRankList: React.FC<{ roadId: RoadId; sectionId: RoadSectionId; side: 0 | 1; items: LineAtRoadSectionData[] }> = ({ roadId, sectionId, side, items }) => {
+  const { order, setOrder, isDirty, cancel } = useStagedOrder(items, sideItemKey);
+
+  const handleApply = () => {
+    const changes = order.map((it, i) => ({ lineId: it.lineId, passIndex: it.passIndex, end: it.end, rank: i }));
+    postMessageToPlugin({ type: 'patch-road', roadId, patch: { op: 'update-section-ranks', sectionId, side, changes } });
+  };
+
+  return (
+    <div>
+      <DraggableLineList
+        items={order}
+        getKey={sideItemKey}
+        getLineColor={item => item.lineColor}
+        getLineName={item => item.lineName}
+        showRank
+        onCommit={setOrder}
+      />
+      {isDirty && (
+        <div className="mt-1 grid grid-cols-2 gap-1.5">
+          <Button size="xs" variant="primary" onClick={handleApply}>Apply</Button>
+          <ConfirmButton size="xs" label="Cancel" onConfirm={cancel} prompt="Discard reorder?" confirmLabel="Discard" keepLabel="Keep" />
+        </div>
+      )}
     </div>
   );
 };

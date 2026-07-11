@@ -4,7 +4,9 @@ import { NodeId, RoadSectionId } from '@/common/types';
 import { postMessageToPlugin } from '../../figma';
 import { useNetworkContext } from '../../contexts/NetworkContext';
 import Button from '../common/Button';
+import ConfirmButton from '../common/ConfirmButton';
 import DraggableLineList from '../DraggableLineList';
+import { useStagedOrder } from '../common/useStagedOrder';
 
 type ArmItem = { line: LineAtNodeData; role: 'exit' | 'enter'; rank: number };
 
@@ -106,35 +108,49 @@ interface NodeArmListProps {
   items: ArmItem[];
 }
 
-const NodeArmList: React.FC<NodeArmListProps> = ({ label, nodeId, items }) => (
-  <div className="mt-2">
-    <label className="text-neutral-600">{label}</label>
-    <div className="mt-1">
-      <DraggableLineList
-        items={items}
-        getKey={item => `${item.line.lineId}-${item.role === 'exit' ? item.line.exitingPassIndex : item.line.enteringPassIndex}-${item.role}`}
-        getLineColor={item => item.line.lineColor}
-        getLineName={item => item.line.lineName}
-        showRank
-        right={item => (
-          <span className="text-[11px] text-neutral-400">
-            {item.role === 'exit' ? 'exit' : 'enter'}
-          </span>
-        )}
-        onCommit={items => {
-          const changes: Array<{ lineId: typeof items[number]['line']['lineId']; passIndex: number; end: 'from' | 'to'; rank: number }> = [];
-          items.forEach((it, i) => {
-            if (it.role === 'exit' && it.line.exitingPassIndex !== null) {
-              changes.push({ lineId: it.line.lineId, passIndex: it.line.exitingPassIndex, end: 'to', rank: i });
-            } else if (it.role === 'enter' && it.line.enteringPassIndex !== null) {
-              changes.push({ lineId: it.line.lineId, passIndex: it.line.enteringPassIndex, end: 'from', rank: i });
-            }
-          });
-          postMessageToPlugin({ type: 'patch-node', nodeId, patch: { op: 'update-pass-ranks', changes } });
-        }}
-      />
+const armKey = (item: ArmItem) => `${item.line.lineId}-${item.role === 'exit' ? item.line.exitingPassIndex : item.line.enteringPassIndex}-${item.role}`;
+
+const NodeArmList: React.FC<NodeArmListProps> = ({ label, nodeId, items }) => {
+  const { order, setOrder, isDirty, cancel } = useStagedOrder(items, armKey);
+
+  const handleApply = () => {
+    const changes: Array<{ lineId: LineAtNodeData['lineId']; passIndex: number; end: 'from' | 'to'; rank: number }> = [];
+    order.forEach((it, i) => {
+      if (it.role === 'exit' && it.line.exitingPassIndex !== null) {
+        changes.push({ lineId: it.line.lineId, passIndex: it.line.exitingPassIndex, end: 'to', rank: i });
+      } else if (it.role === 'enter' && it.line.enteringPassIndex !== null) {
+        changes.push({ lineId: it.line.lineId, passIndex: it.line.enteringPassIndex, end: 'from', rank: i });
+      }
+    });
+    postMessageToPlugin({ type: 'patch-node', nodeId, patch: { op: 'update-pass-ranks', changes } });
+  };
+
+  return (
+    <div className="mt-2">
+      <label className="text-neutral-600">{label}</label>
+      <div className="mt-1">
+        <DraggableLineList
+          items={order}
+          getKey={armKey}
+          getLineColor={item => item.line.lineColor}
+          getLineName={item => item.line.lineName}
+          showRank
+          right={item => (
+            <span className="text-[11px] text-neutral-400">
+              {item.role === 'exit' ? 'exit' : 'enter'}
+            </span>
+          )}
+          onCommit={setOrder}
+        />
+      </div>
+      {isDirty && (
+        <div className="mt-1 grid grid-cols-2 gap-2">
+          <Button size="sm" variant="primary" onClick={handleApply}>Apply</Button>
+          <ConfirmButton size="sm" label="Cancel" onConfirm={cancel} prompt="Discard reorder?" confirmLabel="Discard" keepLabel="Keep" />
+        </div>
+      )}
     </div>
-  </div>
-);
+  );
+};
 
 export default FocusedNodePanel;

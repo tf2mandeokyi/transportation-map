@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { postMessageToPlugin } from '../figma';
 import Button from './common/Button';
+import ConfirmButton from './common/ConfirmButton';
 import { useMessageManager } from '../contexts/MessageContext';
 
 const SettingsSection: React.FC = () => {
@@ -20,12 +21,6 @@ const SettingsSection: React.FC = () => {
       setTimeout(() => setCopyStatus('idle'), 2000);
     });
   }, [manager]);
-
-  const handleClearData = () => {
-    if (confirm('Are you sure you want to clear all saved data? This will reload the plugin.')) {
-      postMessageToPlugin({ type: 'clear-plugin-data' });
-    }
-  };
 
   const handleValidatePaths = () => {
     postMessageToPlugin({ type: 'validate-line-paths' });
@@ -47,9 +42,15 @@ const SettingsSection: React.FC = () => {
         <Button fullWidth onClick={handleCopyMapData}>
           {copyLabel}
         </Button>
-        <Button variant="danger" fullWidth onClick={handleClearData}>
-          Clear Saved Data
-        </Button>
+        <ConfirmButton
+          variant="danger"
+          fullWidth
+          label="Clear Saved Data"
+          prompt="Clear all saved data? This will reload the plugin."
+          confirmLabel="Clear"
+          keepLabel="Never mind"
+          onConfirm={() => postMessageToPlugin({ type: 'clear-plugin-data' })}
+        />
       </div>
     </div>
   );

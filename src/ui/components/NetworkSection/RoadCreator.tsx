@@ -1,6 +1,7 @@
 import React from 'react';
 import { RoadCreationSnap } from '@/common/messages';
 import Button from '../common/Button';
+import ConfirmButton from '../common/ConfirmButton';
 import { useNetworkContext } from '../../contexts/NetworkContext';
 
 function snapLabel(snap: RoadCreationSnap): string {
@@ -49,7 +50,7 @@ const RoadCreator: React.FC = () => {
       </div>
       <div className="grid grid-cols-2 gap-2">
         <Button variant="primary" onClick={handleConfirmRoadCreation}>Create</Button>
-        <Button onClick={handleCancelRoadCreation}>Cancel</Button>
+        <ConfirmButton label="Cancel" onConfirm={handleCancelRoadCreation} prompt="Discard this road?" confirmLabel="Discard" keepLabel="Keep editing" />
       </div>
     </div>
   );

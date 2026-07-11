@@ -6,9 +6,17 @@ import { useMessageManager } from './MessageContext';
 interface LinesContextValue {
   lines: LineData[];
   currentEditingLineId: LineId | null;
+  // Guarded: if the editor has reported unsaved changes (see setIsEditorDirty), a
+  // switch to a *different* target (including back to the list, id === null) is
+  // held in pendingLineSwitch instead of applied immediately.
   setCurrentEditingLineId: (id: LineId | null) => void;
   removeLine: (lineId: LineId) => void;
   reorderLines: (lines: LineData[]) => void;
+  isEditorDirty: boolean;
+  setIsEditorDirty: (dirty: boolean) => void;
+  pendingLineSwitch: { target: LineId | null } | null;
+  confirmPendingLineSwitch: () => void;
+  cancelPendingLineSwitch: () => void;
 }
 
 const LinesContext = createContext<LinesContextValue | null>(null);
@@ -16,7 +24,9 @@ const LinesContext = createContext<LinesContextValue | null>(null);
 export const LinesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const manager = useMessageManager();
   const [lines, setLines] = useState<LineData[]>([]);
-  const [currentEditingLineId, setCurrentEditingLineId] = useState<LineId | null>(null);
+  const [currentEditingLineId, setRawEditingLineId] = useState<LineId | null>(null);
+  const [isEditorDirty, setIsEditorDirty] = useState(false);
+  const [pendingLineSwitch, setPendingLineSwitch] = useState<{ target: LineId | null } | null>(null);
 
   useEffect(() => {
     const unsub1 = manager.onMessage('line-added', msg => {
@@ -37,8 +47,34 @@ export const LinesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setLines(newLines);
   }, []);
 
+  const setCurrentEditingLineId = useCallback((id: LineId | null) => {
+    setRawEditingLineId(current => {
+      if (isEditorDirty && id !== current) {
+        setPendingLineSwitch({ target: id });
+        return current;
+      }
+      setIsEditorDirty(false);
+      return id;
+    });
+  }, [isEditorDirty]);
+
+  const confirmPendingLineSwitch = useCallback(() => {
+    setPendingLineSwitch(pending => {
+      if (pending) {
+        setIsEditorDirty(false);
+        setRawEditingLineId(pending.target);
+      }
+      return null;
+    });
+  }, []);
+
+  const cancelPendingLineSwitch = useCallback(() => setPendingLineSwitch(null), []);
+
   return (
-    <LinesContext.Provider value={{ lines, currentEditingLineId, setCurrentEditingLineId, removeLine, reorderLines }}>
+    <LinesContext.Provider value={{
+      lines, currentEditingLineId, setCurrentEditingLineId, removeLine, reorderLines,
+      isEditorDirty, setIsEditorDirty, pendingLineSwitch, confirmPendingLineSwitch, cancelPendingLineSwitch,
+    }}>
       {children}
     </LinesContext.Provider>
   );

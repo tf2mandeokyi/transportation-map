@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { HVAlign, TextHAlign, TextVAlign } from '@/common/types';
 import Button from './common/Button';
+import ConfirmButton from './common/ConfirmButton';
 import { useMessageManager } from '../contexts/MessageContext';
 import { PlacingStationUISession } from '../sessions/placing-station';
 import { useUISession } from '../sessions/useUISession';
@@ -111,9 +112,7 @@ const StationsSection: React.FC = () => {
           <Button variant="primary" onClick={handleConfirm}>
             Place Here!
           </Button>
-          <Button onClick={handleCancel}>
-            Cancel
-          </Button>
+          <ConfirmButton label="Cancel" onConfirm={handleCancel} prompt="Discard this station?" confirmLabel="Discard" keepLabel="Keep editing" />
         </div>
       </div>
     </div>

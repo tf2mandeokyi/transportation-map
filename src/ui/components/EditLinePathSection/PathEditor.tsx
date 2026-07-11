@@ -1,8 +1,9 @@
-import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { NodeId, RoadId, RoadSectionId, StationId } from '@/common/types';
 import { DisplayEntry, RoadSectionPassData } from '@/common/messages';
 import { postMessageToPlugin } from '../../figma';
 import Button from '../common/Button';
+import ConfirmButton from '../common/ConfirmButton';
 import { useLinesContext } from '../../contexts/LinesContext';
 import { useNetworkContext } from '../../contexts/NetworkContext';
 import { useMessageManager } from '../../contexts/MessageContext';
@@ -21,11 +22,7 @@ const RoadInsertButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
   </div>
 );
 
-export interface PathEditorHandle {
-  flushPendingToggles: () => void;
-}
-
-const PathEditor = forwardRef<PathEditorHandle>((_props, ref) => {
+const PathEditor: React.FC<{ onDirtyChange: (dirty: boolean) => void }> = ({ onDirtyChange }) => {
   const { lines, currentEditingLineId } = useLinesContext();
   const currentLineColor = lines.find(l => l.id === currentEditingLineId)?.color;
   const { roads } = useNetworkContext();
@@ -33,21 +30,28 @@ const PathEditor = forwardRef<PathEditorHandle>((_props, ref) => {
 
   const [linePaths, setLinePaths]           = useState<RoadSectionPassData[]>([]);
   const [displayEntries, setDisplayEntries] = useState<DisplayEntry[]>([]);
+  // The last server-synced path/display data — what Cancel reverts stop-toggles to.
+  const [pristinePaths, setPristinePaths]                 = useState<RoadSectionPassData[]>([]);
+  const [pristineDisplayEntries, setPristineDisplayEntries] = useState<DisplayEntry[]>([]);
+  const [isStopsDirty, setIsStopsDirty]     = useState(false);
   const [addingRseAtBoundary, setAddingRseAtBoundary] = useState<number | null>(null);
   const [rseNodeConstraints, setRseNodeConstraints] = useState<{ knownStartNodeId: NodeId | null; requiredEndNodeId: NodeId | null }>({ knownStartNodeId: null, requiredEndNodeId: null });
 
   const currentLineIdRef     = useRef(currentEditingLineId);
   const linePathsRef         = useRef<RoadSectionPassData[]>(linePaths);
-  const pendingToggleRef     = useRef(false);
   const rseSession           = useUISession<AddingRseUISession>();
 
   useEffect(() => { currentLineIdRef.current     = currentEditingLineId; }, [currentEditingLineId]);
   useEffect(() => { linePathsRef.current          = linePaths; },           [linePaths]);
+  useEffect(() => { onDirtyChange(isStopsDirty); }, [isStopsDirty, onDirtyChange]);
 
   useEffect(() => {
     const unsub1 = manager.onMessage('line-path-data', msg => {
       setLinePaths(msg.paths);
       setDisplayEntries(msg.displayEntries);
+      setPristinePaths(msg.paths);
+      setPristineDisplayEntries(msg.displayEntries);
+      setIsStopsDirty(false);
     });
     const unsub2 = manager.onMessage('station-removed-from-line', () => {
       const lineId = currentLineIdRef.current;
@@ -57,25 +61,31 @@ const PathEditor = forwardRef<PathEditorHandle>((_props, ref) => {
   }, [manager]);
 
   useEffect(() => {
-    pendingToggleRef.current = false;
     if (currentEditingLineId) {
       postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
     }
   }, [currentEditingLineId]);
 
-  // Stop-flag toggles only update local state (see handleToggleStops) so the
-  // canvas isn't re-rendered on every checkbox click. This flushes them to the
-  // plugin as a single update-path patch — called before any other patch that
-  // would refetch from the backend, and when the user leaves the path editor.
-  const flushPendingToggles = () => {
-    if (!pendingToggleRef.current) return;
+  // Stop-flag toggles only update local state (see handleToggleStops), staged like
+  // any other editor field — this commits them as a single update-path patch, either
+  // via the explicit Apply button or before another patch that would refetch from
+  // the backend (removing/rotating passes), so an unrelated action doesn't discard them.
+  const commitStopToggles = () => {
+    if (!isStopsDirty) return;
     const lineId = currentLineIdRef.current;
-    pendingToggleRef.current = false;
     if (!lineId) return;
     postMessageToPlugin({ type: 'patch-line', lineId, patch: { op: 'update-path', paths: linePathsRef.current } });
+    setPristinePaths(linePathsRef.current);
+    setPristineDisplayEntries(displayEntries);
+    setIsStopsDirty(false);
   };
 
-  useImperativeHandle(ref, () => ({ flushPendingToggles }));
+  const cancelStopToggles = () => {
+    linePathsRef.current = pristinePaths;
+    setLinePaths(pristinePaths);
+    setDisplayEntries(pristineDisplayEntries);
+    setIsStopsDirty(false);
+  };
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -123,7 +133,7 @@ const PathEditor = forwardRef<PathEditorHandle>((_props, ref) => {
         stops: [],
       }];
     });
-    flushPendingToggles();
+    commitStopToggles();
     postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'insert-passes', boundaryIndex, passes: newPasses } });
     postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
     stopRseMode();
@@ -133,13 +143,13 @@ const PathEditor = forwardRef<PathEditorHandle>((_props, ref) => {
 
   const handleRemoveStop = (passIndex: number, stationId: StationId) => {
     if (!currentEditingLineId) return;
-    flushPendingToggles();
+    commitStopToggles();
     postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'remove-station', passIndex, stationId } });
   };
 
-  // Only updates local state — deferred to a single update-path patch (see
-  // flushPendingToggles) so toggling a checkbox doesn't trigger a canvas
-  // re-render on every click.
+  // Only updates local state — staged like any other editor field, committed via
+  // commitStopToggles (explicit Apply, or before another patch that would refetch)
+  // so toggling a checkbox doesn't trigger a canvas re-render on every click.
   const handleToggleStops = (passIndex: number, stationId: StationId, stops: boolean) => {
     if (!currentEditingLineId) return;
     const nextPaths = linePaths.map((p, pi) => pi !== passIndex ? p : {
@@ -148,7 +158,7 @@ const PathEditor = forwardRef<PathEditorHandle>((_props, ref) => {
     });
     linePathsRef.current = nextPaths;
     setLinePaths(nextPaths);
-    pendingToggleRef.current = true;
+    setIsStopsDirty(true);
     setDisplayEntries(prev => prev.map(entry => entry.kind !== 'traversal' ? entry : {
       ...entry,
       stations: entry.stations.map(s => s.stationId === stationId && s.passIndex === passIndex ? { ...s, stops } : s),
@@ -157,14 +167,14 @@ const PathEditor = forwardRef<PathEditorHandle>((_props, ref) => {
 
   const handleRemovePass = (passIndex: number) => {
     if (!currentEditingLineId) return;
-    flushPendingToggles();
+    commitStopToggles();
     postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'remove-pass', passIndex } });
     postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
   };
 
   const handleRotatePath = (steps: number) => {
     if (!currentEditingLineId) return;
-    flushPendingToggles();
+    commitStopToggles();
     postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'rotate-path', steps } });
     postMessageToPlugin({ type: 'get-line-path', lineId: currentEditingLineId });
   };
@@ -212,6 +222,13 @@ const PathEditor = forwardRef<PathEditorHandle>((_props, ref) => {
         );
       })()}
 
+      {isStopsDirty && (
+        <div className="mt-1 grid grid-cols-2 gap-2">
+          <Button variant="primary" onClick={commitStopToggles}>Apply</Button>
+          <ConfirmButton label="Cancel" onConfirm={cancelStopToggles} prompt="Discard unsaved stop changes?" confirmLabel="Discard" keepLabel="Keep editing" />
+        </div>
+      )}
+
       {inactive && realStopCount > 1 && (
         <div className="mt-1 flex justify-end gap-2">
           <Button onClick={() => handleRotatePath(1)} title="Rotate path by 1">↻</Button>
@@ -219,8 +236,6 @@ const PathEditor = forwardRef<PathEditorHandle>((_props, ref) => {
       )}
     </div>
   );
-});
-
-PathEditor.displayName = 'PathEditor';
+};
 
 export default PathEditor;

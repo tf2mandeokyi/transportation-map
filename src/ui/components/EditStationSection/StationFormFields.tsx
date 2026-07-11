@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { HVAlign, StationId, TextHAlign, TextVAlign } from '@/common/types';
 import { postMessageToPlugin } from '../../figma';
 import Button from '../common/Button';
+import ConfirmButton from '../common/ConfirmButton';
 
 interface Props {
   stationId: StationId;
@@ -14,13 +15,16 @@ interface Props {
   isCombiningMode: boolean;
   setIsCombiningMode: (v: boolean) => void;
   onClose: () => void;
+  // Reported on every dirty/clean transition so the surrounding Edit Station panel's
+  // Close/switch-station guard also catches unapplied field edits.
+  onDirtyChange: (dirty: boolean) => void;
 }
 
 const StationFormFields: React.FC<Props> = ({
   stationId, stationName,
   stationTextAlign, stationTextHAlign, stationTextVAlign, stationTextRotation, stationFlipped,
   isCombiningMode, setIsCombiningMode,
-  onClose,
+  onClose, onDirtyChange,
 }) => {
   const [name, setName]               = useState(stationName);
   const [textAlign, setTextAlign]     = useState(stationTextAlign);
@@ -29,13 +33,14 @@ const StationFormFields: React.FC<Props> = ({
   const [textRotation, setTextRotation] = useState(stationTextRotation);
   const [flipped, setFlipped]         = useState(stationFlipped);
 
-  const nameUpdateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isDirty = name !== stationName || textAlign !== stationTextAlign || textHAlign !== stationTextHAlign
+    || textVAlign !== stationTextVAlign || textRotation !== stationTextRotation || flipped !== stationFlipped;
 
-  const onUpdateStation = (name: string, textAlign: HVAlign, textHAlign: TextHAlign, textVAlign: TextVAlign, textRotation: number, flipped: boolean) => {
-    postMessageToPlugin({ type: 'patch-station', stationId, patch: { op: 'update', station: { name, textAlign, textHAlign, textVAlign, textRotation, flipped } } });
-  };
+  useEffect(() => { onDirtyChange(isDirty); }, [isDirty, onDirtyChange]);
 
-  // Sync local state when server state changes (different station selected while panel is open)
+  // Sync local state when server state changes — either a different station was
+  // selected, or our own Apply just echoed back as the new prop values (a no-op
+  // reset in that case, since local already matches).
   useEffect(() => {
     setName(stationName);
     setTextAlign(stationTextAlign);
@@ -45,33 +50,18 @@ const StationFormFields: React.FC<Props> = ({
     setFlipped(stationFlipped);
   }, [stationName, stationTextAlign, stationTextHAlign, stationTextVAlign, stationTextRotation, stationFlipped]);
 
-  useEffect(() => {
-    if (nameUpdateTimerRef.current) clearTimeout(nameUpdateTimerRef.current);
-    if (name !== stationName) {
-      nameUpdateTimerRef.current = setTimeout(() => { onUpdateStation(name, textAlign, textHAlign, textVAlign, textRotation, flipped); }, 500);
-    }
-    return () => { if (nameUpdateTimerRef.current) clearTimeout(nameUpdateTimerRef.current); };
-  }, [name]);
+  const handleApply = () => {
+    postMessageToPlugin({ type: 'patch-station', stationId, patch: { op: 'update', station: { name, textAlign, textHAlign, textVAlign, textRotation, flipped } } });
+  };
 
-  useEffect(() => {
-    if (textAlign !== stationTextAlign) onUpdateStation(name, textAlign, textHAlign, textVAlign, textRotation, flipped);
-  }, [textAlign]);
-
-  useEffect(() => {
-    if (textHAlign !== stationTextHAlign) onUpdateStation(name, textAlign, textHAlign, textVAlign, textRotation, flipped);
-  }, [textHAlign]);
-
-  useEffect(() => {
-    if (textVAlign !== stationTextVAlign) onUpdateStation(name, textAlign, textHAlign, textVAlign, textRotation, flipped);
-  }, [textVAlign]);
-
-  useEffect(() => {
-    if (textRotation !== stationTextRotation) onUpdateStation(name, textAlign, textHAlign, textVAlign, textRotation, flipped);
-  }, [textRotation]);
-
-  useEffect(() => {
-    if (flipped !== stationFlipped) onUpdateStation(name, textAlign, textHAlign, textVAlign, textRotation, flipped);
-  }, [flipped]);
+  const handleCancelEdits = () => {
+    setName(stationName);
+    setTextAlign(stationTextAlign);
+    setTextHAlign(stationTextHAlign);
+    setTextVAlign(stationTextVAlign);
+    setTextRotation(stationTextRotation);
+    setFlipped(stationFlipped);
+  };
 
   return (
     <div className="mb-4">
@@ -144,6 +134,19 @@ const StationFormFields: React.FC<Props> = ({
         </Button>
       </div>
       <div className="mb-2 grid grid-cols-2 gap-2">
+        <Button variant="primary" disabled={!isDirty} onClick={handleApply}>
+          Apply
+        </Button>
+        <ConfirmButton
+          label="Cancel"
+          onConfirm={handleCancelEdits}
+          skipConfirm={!isDirty}
+          prompt="Discard unsaved changes?"
+          confirmLabel="Discard"
+          keepLabel="Keep editing"
+        />
+      </div>
+      <div className="mb-2 grid grid-cols-2 gap-2">
         <Button onClick={() => postMessageToPlugin({ type: 'patch-station', stationId, patch: { op: 'copy', direction: 'forwards' } })}>
           Copy Forwards
         </Button>
@@ -164,19 +167,18 @@ const StationFormFields: React.FC<Props> = ({
           Combine with Another Station
         </Button>
       )}
-      <Button
+      <ConfirmButton
         fullWidth
-        className="text-[#F24822]"
-        onClick={() => {
-          const displayName = stationName || '(unnamed station)';
-          if (confirm(`Are you sure you want to delete "${displayName}"? This action cannot be undone.`)) {
-            postMessageToPlugin({ type: 'patch-station', stationId, patch: { op: 'delete' } });
-            onClose();
-          }
+        variant="danger"
+        label="Delete Station"
+        prompt={`Delete "${stationName || '(unnamed station)'}"?`}
+        confirmLabel="Delete"
+        keepLabel="Never mind"
+        onConfirm={() => {
+          postMessageToPlugin({ type: 'patch-station', stationId, patch: { op: 'delete' } });
+          onClose();
         }}
-      >
-        Delete Station
-      </Button>
+      />
     </div>
   );
 };

@@ -4,6 +4,7 @@ import { RoadSectionData } from '@/common/messages';
 import { useMessageManager } from '../../contexts/MessageContext';
 import { useNetworkContext } from '../../contexts/NetworkContext';
 import Button from '../common/Button';
+import ConfirmButton from '../common/ConfirmButton';
 
 interface RseAddingPanelProps {
   afterPathIndex: number;
@@ -341,7 +342,7 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
             Add {pendingList.length === 1 ? 'road' : `${pendingList.length} roads`}
           </Button>
         )}
-        <Button fullWidth onClick={onCancel}>Cancel</Button>
+        <ConfirmButton label="Cancel" fullWidth onConfirm={onCancel} skipConfirm={pendingList.length === 0} prompt="Discard these roads?" confirmLabel="Discard" keepLabel="Keep editing" />
       </div>
     </div>
   );
