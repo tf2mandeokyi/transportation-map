@@ -205,10 +205,10 @@ export class Station extends TransportationMapObject<StationId> {
     return { x: pos.x + (-tangent.y / len) * offset, y: pos.y + (tangent.x / len) * offset };
   }
 
-  updateStopRanks(stops: Array<{ line: Line; passIndex: number; rank: number }>): void {
-    for (const { line, passIndex, rank } of stops) {
+  updateStopRanks(stops: Array<{ line: Line; passIndex: number; rank: number; stops: boolean }>): void {
+    for (const { line, passIndex, rank, stops: stopFlag } of stops) {
       const stop = line.paths[passIndex]?.stops.find(s => s.station === this);
-      if (stop) stop.rank = rank;
+      if (stop) { stop.rank = rank; stop.stops = stopFlag; }
     }
   }
 }

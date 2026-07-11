@@ -17,7 +17,7 @@ export type StationPatch =
   | { op: 'delete' }
   | { op: 'copy'; direction: 'forwards' | 'backwards' }
   | { op: 'combine'; targetStationId: StationId }
-  | { op: 'update-stop-ranks'; stops: Array<{ lineId: LineId; passIndex: number; rank: number }> };
+  | { op: 'update-stop-ranks'; stops: Array<{ lineId: LineId; passIndex: number; rank: number; stops: boolean }> };
 
 export type UIToPluginStationMessage =
   | { type: 'start-placing-station-mode' }

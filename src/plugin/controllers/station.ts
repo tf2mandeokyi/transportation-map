@@ -172,13 +172,13 @@ export class StationController extends BaseController {
 
   private async handleUpdateStationStopRanks(
     stationId: StationId,
-    stops: Array<{ lineId: LineId; passIndex: number; rank: number }>
+    stops: Array<{ lineId: LineId; passIndex: number; rank: number; stops: boolean }>
   ): Promise<void> {
     const station = this.model.state.getStation(stationId);
     if (!station) return;
-    const resolvedStops = stops.flatMap(({ lineId, passIndex, rank }) => {
+    const resolvedStops = stops.flatMap(({ lineId, passIndex, rank, stops: stopFlag }) => {
       const line = this.model.state.getLine(lineId);
-      return line ? [{ line, passIndex, rank }] : [];
+      return line ? [{ line, passIndex, rank, stops: stopFlag }] : [];
     });
     station.updateStopRanks(resolvedStops);
     await this.render();
