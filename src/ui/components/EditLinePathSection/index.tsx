@@ -44,12 +44,7 @@ const EditLinePathSection: React.FC = () => {
           line={currentLine}
           onApply={(name, color) => {
             if (!currentEditingLineId) return;
-            if (name && name !== currentLine.name) {
-              postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'update-name', name } });
-            }
-            if (color !== currentLine.color) {
-              postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'update-color', color } });
-            }
+            postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'update-info', name, color } });
           }}
           onDirtyChange={setInfoDirty}
         />

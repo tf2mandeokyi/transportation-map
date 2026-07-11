@@ -77,12 +77,22 @@ export class NetworkController extends BaseController {
   public async handlePatchRoad(roadId: RoadId, patch: RoadPatch): Promise<void> {
     const road = this.model.state.getRoad(roadId);
     switch (patch.op) {
-      case 'add-section':
-        if (road) this.model.addRoadSection(road, { ...patch.section });
-        break;
-      case 'remove-section': {
-        const section = road?.hasSection(patch.sectionId[1]) ? road.getSectionHarsh(patch.sectionId[1]) : undefined;
-        if (section) this.model.removeRoadSection(section);
+      case 'apply': {
+        if (!road) break;
+        road.name = patch.name;
+        const retained = new Set(patch.sections.filter(s => s.id !== null).map(s => s.id!));
+        for (const section of [...road.getSections()]) {
+          if (!retained.has(section.id)) this.model.removeRoadSection(section);
+        }
+        patch.sections.forEach((s, index) => {
+          if (s.id !== null) {
+            const section = road.getSectionHarsh(s.id);
+            section.name = s.name;
+            section.index = index;
+          } else {
+            this.model.addRoadSection(road, { name: s.name, index });
+          }
+        });
         break;
       }
       case 'update-section-ranks': {

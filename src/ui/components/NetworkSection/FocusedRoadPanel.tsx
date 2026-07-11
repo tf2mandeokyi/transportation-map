@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { LineAtRoadSectionData, NetworkFocusedElement, NodeData } from '@/common/messages';
+import React, { useEffect, useRef, useState } from 'react';
+import { LineAtRoadSectionData, NetworkFocusedElement, NodeData, RoadSectionData } from '@/common/messages';
 import { RoadId, RoadSectionId } from '@/common/types';
 import { postMessageToPlugin } from '../../figma';
 import { useNetworkContext } from '../../contexts/NetworkContext';
@@ -8,22 +8,72 @@ import ConfirmButton from '../common/ConfirmButton';
 import DraggableLineList from '../DraggableLineList';
 import { useStagedOrder } from '../common/useStagedOrder';
 
+const sectionIdKey = (id: RoadSectionId) => id.join(':');
+
+// A staged section row — either an existing section (id set) or one added locally
+// and not yet sent to the plugin (id null, only a locally-unique tempKey).
+type SectionDraft = { id: RoadSectionId | null; tempKey: string; name: string };
+
+const toDrafts = (sections: RoadSectionData[]): SectionDraft[] =>
+  sections.map(s => ({ id: s.id, tempKey: sectionIdKey(s.id), name: s.name ?? '' }));
+
 const FocusedRoadPanel: React.FC<{
   element: Extract<NetworkFocusedElement, { kind: 'road' }>;
   nodes: NodeData[];
 }> = ({ element, nodes }) => {
-  const [sectionName, setSectionName] = useState('');
   const { roadLinesData: lines } = useNetworkContext();
+
+  const [editName, setEditName] = useState(element.name ?? '');
+  const [sectionDrafts, setSectionDrafts] = useState<SectionDraft[]>(() => toDrafts(element.sections));
+  const nextTempIdRef = useRef(0);
 
   const startNode = nodes.find(n => n.id === element.startNodeId);
   const endNode   = nodes.find(n => n.id === element.endNodeId);
 
-  const handleAddSection = () => {
-    postMessageToPlugin({ type: 'patch-road', roadId: element.roadId, patch: { op: 'add-section', section: { name: sectionName.trim() || undefined, index: element.sections.length } } });
-    setSectionName('');
+  // Re-sync staged name/sections whenever the server's copy actually changes — e.g.
+  // after Apply round-trips — not on every render (a fresh-but-equal sections array).
+  const serverSectionsKey = element.sections.map(s => `${sectionIdKey(s.id)}:${s.name ?? ''}`).join('|');
+  useEffect(() => {
+    setEditName(element.name ?? '');
+    setSectionDrafts(toDrafts(element.sections));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [element.roadId, element.name, serverSectionsKey]);
+
+  const originalDrafts = toDrafts(element.sections);
+  const isSectionsDirty =
+    sectionDrafts.length !== originalDrafts.length ||
+    sectionDrafts.some((d, i) => d.tempKey !== originalDrafts[i]?.tempKey || d.name !== originalDrafts[i]?.name);
+  const isNameDirty = editName !== (element.name ?? '');
+  const isDirty = isNameDirty || isSectionsDirty;
+
+  const handleAddSectionDraft = () => {
+    setSectionDrafts(prev => [...prev, { id: null, tempKey: `new-${nextTempIdRef.current++}`, name: '' }]);
   };
 
-  const sectionIdKey = (id: RoadSectionId) => id.join(':');
+  const handleRemoveSectionDraft = (tempKey: string) => {
+    setSectionDrafts(prev => prev.filter(d => d.tempKey !== tempKey));
+  };
+
+  const handleSectionNameChange = (tempKey: string, name: string) => {
+    setSectionDrafts(prev => prev.map(d => d.tempKey === tempKey ? { ...d, name } : d));
+  };
+
+  const handleApply = () => {
+    postMessageToPlugin({
+      type: 'patch-road',
+      roadId: element.roadId,
+      patch: {
+        op: 'apply',
+        name: editName.trim() || undefined,
+        sections: sectionDrafts.map(d => ({ id: d.id ? d.id[1] : null, name: d.name.trim() || undefined })),
+      },
+    });
+  };
+
+  const handleCancel = () => {
+    setEditName(element.name ?? '');
+    setSectionDrafts(toDrafts(element.sections));
+  };
 
   return (
     <div className="mb-3 rounded bg-[#e8f4ff] p-2 text-xs">
@@ -33,7 +83,12 @@ const FocusedRoadPanel: React.FC<{
           Delete
         </Button>
       </div>
-      <div>{element.name ?? element.roadId}</div>
+      <input
+        className="mb-1 w-full rounded border border-neutral-300 px-2 py-1 text-xs"
+        placeholder="Road name (optional)"
+        value={editName}
+        onChange={e => setEditName(e.target.value)}
+      />
       <div className="mt-0.5 text-neutral-500">
         {startNode?.name ?? `junction #${element.startNodeId}`} → {endNode?.name ?? `junction #${element.endNodeId}`}
       </div>
@@ -41,16 +96,31 @@ const FocusedRoadPanel: React.FC<{
 
       <div className="border-t border-[#d0e4f7] pt-2">
         <label className="mb-1 block text-[11px] text-neutral-500">Sections</label>
-        {element.sections.length === 0 && <p className="mb-2 text-[11px] text-neutral-400">No sections yet.</p>}
-        {element.sections.map(section => (
-          <div key={section.id.join(':')} className="mb-1 flex items-center gap-2">
-            <span className="flex-1">{section.name ?? `Section ${section.index}`}</span>
-            <Button size="sm" onClick={() => postMessageToPlugin({ type: 'patch-road', roadId: element.roadId, patch: { op: 'remove-section', sectionId: section.id } })}>×</Button>
-          </div>
-        ))}
-        <input className="my-1 w-full rounded border border-neutral-300 px-2 py-1 text-xs" placeholder="Section name (optional)" value={sectionName} onChange={e => setSectionName(e.target.value)} />
-        <Button fullWidth onClick={handleAddSection}>+ Add Section</Button>
+        {sectionDrafts.length === 0 && <p className="mb-2 text-[11px] text-neutral-400">No sections yet.</p>}
+        {sectionDrafts.map((draft, i) => {
+          const original = element.sections.find(s => sectionIdKey(s.id) === draft.tempKey);
+          const placeholder = original ? `Section ${original.index}` : `Section ${i} (new)`;
+          return (
+            <div key={draft.tempKey} className="mb-1 flex items-center gap-2">
+              <input
+                className="flex-1 rounded border border-neutral-300 px-2 py-1 text-xs"
+                placeholder={placeholder}
+                value={draft.name}
+                onChange={e => handleSectionNameChange(draft.tempKey, e.target.value)}
+              />
+              <Button size="sm" onClick={() => handleRemoveSectionDraft(draft.tempKey)}>×</Button>
+            </div>
+          );
+        })}
+        <Button fullWidth onClick={handleAddSectionDraft}>+ Add Section</Button>
       </div>
+
+      {isDirty && (
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <Button variant="primary" onClick={handleApply}>Apply</Button>
+          <ConfirmButton label="Cancel" onConfirm={handleCancel} prompt="Discard unsaved changes?" confirmLabel="Discard" keepLabel="Keep editing" />
+        </div>
+      )}
 
       {element.sections.length > 0 && (
         <div className="mt-2 border-t border-[#d0e4f7] pt-2">

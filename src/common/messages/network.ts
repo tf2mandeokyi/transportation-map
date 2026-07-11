@@ -1,4 +1,4 @@
-import { LineId, NodeId, RoadId, RoadSectionId } from "../types";
+import { LineId, NodeId, RoadId, RoadSectionId, SectionId } from "../types";
 
 export type NodeData = { id: NodeId; name?: string; pos: { x: number; y: number } };
 export type RoadSectionData = { id: RoadSectionId; name?: string; index: number };
@@ -41,8 +41,11 @@ export type NodePatch =
   | { op: 'update-pass-ranks'; changes: Array<{ lineId: LineId; passIndex: number; end: 'from' | 'to'; rank: number }> };
 
 export type RoadPatch =
-  | { op: 'add-section'; section: { name?: string; index: number } }
-  | { op: 'remove-section'; sectionId: RoadSectionId }
+  // Commits the road's name and its full section list (name + order) in one shot —
+  // a section with id: null is a new section to create; any existing section whose
+  // id is missing from this list is removed. Keeps a single Focused Road Panel Apply
+  // click to a single undo/redo step instead of one per changed field.
+  | { op: 'apply'; name: string | undefined; sections: Array<{ id: SectionId | null; name?: string }> }
   | { op: 'update-section-ranks'; sectionId: RoadSectionId; side: 0 | 1; changes: Array<{ lineId: LineId; passIndex: number; end: 'from' | 'to'; rank: number }> };
 
 export type UIToPluginNetworkMessage =

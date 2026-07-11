@@ -20,8 +20,9 @@ export interface RoadSectionPassData {
 export type LineData = { id: LineId; name: string; color: string };
 
 export type LinePatch =
-  | { op: 'update-name'; name: string }
-  | { op: 'update-color'; color: string }
+  // Commits name and color together so a single Line Info Editor Apply click is a
+  // single undo/redo step instead of one per changed field.
+  | { op: 'update-info'; name: string; color: string }
   | { op: 'update-path'; paths: RoadSectionPassData[] }
   | { op: 'insert-passes'; boundaryIndex: number; passes: RoadSectionPassData[] }
   | { op: 'remove-pass'; passIndex: number }

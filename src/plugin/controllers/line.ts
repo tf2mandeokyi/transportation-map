@@ -27,8 +27,7 @@ export class LineController extends BaseController {
 
   private async handlePatchLine(lineId: LineId, patch: LinePatch): Promise<void> {
     switch (patch.op) {
-      case 'update-name':     return this.handleUpdateLineName(lineId, patch.name);
-      case 'update-color':    return this.handleUpdateLineColor(lineId, patch.color);
+      case 'update-info':     return this.handleUpdateLineInfo(lineId, patch.name, patch.color);
       case 'update-path':     return this.handleUpdateLinePath(lineId, patch.paths);
       case 'insert-passes':   return this.handleInsertPasses(lineId, patch.boundaryIndex, patch.passes);
       case 'remove-pass':     return this.handleRemovePass(lineId, patch.passIndex);
@@ -38,18 +37,10 @@ export class LineController extends BaseController {
     }
   }
 
-  private async handleUpdateLineName(lineId: LineId, name: string): Promise<void> {
+  private async handleUpdateLineInfo(lineId: LineId, name: string, color: string): Promise<void> {
     const line = this.model.state.getLine(lineId);
     if (!line) return;
     line.name = name;
-    await this.render();
-    await this.save();
-    postMessageToUI({ type: 'line-added', id: lineId, name: line.name, color: line.color });
-  }
-
-  private async handleUpdateLineColor(lineId: LineId, color: string): Promise<void> {
-    const line = this.model.state.getLine(lineId);
-    if (!line) return;
     line.color = color;
     await this.render();
     await this.save();
