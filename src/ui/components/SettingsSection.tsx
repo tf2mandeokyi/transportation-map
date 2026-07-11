@@ -22,10 +22,6 @@ const SettingsSection: React.FC = () => {
     });
   }, [manager]);
 
-  const handleValidatePaths = () => {
-    postMessageToPlugin({ type: 'validate-line-paths' });
-  };
-
   const handleCopyMapData = () => {
     postMessageToPlugin({ type: 'get-map-data' });
   };
@@ -36,9 +32,6 @@ const SettingsSection: React.FC = () => {
     <div className="mb-4 border-b border-neutral-200 pb-4">
       <h3 className="mb-3 text-sm font-semibold">Development</h3>
       <div className="mt-4 flex flex-col gap-2">
-        <Button fullWidth onClick={handleValidatePaths}>
-          Validate Line Paths
-        </Button>
         <Button fullWidth onClick={handleCopyMapData}>
           {copyLabel}
         </Button>

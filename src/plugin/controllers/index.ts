@@ -64,7 +64,6 @@ export class Controller {
     this.connectionController.registerMessages(router);
     this.renderController.registerMessages(router);
     this.networkController.registerMessages(router);
-    router.register('validate-line-paths',  () => this.handleValidateLinePaths());
     router.register('clear-plugin-data',    () => this.handleClearPluginData());
     router.register('request-initial-data', () => this.handleRequestInitialData());
     router.register('get-map-data',         () => this.handleGetMapData());
@@ -154,11 +153,6 @@ export class Controller {
 
   private postUndoState(): void {
     postMessageToUI({ type: 'undo-state', canUndo: this.history.canUndo, canRedo: this.history.canRedo });
-  }
-
-  private async handleValidateLinePaths(): Promise<void> {
-    this.model.validateAllLinePaths();
-    await this.save();
   }
 
   private async handleClearPluginData(): Promise<void> {
