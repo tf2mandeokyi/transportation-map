@@ -179,6 +179,21 @@ const PathEditor: React.FC<{ onDirtyChange: (dirty: boolean) => void }> = ({ onD
   const isEmpty = linePaths.length === 0;
   const realStopCount = linePaths.reduce((n, p) => n + p.stops.filter(s => s.stops).length, 0);
 
+  const insertPanel = addingRseAtBoundary !== null ? (() => {
+    const src = getSourceAt(addingRseAtBoundary);
+    return (
+      <RseAddingPanel
+        afterPathIndex={addingRseAtBoundary}
+        sourceRoadId={src.roadId}
+        exitingSectionId={src.sectionId}
+        knownStartNodeId={rseNodeConstraints.knownStartNodeId}
+        requiredEndNodeId={rseNodeConstraints.requiredEndNodeId}
+        onCommitRses={commitRses}
+        onCancel={stopRseMode}
+      />
+    );
+  })() : null;
+
   return (
     <div className="flex flex-col gap-2">
       <label className="mb-1 block font-medium select-none">Current Path</label>
@@ -187,6 +202,7 @@ const PathEditor: React.FC<{ onDirtyChange: (dirty: boolean) => void }> = ({ onD
         <div>
           <p className="p-2 text-[11px] text-neutral-500">No stops in path</p>
           {inactive && <RoadInsertButton onClick={() => startRseMode(0)} />}
+          {insertPanel}
         </div>
       ) : (
         <PathItemsList
@@ -197,23 +213,10 @@ const PathEditor: React.FC<{ onDirtyChange: (dirty: boolean) => void }> = ({ onD
           onSelectStation={(stationId) => postMessageToPlugin({ type: 'select-station', stationId })}
           onToggleStops={handleToggleStops}
           onInsertRoad={startRseMode}
+          activeBoundaryIndex={addingRseAtBoundary}
+          insertPanel={insertPanel}
         />
       )}
-
-      {addingRseAtBoundary !== null && (() => {
-        const src = getSourceAt(addingRseAtBoundary);
-        return (
-          <RseAddingPanel
-            afterPathIndex={addingRseAtBoundary}
-            sourceRoadId={src.roadId}
-            exitingSectionId={src.sectionId}
-            knownStartNodeId={rseNodeConstraints.knownStartNodeId}
-            requiredEndNodeId={rseNodeConstraints.requiredEndNodeId}
-            onCommitRses={commitRses}
-            onCancel={stopRseMode}
-          />
-        );
-      })()}
 
       {isStopsDirty && (
         <div className="mt-1 grid grid-cols-2 gap-2">

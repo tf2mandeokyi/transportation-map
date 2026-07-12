@@ -12,6 +12,11 @@ interface PathItemsListProps {
   onToggleStops: (passIndex: number, stationId: StationId, stops: boolean) => void;
   onInsertRoad: (boundaryIndex: number, knownStartNodeId?: NodeId | null, requiredEndNodeId?: NodeId | null) => void;
   lineColor?: string;
+  // The boundary currently being added to (if any) and the panel to render right
+  // after that boundary's row — so the adding UI appears where the insertion is
+  // actually happening, rather than always trailing the whole list.
+  activeBoundaryIndex?: number | null;
+  insertPanel?: React.ReactNode;
 }
 
 // Rail column: a marker sits over a continuous vertical line so the list reads
@@ -35,7 +40,7 @@ const RoadInsertButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
 const PathItemsList: React.FC<PathItemsListProps> = ({
   displayEntries, inactive,
   onRemovePass, onSelectStation, onToggleStops, onInsertRoad,
-  lineColor,
+  lineColor, activeBoundaryIndex = null, insertPanel,
 }) => {
   const railColor = lineColor ?? FALLBACK_RAIL_COLOR;
   const elements: React.ReactNode[] = [];
@@ -66,6 +71,7 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
           </div>
         </Row>
       );
+      if (boundaryIndex === activeBoundaryIndex && insertPanel) elements.push(<React.Fragment key={`insert-${ei}`}>{insertPanel}</React.Fragment>);
     } else if (entry.kind === 'invalid-jump') {
       elements.push(
         <Row key={`invalid-jump-${ei}`} marker={<span className="text-red-500">⚠</span>}>
@@ -77,6 +83,7 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
           </div>
         </Row>
       );
+      if (entry.boundaryIndex === activeBoundaryIndex && insertPanel) elements.push(<React.Fragment key={`insert-${ei}`}>{insertPanel}</React.Fragment>);
     } else {
       // Traversal: render each station in the order the plugin computed. Every
       // station self-describes its own address (passIndex + stationId) and whether

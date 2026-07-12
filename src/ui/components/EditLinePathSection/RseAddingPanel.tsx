@@ -315,11 +315,11 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
             return (
               <React.Fragment key={i}>
                 <Row marker={<span className="h-3 w-3 rounded-full border-2 border-neutral-400 bg-white" />} className="my-0.5">
-                  <div className="flex items-center gap-1.5 rounded border border-neutral-300 bg-white px-2 py-1.5">
-                    <span className="text-sm">{entry.isStart ? '●' : entry.isUturn ? '↩' : '↪'}</span>
+                  <div className="flex items-center gap-1.5 rounded border border-neutral-200 bg-white px-2">
+                    <span className="text-xs">{entry.isStart ? '●' : entry.isUturn ? '↩' : '↪'}</span>
                     {entry.nodeOptions.length > 1 ? (
                       <select
-                        className="flex-1 rounded border border-neutral-300 px-2 py-1 text-[11px]"
+                        className="flex-1 rounded border-0 py-1 text-[11px]"
                         value={entry.selectedNodeId}
                         onChange={e => updateEntry(i, { selectedNodeId: e.target.value })}
                       >
@@ -356,7 +356,7 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
           })}
 
           <Row marker={<span className="h-3 w-3 rounded-full border-2 border-neutral-400 bg-white" />} className="my-0.5">
-            <div className={`flex items-center gap-1.5 rounded border border-dashed px-2 py-1.5 ${reachedRequiredEnd ? 'border-neutral-300 text-neutral-400' : 'border-red-300 text-red-400'}`}>
+            <div className={`flex items-center gap-1.5 rounded border border-dashed px-2 ${reachedRequiredEnd ? 'border-neutral-300 text-neutral-400' : 'border-red-300 text-red-400'}`}>
               {impliedNextNode ? (
                 <span className="flex-1 text-xs font-medium">{impliedNextNode.name ?? impliedNextNode.id}</span>
               ) : (
