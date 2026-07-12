@@ -6,7 +6,10 @@ import { useNetworkContext } from '../../contexts/NetworkContext';
 import Button from '../common/Button';
 import ConfirmButton from '../common/ConfirmButton';
 import DraggableLineList from '../DraggableLineList';
+import SortOrderButtons from '../common/SortOrderButtons';
+import { sortByLineOrder } from '../common/sortByLineOrder';
 import { useStagedOrder } from '../common/useStagedOrder';
+import { useLinesContext } from '../../contexts/LinesContext';
 
 type ArmItem = { line: LineAtNodeData; role: 'exit' | 'enter'; rank: number };
 
@@ -112,6 +115,7 @@ const armKey = (item: ArmItem) => `${item.line.lineId}-${item.role === 'exit' ? 
 
 const NodeArmList: React.FC<NodeArmListProps> = ({ label, nodeId, items }) => {
   const { order, setOrder, isDirty, cancel } = useStagedOrder(items, armKey);
+  const { lines: lineList } = useLinesContext();
 
   const handleApply = () => {
     const changes: Array<{ lineId: LineAtNodeData['lineId']; passIndex: number; end: 'from' | 'to'; rank: number }> = [];
@@ -127,7 +131,10 @@ const NodeArmList: React.FC<NodeArmListProps> = ({ label, nodeId, items }) => {
 
   return (
     <div className="mt-2">
-      <label className="text-neutral-600">{label}</label>
+      <div className="flex items-center justify-between gap-2">
+        <label className="text-neutral-600">{label}</label>
+        <SortOrderButtons onSort={reverse => setOrder(sortByLineOrder(order, lineList, it => it.line.lineId, reverse))} />
+      </div>
       <div className="mt-1">
         <DraggableLineList
           items={order}

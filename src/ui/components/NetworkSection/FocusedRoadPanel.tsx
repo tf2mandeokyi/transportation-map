@@ -6,7 +6,10 @@ import { useNetworkContext } from '../../contexts/NetworkContext';
 import Button from '../common/Button';
 import ConfirmButton from '../common/ConfirmButton';
 import DraggableLineList from '../DraggableLineList';
+import SortOrderButtons from '../common/SortOrderButtons';
+import { sortByLineOrder } from '../common/sortByLineOrder';
 import { useStagedOrder } from '../common/useStagedOrder';
+import { useLinesContext } from '../../contexts/LinesContext';
 
 const sectionIdKey = (id: RoadSectionId) => id.join(':');
 
@@ -175,6 +178,7 @@ const sideItemKey = (item: LineAtRoadSectionData) => `${item.lineId}-${item.pass
 
 const SideRankList: React.FC<{ roadId: RoadId; sectionId: RoadSectionId; side: 0 | 1; items: LineAtRoadSectionData[] }> = ({ roadId, sectionId, side, items }) => {
   const { order, setOrder, isDirty, cancel } = useStagedOrder(items, sideItemKey);
+  const { lines: lineList } = useLinesContext();
 
   const handleApply = () => {
     const changes = order.map((it, i) => ({ lineId: it.lineId, passIndex: it.passIndex, end: it.end, rank: i }));
@@ -183,6 +187,9 @@ const SideRankList: React.FC<{ roadId: RoadId; sectionId: RoadSectionId; side: 0
 
   return (
     <div>
+      <div className="mb-1">
+        <SortOrderButtons onSort={reverse => setOrder(sortByLineOrder(order, lineList, it => it.lineId, reverse))} />
+      </div>
       <DraggableLineList
         items={order}
         getKey={sideItemKey}

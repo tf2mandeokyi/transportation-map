@@ -5,7 +5,10 @@ import { postMessageToPlugin } from '../../figma';
 import Button from '../common/Button';
 import ConfirmButton from '../common/ConfirmButton';
 import DraggableLineList from '../DraggableLineList';
+import SortOrderButtons from '../common/SortOrderButtons';
+import { sortByLineOrder } from '../common/sortByLineOrder';
 import { useStagedOrder } from '../common/useStagedOrder';
+import { useLinesContext } from '../../contexts/LinesContext';
 
 interface Props {
   stationId: StationId;
@@ -21,6 +24,7 @@ const lineDirtyValue = (l: LineAtStationData) => `${lineKey(l)}:${l.stops}`;
 
 const StationLineList: React.FC<Props> = ({ stationId, lines, onDirtyChange }) => {
   const { order, setOrder, isDirty, cancel } = useStagedOrder(lines, lineKey, lineDirtyValue);
+  const { lines: lineList } = useLinesContext();
 
   useEffect(() => { onDirtyChange(isDirty); }, [isDirty, onDirtyChange]);
 
@@ -35,7 +39,10 @@ const StationLineList: React.FC<Props> = ({ stationId, lines, onDirtyChange }) =
 
   return (
     <div>
-      <label className="mb-1 block font-medium select-none">Lines at this station (drag to reorder)</label>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <label className="block font-medium select-none">Lines at this station (drag to reorder)</label>
+        <SortOrderButtons onSort={reverse => setOrder(sortByLineOrder(order, lineList, l => l.id, reverse))} />
+      </div>
       <div className="mt-2 max-h-[200px] overflow-y-auto">
         <DraggableLineList
           items={order}
