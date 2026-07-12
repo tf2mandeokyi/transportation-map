@@ -16,11 +16,18 @@ export class NodeControlManager {
   private controlledNodeId: NodeId | null = null;
   private handleId: string | null = null;
   private lockedAnchorId: string | null = null;
+  private dirty = false;
   public suppressNextControlChanges = false;
 
   constructor(private readonly model: Model) {}
 
   get activeNodeId(): NodeId | null { return this.controlledNodeId; }
+
+  // True once the radius handle has actually resized the node's model radius — the
+  // junction/marker visual (drawn by RoadRenderer) isn't updated live during the
+  // resize, so it needs a real render() to catch up once editing ends, but only if
+  // it's actually stale.
+  get isDirty(): boolean { return this.dirty; }
 
   isControlElement(id: string): boolean {
     return this.handleId === id;
@@ -69,6 +76,7 @@ export class NodeControlManager {
     this.handleId = null;
     await this.unlockAnchor();
     this.controlledNodeId = null;
+    this.dirty = false;
   }
 
   cleanup(): void {
@@ -82,6 +90,7 @@ export class NodeControlManager {
     }
     this.lockedAnchorId = null;
     this.controlledNodeId = null;
+    this.dirty = false;
   }
 
   private async unlockAnchor(): Promise<void> {
@@ -104,6 +113,7 @@ export class NodeControlManager {
     const centerY = origin.y + handle.height / 2;
 
     node.radius = radius;
+    this.dirty = true;
 
     // Re-center the handle on the node's (unchanged) position and correct any drift
     // from a non-uniform resize back to a perfect circle.

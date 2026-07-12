@@ -30,11 +30,18 @@ export class RoadControlManager {
   private stemLineIds: StemLineIds | null = null;
   private offsetHandleIds: OffsetHandleIds | null = null;
   private lockedRoadNodeIds: string[] = [];
+  private dirty = false;
   public suppressNextControlChanges = false;
 
   constructor(private readonly model: Model) {}
 
   get activeRoadId(): RoadId | null { return this.controlledRoadId; }
+
+  // True once the mid-bezier or offset handles have actually moved the road's model
+  // geometry — only the overlay handles/stems are kept live during a drag (see
+  // updateRoadAndStems), so the base road curve visual needs a real render() to catch
+  // up once editing ends, but only if it's actually stale.
+  get isDirty(): boolean { return this.dirty; }
 
   isControlElement(id: string): boolean {
     return this.controlElementIds.includes(id);
@@ -109,6 +116,7 @@ export class RoadControlManager {
     this.stemLineIds = null;
     this.offsetHandleIds = null;
     this.controlledRoadId = null;
+    this.dirty = false;
   }
 
   cleanup(): void {
@@ -124,6 +132,7 @@ export class RoadControlManager {
     this.stemLineIds = null;
     this.offsetHandleIds = null;
     this.controlledRoadId = null;
+    this.dirty = false;
   }
 
   private findRoadVisualNodes(roadId: RoadId): SceneNode[] {
@@ -150,6 +159,7 @@ export class RoadControlManager {
     const anchor  = { x: node.position.x + normal.x * node.radius, y: node.position.y + normal.y * node.radius };
     const offsetVec = { x: draggedPos.x - anchor.x, y: draggedPos.y - anchor.y };
     conn.horizontalOffset = dot(offsetVec, tangent);
+    this.dirty = true;
 
     const resolvedPos = road.computeEndpointPos(endpointIndex);
     handle.x = resolvedPos.x - HANDLE_RADIUS;
@@ -164,6 +174,7 @@ export class RoadControlManager {
     const road = this.model.state.getRoad(roadId);
     if (!road) return;
     road.bezierMidPoint = handlePos;
+    this.dirty = true;
     await this.updateRoadAndStems(roadId);
   }
 

@@ -201,6 +201,7 @@ export class NetworkController extends BaseController {
     if (this.view.isRendering) return;
 
     await this.flushPendingNodeMove();
+    await this.flushControlDirty();
 
     const selection = figma.currentPage.selection;
     const first = selection[0];
@@ -387,15 +388,21 @@ export class NetworkController extends BaseController {
     postMessageToUI({ type: 'network-element-focused', element: this.buildNodeElement(pending.nodeId) });
   }
 
+  // The mid-bezier, offset, and radius handles only keep their own overlay live during
+  // a drag (see updateRoadAndStems) — the base road/junction visuals are stale until a
+  // real render() catches them up. Called before any focus switch (including losing
+  // focus entirely) so that render only happens when a handle actually moved something,
+  // never on a plain focus/unfocus with no drag.
+  private async flushControlDirty(): Promise<void> {
+    if (!this.roadControl.isDirty && !this.nodeControl.isDirty) return;
+    this.isRendering = true;
+    try { await this.render(); await this.save(); } finally { this.isRendering = false; }
+  }
+
   private async clearNetworkFocus(): Promise<void> {
-    const wasEditingRoad = this.roadControl.activeRoadId !== null;
-    const wasEditingNode = this.nodeControl.activeNodeId !== null;
+    await this.flushControlDirty();
     await this.roadControl.remove();
     await this.nodeControl.remove();
-    if (wasEditingRoad || wasEditingNode) {
-      this.isRendering = true;
-      try { await this.render(); await this.save(); } finally { this.isRendering = false; }
-    }
     postMessageToUI({ type: 'network-selection-cleared' });
   }
 
