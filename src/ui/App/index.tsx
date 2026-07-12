@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import StationsSection from '../components/StationsSection';
 import EditStationSection from '../components/EditStationSection';
 import NetworkSection from '../components/NetworkSection';
@@ -27,6 +27,11 @@ const App: React.FC = () => {
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
 
+  // Whether the station currently open in the Stations tab has unsaved edits — while
+  // true, canvas selection must not yank the user to another tab out from under them.
+  const stationsDirtyRef = useRef(false);
+  const handleStationsDirtyChange = useCallback((dirty: boolean) => { stationsDirtyRef.current = dirty; }, []);
+
   useEffect(() => {
     postMessageToPlugin({ type: 'request-initial-data' });
   }, []);
@@ -52,6 +57,19 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [canUndo, canRedo]);
 
+  // Canvas selection drives which tab is shown, so the relevant editor is always in
+  // view — unless the Stations editor has unsaved edits, in which case switching tabs
+  // would hide the discard-confirmation the Stations editor itself is about to show.
+  useEffect(() => {
+    const unsub1 = manager.onMessage('station-clicked', () => {
+      if (!stationsDirtyRef.current) setActiveTab('stations');
+    });
+    const unsub2 = manager.onMessage('network-element-focused', () => {
+      if (!stationsDirtyRef.current) setActiveTab('network');
+    });
+    return () => { unsub1(); unsub2(); };
+  }, [manager]);
+
   return (
     <div className="p-4 font-sans text-xs text-neutral-900">
       <div className="mb-4 flex gap-2">
@@ -75,12 +93,10 @@ const App: React.FC = () => {
         <NavButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')}>Settings</NavButton>
       </div>
 
-      {activeTab === 'stations' && (
-        <div>
-          <StationsSection />
-          <EditStationSection />
-        </div>
-      )}
+      <div className={activeTab === 'stations' ? undefined : 'hidden'}>
+        <StationsSection />
+        <EditStationSection onDirtyChange={handleStationsDirtyChange} />
+      </div>
       {activeTab === 'lines'    && <LineTabContent />}
       {activeTab === 'network'  && <NetworkSection />}
       {activeTab === 'settings' && <SettingsSection />}

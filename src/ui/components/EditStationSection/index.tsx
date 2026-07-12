@@ -9,7 +9,11 @@ import StationLineList from './StationLineList';
 
 type PendingStation = { stationId: StationId; station: StationParams; lines: LineAtStationData[] };
 
-const EditStationSection: React.FC = () => {
+interface EditStationSectionProps {
+  onDirtyChange?: (dirty: boolean) => void;
+}
+
+const EditStationSection: React.FC<EditStationSectionProps> = ({ onDirtyChange }) => {
   const manager = useMessageManager();
 
   const [stationId, setStationId]                     = useState<StationId | null>(null);
@@ -37,6 +41,7 @@ const EditStationSection: React.FC = () => {
   useEffect(() => { isCombiningModeRef.current = isCombiningMode; }, [isCombiningMode]);
   useEffect(() => { stationIdRef.current = stationId; }, [stationId]);
   useEffect(() => { isDirtyRef.current = isDirty; }, [isDirty]);
+  useEffect(() => { onDirtyChange?.(isDirty); }, [isDirty, onDirtyChange]);
 
   const applyStation = useCallback((data: PendingStation) => {
     setStationId(data.stationId);
