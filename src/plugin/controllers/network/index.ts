@@ -46,8 +46,9 @@ export class NetworkController extends BaseController {
     switch (patch.op) {
       case 'update-name':
         node?.updateName(patch.name);
+        await this.render();
+        this.reselectNode(nodeId);
         await this.save();
-        this.syncNetworkToUI();
         break;
       case 'update-pass-ranks':
         if (node) node.updatePassRanks(patch.changes);
@@ -93,6 +94,8 @@ export class NetworkController extends BaseController {
             this.model.addRoadSection(road, { name: s.name, index });
           }
         });
+        await this.render();
+        this.reselectRoad(roadId);
         break;
       }
       case 'update-section-ranks': {
