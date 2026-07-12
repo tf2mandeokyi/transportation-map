@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { LineAtNodeData, LineAtRoadSectionData, NetworkFocusedElement, NodeData, RoadCreationSnap, RoadData } from '@/common/messages';
 import { useMessageManager } from './MessageContext';
 import { AddingRoadUISession } from '../sessions/adding-road';
@@ -9,10 +9,16 @@ type RoadSnapState = {
   endSnap:   RoadCreationSnap;
 } | null;
 
-interface NetworkContextValue {
+// Split in two so a consumer that only cares about the network graph itself (nodes/roads/
+// selection) doesn't re-render on every road-creation snap update or line-pass data push,
+// and vice versa — those change at very different rates and for unrelated reasons.
+interface NetworkDataContextValue {
   nodes: NodeData[];
   roads: RoadData[];
   networkFocus: NetworkFocusedElement | null;
+}
+
+interface NetworkSessionContextValue {
   nodeLinesData: LineAtNodeData[];
   roadLinesData: LineAtRoadSectionData[];
   isAddingRoad: boolean;
@@ -24,7 +30,8 @@ interface NetworkContextValue {
   handleSetRoadSnapMode:     (enabled: boolean) => void;
 }
 
-const NetworkContext = createContext<NetworkContextValue | null>(null);
+const NetworkDataContext = createContext<NetworkDataContextValue | null>(null);
+const NetworkSessionContext = createContext<NetworkSessionContextValue | null>(null);
 
 export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const manager = useMessageManager();
@@ -90,19 +97,35 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setRoadSnapState(null);
   }, [close]);
 
+  const dataValue = useMemo<NetworkDataContextValue>(() => ({
+    nodes, roads, networkFocus,
+  }), [nodes, roads, networkFocus]);
+
+  const sessionValue = useMemo<NetworkSessionContextValue>(() => ({
+    nodeLinesData, roadLinesData, isAddingRoad, roadSnapState, roadSnapModeEnabled,
+    handleStartRoadCreation, handleConfirmRoadCreation, handleCancelRoadCreation, handleSetRoadSnapMode,
+  }), [
+    nodeLinesData, roadLinesData, isAddingRoad, roadSnapState, roadSnapModeEnabled,
+    handleStartRoadCreation, handleConfirmRoadCreation, handleCancelRoadCreation, handleSetRoadSnapMode,
+  ]);
+
   return (
-    <NetworkContext.Provider value={{
-      nodes, roads, networkFocus, nodeLinesData, roadLinesData,
-      isAddingRoad, roadSnapState, roadSnapModeEnabled,
-      handleStartRoadCreation, handleConfirmRoadCreation, handleCancelRoadCreation, handleSetRoadSnapMode,
-    }}>
-      {children}
-    </NetworkContext.Provider>
+    <NetworkDataContext.Provider value={dataValue}>
+      <NetworkSessionContext.Provider value={sessionValue}>
+        {children}
+      </NetworkSessionContext.Provider>
+    </NetworkDataContext.Provider>
   );
 };
 
-export const useNetworkContext = (): NetworkContextValue => {
-  const ctx = useContext(NetworkContext);
-  if (!ctx) throw new Error('useNetworkContext must be used within NetworkProvider');
+export const useNetworkDataContext = (): NetworkDataContextValue => {
+  const ctx = useContext(NetworkDataContext);
+  if (!ctx) throw new Error('useNetworkDataContext must be used within NetworkProvider');
+  return ctx;
+};
+
+export const useNetworkSessionContext = (): NetworkSessionContextValue => {
+  const ctx = useContext(NetworkSessionContext);
+  if (!ctx) throw new Error('useNetworkSessionContext must be used within NetworkProvider');
   return ctx;
 };

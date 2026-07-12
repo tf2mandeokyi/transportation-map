@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { NodeId, RoadId, RoadSectionId } from '@/common/types';
 import { RoadSectionData } from '@/common/messages';
 import { useMessageManager } from '../../contexts/MessageContext';
-import { useNetworkContext } from '../../contexts/NetworkContext';
+import { useNetworkDataContext } from '../../contexts/NetworkContext';
 import Button from '../common/Button';
 import ConfirmButton from '../common/ConfirmButton';
 
@@ -86,7 +86,7 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
   afterPathIndex, sourceRoadId, exitingSectionId, knownStartNodeId = null, requiredEndNodeId = null, onCommitRses, onCancel,
 }) => {
   const manager = useMessageManager();
-  const { roads, nodes } = useNetworkContext();
+  const { roads, nodes } = useNetworkDataContext();
 
   const [error, setError] = useState<string | null>(null);
   const [pendingList, setPendingList] = useState<PendingRse[]>([]);

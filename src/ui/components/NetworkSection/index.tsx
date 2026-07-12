@@ -1,11 +1,11 @@
 import React from 'react';
-import { useNetworkContext } from '../../contexts/NetworkContext';
+import { useNetworkDataContext } from '../../contexts/NetworkContext';
 import FocusedNodePanel from './FocusedNodePanel';
 import FocusedRoadPanel from './FocusedRoadPanel';
 import RoadCreator from './RoadCreator';
 
 const NetworkSection: React.FC = () => {
-  const { nodes, networkFocus } = useNetworkContext();
+  const { nodes, networkFocus } = useNetworkDataContext();
 
   return (
     <div>

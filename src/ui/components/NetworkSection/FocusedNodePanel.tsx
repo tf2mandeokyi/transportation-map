@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { LineAtNodeData, NetworkFocusedElement } from '@/common/messages';
 import { RoadSectionId } from '@/common/types';
 import { postMessageToPlugin } from '../../figma';
-import { useNetworkContext } from '../../contexts/NetworkContext';
+import { useNetworkDataContext, useNetworkSessionContext } from '../../contexts/NetworkContext';
 import Button from '../common/Button';
 import ConfirmButton from '../common/ConfirmButton';
 import DraggableLineList from '../DraggableLineList';
@@ -22,7 +22,8 @@ type RankEntry = { getChanges: () => RankChanges; cancel: () => void };
 
 const FocusedNodePanel: React.FC<{ element: Extract<NetworkFocusedElement, { kind: 'node' }> }> = ({ element }) => {
   const [editName, setEditName] = useState(element.name ?? '');
-  const { roads, nodeLinesData: lines } = useNetworkContext();
+  const { roads } = useNetworkDataContext();
+  const { nodeLinesData: lines } = useNetworkSessionContext();
 
   const [rankRegistry, setRankRegistry] = useState<Record<string, RankEntry>>({});
   const registerRank = useCallback((key: string, entry: RankEntry | null) => {

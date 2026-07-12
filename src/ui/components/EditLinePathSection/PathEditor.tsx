@@ -5,7 +5,7 @@ import { postMessageToPlugin } from '../../figma';
 import Button from '../common/Button';
 import ConfirmButton from '../common/ConfirmButton';
 import { useLinesContext } from '../../contexts/LinesContext';
-import { useNetworkContext } from '../../contexts/NetworkContext';
+import { useNetworkDataContext } from '../../contexts/NetworkContext';
 import { useMessageManager } from '../../contexts/MessageContext';
 import { AddingRseUISession } from '../../sessions/adding-rse';
 import { useUISession } from '../../sessions/useUISession';
@@ -25,7 +25,7 @@ const RoadInsertButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
 const PathEditor: React.FC<{ onDirtyChange: (dirty: boolean) => void }> = ({ onDirtyChange }) => {
   const { lines, currentEditingLineId } = useLinesContext();
   const currentLineColor = lines.find(l => l.id === currentEditingLineId)?.color;
-  const { roads } = useNetworkContext();
+  const { roads } = useNetworkDataContext();
   const manager = useMessageManager();
 
   const [linePaths, setLinePaths]           = useState<RoadSectionPassData[]>([]);

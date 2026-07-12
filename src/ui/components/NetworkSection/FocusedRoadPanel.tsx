@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { LineAtRoadSectionData, NetworkFocusedElement, NodeData, RoadSectionData } from '@/common/messages';
 import { LineId, RoadSectionId } from '@/common/types';
 import { postMessageToPlugin } from '../../figma';
-import { useNetworkContext } from '../../contexts/NetworkContext';
+import { useNetworkSessionContext } from '../../contexts/NetworkContext';
 import Button from '../common/Button';
 import ConfirmButton from '../common/ConfirmButton';
 import DraggableLineList from '../DraggableLineList';
@@ -30,7 +30,7 @@ const FocusedRoadPanel: React.FC<{
   element: Extract<NetworkFocusedElement, { kind: 'road' }>;
   nodes: NodeData[];
 }> = ({ element, nodes }) => {
-  const { roadLinesData: lines } = useNetworkContext();
+  const { roadLinesData: lines } = useNetworkSessionContext();
 
   const [editName, setEditName] = useState(element.name ?? '');
   const [sectionDrafts, setSectionDrafts] = useState<SectionDraft[]>(() => toDrafts(element.sections));

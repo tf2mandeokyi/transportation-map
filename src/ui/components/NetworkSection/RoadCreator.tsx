@@ -2,7 +2,7 @@ import React from 'react';
 import { RoadCreationSnap } from '@/common/messages';
 import Button from '../common/Button';
 import ConfirmButton from '../common/ConfirmButton';
-import { useNetworkContext } from '../../contexts/NetworkContext';
+import { useNetworkSessionContext } from '../../contexts/NetworkContext';
 
 function snapLabel(snap: RoadCreationSnap): string {
   if (!snap) return 'new node';
@@ -14,7 +14,7 @@ const RoadCreator: React.FC = () => {
   const {
     isAddingRoad, roadSnapState, roadSnapModeEnabled,
     handleStartRoadCreation, handleConfirmRoadCreation, handleCancelRoadCreation, handleSetRoadSnapMode,
-  } = useNetworkContext();
+  } = useNetworkSessionContext();
 
   if (!isAddingRoad) {
     return (
