@@ -29,6 +29,11 @@ export class NodeControlManager {
   // it's actually stale.
   get isDirty(): boolean { return this.dirty; }
 
+  // Called once a pending render() has actually caught the visuals up to a dirty
+  // edit, so the same edit doesn't force another redundant render() on the next
+  // selection change.
+  markClean(): void { this.dirty = false; }
+
   isControlElement(id: string): boolean {
     return this.handleId === id;
   }

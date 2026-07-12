@@ -201,7 +201,6 @@ export class NetworkController extends BaseController {
     if (this.view.isRendering) return;
 
     await this.flushPendingNodeMove();
-    await this.flushControlDirty();
 
     const selection = figma.currentPage.selection;
     const first = selection[0];
@@ -212,6 +211,7 @@ export class NetworkController extends BaseController {
     }
 
     if (this.isAddingRseMode) {
+      await this.flushControlDirty();
       const roadId = first.getPluginData(FIGMA_KEY_ROAD_ID) as RoadId;
       const sectionIdPart = first.getPluginData(FIGMA_KEY_SECTION_ID) as SectionId;
       const sectionId: RoadSectionId | null = sectionIdPart ? [roadId, sectionIdPart] : null;
@@ -219,6 +219,9 @@ export class NetworkController extends BaseController {
       return;
     }
 
+    // Selecting another handle that belongs to the road/node already being edited
+    // doesn't change what's focused, so there's nothing to flush yet — the dirty
+    // flag stays set and will be flushed once focus actually moves elsewhere.
     if (first.getPluginData(FIGMA_KEY_IS_ROAD_CONTROL) === 'true') {
       const roadId = first.getPluginData(FIGMA_KEY_ROAD_ID) as RoadId;
       if (roadId) postMessageToUI({ type: 'network-element-focused', element: this.buildRoadElement(roadId) });
@@ -230,6 +233,8 @@ export class NetworkController extends BaseController {
       if (nodeId) postMessageToUI({ type: 'network-element-focused', element: this.buildNodeElement(nodeId) });
       return;
     }
+
+    await this.flushControlDirty();
 
     const nodeId = first.getPluginData(FIGMA_KEY_NODE_ID) as NodeId;
     if (nodeId) {
@@ -397,6 +402,8 @@ export class NetworkController extends BaseController {
     if (!this.roadControl.isDirty && !this.nodeControl.isDirty) return;
     this.isRendering = true;
     try { await this.render(); await this.save(); } finally { this.isRendering = false; }
+    this.roadControl.markClean();
+    this.nodeControl.markClean();
   }
 
   private async clearNetworkFocus(): Promise<void> {
