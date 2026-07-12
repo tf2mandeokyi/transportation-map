@@ -1,9 +1,16 @@
 import { LineId, StationId } from "@/common/types";
 import { LinePatch, RoadSectionPassData } from "@/common/messages";
-import { RoadSectionPass } from "../models/structures";
+import { RoadSectionPass, Station } from "../models/structures";
 import { postMessageToUI } from "../figma";
 import { BaseController } from "./base";
 import { UIMessageRouter } from "./router";
+
+// Stations touched either before or after a path edit — both need re-rendering, the
+// "before" set to drop indicators for stops the line no longer makes, the "after" set to
+// add indicators (and correct connection points) for its current stops.
+function stationUnion(before: Station[], after: Station[]): Station[] {
+  return [...new Map([...before, ...after].map(s => [s.id, s])).values()];
+}
 
 export class LineController extends BaseController {
   public registerMessages(router: UIMessageRouter): void {
@@ -41,7 +48,7 @@ export class LineController extends BaseController {
     if (!line) return;
     line.name = name;
     line.color = color;
-    await this.render({ roads: false });
+    await this.renderPartial({ stations: line.getStations(), lines: [line] });
     await this.save();
     postMessageToUI({ type: 'line-added', id: lineId, name: line.name, color: line.color });
   }
@@ -49,8 +56,9 @@ export class LineController extends BaseController {
   private async handleUpdateLinePath(lineId: LineId, paths: RoadSectionPassData[]): Promise<void> {
     const line = this.model.state.getLine(lineId);
     if (!line) { console.error("Line not found:", lineId); return; }
+    const before = line.getStations();
     line.replacePaths(paths);
-    await this.render({ roads: false });
+    await this.renderPartial({ stations: stationUnion(before, line.getStations()), lines: [line] });
     await this.save();
   }
 
@@ -58,16 +66,18 @@ export class LineController extends BaseController {
     const line = this.model.state.getLine(lineId);
     if (!line) { console.error("Line not found:", lineId); return; }
     const passes = passesData.map(p => RoadSectionPass.fromData(this.model.state, p));
+    const before = line.getStations();
     line.insertPassesAt(boundaryIndex, passes);
-    await this.render({ roads: false });
+    await this.renderPartial({ stations: stationUnion(before, line.getStations()), lines: [line] });
     await this.save();
   }
 
   private async handleRemovePass(lineId: LineId, passIndex: number): Promise<void> {
     const line = this.model.state.getLine(lineId);
     if (!line) return;
+    const before = line.getStations();
     line.removePassAt(passIndex);
-    await this.render({ roads: false });
+    await this.renderPartial({ stations: stationUnion(before, line.getStations()), lines: [line] });
     await this.save();
     postMessageToUI({ type: 'station-removed-from-line' });
   }
@@ -76,7 +86,7 @@ export class LineController extends BaseController {
     const line = this.model.state.getLine(lineId);
     if (!line) return;
     line.setStopFlag(passIndex, stationId, stops);
-    await this.render({ roads: false });
+    await this.renderPartial({ stations: line.getStations(), lines: [line] });
     await this.save();
     postMessageToUI({ type: 'station-removed-from-line' });
   }
@@ -86,8 +96,9 @@ export class LineController extends BaseController {
     if (!line) { console.error("Line not found:", lineId); return; }
     if (line.paths.length === 0) { console.warn("Cannot rotate empty path"); return; }
 
+    const before = line.getStations();
     line.rotatePasses(steps);
-    await this.render({ roads: false });
+    await this.renderPartial({ stations: stationUnion(before, line.getStations()), lines: [line] });
     await this.save();
   }
 

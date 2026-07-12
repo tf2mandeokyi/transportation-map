@@ -2,7 +2,7 @@ import { LineId, NodeId, RoadId, RoadSectionId, SectionId } from "@/common/types
 import { LineAtNodeData, LineAtRoadSectionData, NetworkFocusedElement, NodeData, NodePatch, RoadData, RoadPatch, RoadSectionData } from "@/common/messages";
 import { PluginSessionManager } from "../../sessions/manager";
 import { postMessageToUI } from "../../figma";
-import { Line, Node, Road, RoadSectionPass } from "../../models/structures";
+import { Line, Node, Road, RoadSectionPass, Station } from "../../models/structures";
 import { Model } from "../../models";
 import { View } from "../../views";
 import { BaseController } from "../base";
@@ -17,6 +17,25 @@ import { AddingRoadPluginSession } from "../../sessions/adding-road";
 import { own } from "@/common/utils/ownership";
 import { absoluteOrigin } from "../../utils/math";
 
+
+// Expands a set of directly-touched nodes/roads into the full redraw closure: roads
+// touched at n^0.5 (any road connected to a touched node, plus any directly-touched
+// road itself), junctions at n^1 (every node touched by an endpoint of a dirty road —
+// this always includes the originally touched node(s), since they're endpoints of
+// their own connected roads). See RoadRenderer.renderPartial: a junction's visual is
+// purely a function of the roads meeting at its own node, so this set is always closed
+// — no road or junction further out than this ever needs rebuilding.
+function networkDirtySet(touchedNodes: Node[] = [], touchedRoads: Road[] = []): { roads: Road[]; nodes: Node[] } {
+  const dirtyRoads = new Map(touchedRoads.map(r => [r.id, r]));
+  for (const node of touchedNodes) {
+    for (const { road } of node.roadConnections) dirtyRoads.set(road.id, road);
+  }
+  const dirtyNodes = new Map(touchedNodes.map(n => [n.id, n]));
+  for (const road of dirtyRoads.values()) {
+    for (const { node } of road.endpoints) dirtyNodes.set(node.id, node);
+  }
+  return { roads: [...dirtyRoads.values()], nodes: [...dirtyNodes.values()] };
+}
 
 export class NetworkController extends BaseController {
   private readonly roadControl: RoadControlManager;
@@ -44,49 +63,110 @@ export class NetworkController extends BaseController {
   public async handlePatchNode(nodeId: NodeId, patch: NodePatch): Promise<void> {
     const node = this.model.state.getNode(nodeId);
     switch (patch.op) {
-      case 'update-name':
+      case 'update-name': {
+        // A node's name is never drawn on canvas — it only shows up as the internal
+        // Figma layer name on its junction/marker frame — so this needs no render()
+        // at all, just that one frame's `.name` updated in place.
         node?.updateName(patch.name);
-        await this.render();
-        this.reselectNode(nodeId);
+        if (node) {
+          const target = figma.currentPage.children.find(c => c.getPluginData(FIGMA_KEY_NODE_ID) === nodeId);
+          if (target) {
+            target.name = target.getPluginData(FIGMA_KEY_IS_NODE_MARKER) === 'true'
+              ? `Node: ${node.name ?? node.id}`
+              : `Junction: ${node.name ?? node.id}`;
+          }
+        }
         await this.save();
         break;
-      case 'update-pass-ranks':
+      }
+      case 'update-pass-ranks': {
+        // Rank only feeds into line-segment lane offset (see computeTotalOffset/
+        // lineOffsetInSection) — road/junction geometry and station frames never read
+        // it, so only the lines touching this node need re-rendering, not the node's
+        // own junction/marker visual.
         if (node) node.updatePassRanks(patch.changes);
         if (node) await this.emitNodeLinesData(node);
-        await this.render();
-        this.reselectNode(nodeId);
+        const touchedLines = node
+          ? [...new Map(node.getPassBoundaryEntries().map(e => [e.line.id, e.line] as const)).values()]
+          : [];
+        await this.renderPartial({ lines: touchedLines });
         await this.save();
         break;
+      }
     }
   }
 
   public async handleRemoveNode(nodeId: NodeId): Promise<void> {
     const node = this.model.state.getNode(nodeId);
-    if (node) this.model.removeNode(node);
+    if (!node) return;
+
+    // Removing a node cascades to remove every road connected to it (n^0.5), which in
+    // turn strips an arm from each of THOSE roads' far junctions (n^1) — the one case
+    // where a junction beyond the node's own roads actually needs rebuilding, since an
+    // arm disappearing changes the polygon at a node that itself never moved.
+    const { roads: staleRoads, nodes: farNodes } = networkDirtySet([node]);
+    const staleStations = staleRoads.flatMap(road => [...road.getSections()].flatMap(section => [...section.stations]));
+    await this.clearStationVisuals(staleStations);
+
+    this.model.removeNode(node);
     await this.save();
+
+    this.isRendering = true;
+    try {
+      await this.renderPartial({
+        nodes: farNodes.filter(n => n.id !== nodeId),
+        removedRoadIds: staleRoads.map(r => r.id),
+        removedNodeIds: [nodeId],
+      });
+    } finally { this.isRendering = false; }
     this.syncNetworkToUI();
   }
 
   public async handleRemoveRoad(roadId: RoadId): Promise<void> {
     const road = this.model.state.getRoad(roadId);
     if (!road) return;
+
+    // n^0.5 (the road itself, gone) / n^1 (its two endpoint junctions, which lose an arm).
+    const dirty = networkDirtySet([], [road]);
+    const staleStations = [...road.getSections()].flatMap(section => [...section.stations]);
+    await this.clearStationVisuals(staleStations);
+
     this.model.removeRoad(road);
     await this.save();
+
+    this.isRendering = true;
+    try {
+      await this.renderPartial({ nodes: dirty.nodes, removedRoadIds: [roadId] });
+    } finally { this.isRendering = false; }
     this.syncNetworkToUI();
+  }
+
+  // Station frames aren't torn down by any render() path (only their connection points
+  // are), so a station removed as a side effect of a road/node deletion needs its figma
+  // frame cleared out explicitly here — otherwise it's orphaned on canvas forever.
+  private async clearStationVisuals(stations: Iterable<Station>): Promise<void> {
+    for (const station of stations) {
+      if (!station.figmaNodeId) continue;
+      const figmaNode = await figma.getNodeByIdAsync(station.figmaNodeId);
+      if (figmaNode && !figmaNode.removed) figmaNode.remove();
+    }
   }
 
   private applySectionRankChanges(
     section: ReturnType<Road['getSectionHarsh']>,
     changes: Array<{ lineId: LineId; passIndex: number; end: 'from' | 'to'; rank: number }>,
-  ): void {
+  ): Line[] {
+    const touched: Line[] = [];
     for (const change of changes) {
       const line = this.model.state.getLine(change.lineId);
       const pass = line?.paths[change.passIndex];
       if (pass && pass.section === section) {
         if (change.end === 'from') pass.fromRank = change.rank;
         else pass.toRank = change.rank;
+        if (line) touched.push(line);
       }
     }
+    return touched;
   }
 
   public async handlePatchRoad(roadId: RoadId, patch: RoadPatch): Promise<void> {
@@ -108,25 +188,28 @@ export class NetworkController extends BaseController {
             this.model.addRoadSection(road, { name: s.name, index });
           }
         });
-        await this.render();
+        // Section width/offset feeds into the junction arm at both ends (see
+        // JunctionShape), so both endpoints need rebuilding alongside the road itself.
+        await this.renderPartial(networkDirtySet([], [road]));
         this.reselectRoad(roadId);
         break;
       }
       case 'update-section-ranks': {
+        // Same as node pass-ranks: rank only affects line-segment lane offset, never
+        // road/junction geometry, so this stays scoped to the touched lines.
         const section = road?.hasSection(patch.sectionId[1]) ? road.getSectionHarsh(patch.sectionId[1]) : undefined;
-        if (section) this.applySectionRankChanges(section, patch.changes);
-        await this.render();
-        this.reselectRoad(roadId);
+        const touchedLines = section ? this.applySectionRankChanges(section, patch.changes) : [];
+        await this.renderPartial({ lines: touchedLines });
         if (road) await this.emitRoadLinesData(road);
         break;
       }
       case 'update-ranks-batch': {
+        const touchedLines: Line[] = [];
         for (const { sectionId, changes } of patch.sections) {
           const section = road?.hasSection(sectionId[1]) ? road.getSectionHarsh(sectionId[1]) : undefined;
-          if (section) this.applySectionRankChanges(section, changes);
+          if (section) touchedLines.push(...this.applySectionRankChanges(section, changes));
         }
-        await this.render();
-        this.reselectRoad(roadId);
+        await this.renderPartial({ lines: touchedLines });
         if (road) await this.emitRoadLinesData(road);
         break;
       }
@@ -147,11 +230,14 @@ export class NetworkController extends BaseController {
   // Resolves a road-placing endpoint's snap target to an actual Node, splicing a new
   // junction into an existing road if the endpoint snapped to a mid-road point. Falls
   // back to a plain new node if a mid-road target's road was already consumed by the
-  // other endpoint's split (both endpoints snapped into the same road).
-  private resolveEndpointNode(snap: SnapTarget | null, pos: Vector): Node {
+  // other endpoint's split (both endpoints snapped into the same road). A split retires
+  // the original road (new id, same visual geometry) — its id is pushed onto
+  // `staleRoadIds` so the caller can clear its now-orphaned figma nodes.
+  private resolveEndpointNode(snap: SnapTarget | null, pos: Vector, staleRoadIds: RoadId[]): Node {
     if (!snap) return this.model.addNode({ position: pos, radius: NODE_DEFAULT_RADIUS });
     if (snap.kind === 'node') return snap.node;
     if (!this.model.state.getRoad(snap.road.id)) return this.model.addNode({ position: pos, radius: NODE_DEFAULT_RADIUS });
+    staleRoadIds.push(snap.road.id);
     return this.model.splitRoad(snap.road, snap.t, NODE_DEFAULT_RADIUS);
   }
 
@@ -160,8 +246,9 @@ export class NetworkController extends BaseController {
     await this.roadPlacing.cleanup();
 
     if (result) {
-      const startNode = this.resolveEndpointNode(result.startSnap, result.startPos);
-      const endNode   = this.resolveEndpointNode(result.endSnap,   result.endPos);
+      const staleRoadIds: RoadId[] = [];
+      const startNode = this.resolveEndpointNode(result.startSnap, result.startPos, staleRoadIds);
+      const endNode   = this.resolveEndpointNode(result.endSnap,   result.endPos, staleRoadIds);
 
       this.model.addRoad({
         name: undefined,
@@ -172,8 +259,14 @@ export class NetworkController extends BaseController {
         ],
       });
 
+      // n^0.5: every road now connected to either endpoint (the new road, plus either
+      // half of a split). n^1: the junctions those roads touch — for a split, that's
+      // the original road's two far endpoints, which now reference new Road objects.
       this.isRendering = true;
-      try { await this.render(); await this.save(); } finally { this.isRendering = false; }
+      try {
+        await this.renderPartial({ ...networkDirtySet([startNode, endNode]), removedRoadIds: staleRoadIds });
+        await this.save();
+      } finally { this.isRendering = false; }
       this.syncNetworkToUI();
     }
 
@@ -388,7 +481,7 @@ export class NetworkController extends BaseController {
     if (!pending.keepNodeControl) await this.nodeControl.remove();
 
     this.isRendering = true;
-    try { await this.render(); await this.save(); } finally { this.isRendering = false; }
+    try { await this.renderPartial(networkDirtySet([node])); await this.save(); } finally { this.isRendering = false; }
     this.syncNetworkToUI();
     postMessageToUI({ type: 'network-element-focused', element: this.buildNodeElement(pending.nodeId) });
   }
@@ -400,8 +493,27 @@ export class NetworkController extends BaseController {
   // never on a plain focus/unfocus with no drag.
   private async flushControlDirty(): Promise<void> {
     if (!this.roadControl.isDirty && !this.nodeControl.isDirty) return;
+
+    const touchedRoads: Road[] = [];
+    if (this.roadControl.isDirty && this.roadControl.activeRoadId) {
+      const road = this.model.state.getRoad(this.roadControl.activeRoadId);
+      if (road) touchedRoads.push(road);
+    }
+    const touchedNodes: Node[] = [];
+    if (this.nodeControl.isDirty && this.nodeControl.activeNodeId) {
+      const node = this.model.state.getNode(this.nodeControl.activeNodeId);
+      if (node) touchedNodes.push(node);
+    }
+
     this.isRendering = true;
-    try { await this.render(); await this.save(); } finally { this.isRendering = false; }
+    try {
+      if (touchedRoads.length > 0 || touchedNodes.length > 0) {
+        await this.renderPartial(networkDirtySet(touchedNodes, touchedRoads));
+      } else {
+        await this.render();
+      }
+      await this.save();
+    } finally { this.isRendering = false; }
     this.roadControl.markClean();
     this.nodeControl.markClean();
   }
@@ -421,11 +533,6 @@ export class NetworkController extends BaseController {
     const target = figma.currentPage.children.find(c =>
       c.getPluginData(FIGMA_KEY_ROAD_ID) === roadId && c.getPluginData(FIGMA_KEY_IS_ROAD_CONTROL) !== 'true'
     );
-    if (target) figma.currentPage.selection = [target as SceneNode];
-  }
-
-  private reselectNode(nodeId: NodeId): void {
-    const target = figma.currentPage.children.find(c => c.getPluginData(FIGMA_KEY_NODE_ID) === nodeId);
     if (target) figma.currentPage.selection = [target as SceneNode];
   }
 
