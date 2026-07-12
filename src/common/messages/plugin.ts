@@ -32,6 +32,7 @@ export type DisplayEntry =
     }
   | {
       kind: 'traversal';
+      passIndex: number;
       direction: 'ascending' | 'descending';
       stations: DisplayStation[];
     }

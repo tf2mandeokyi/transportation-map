@@ -27,7 +27,6 @@ export type LinePatch =
   | { op: 'insert-passes'; boundaryIndex: number; passes: RoadSectionPassData[] }
   | { op: 'remove-pass'; passIndex: number }
   | { op: 'rotate-path'; steps: number }
-  | { op: 'remove-station'; passIndex: number; stationId: StationId }
   | { op: 'toggle-stops'; passIndex: number; stationId: StationId; stops: boolean };
 
 export type UIToPluginLineMessage =

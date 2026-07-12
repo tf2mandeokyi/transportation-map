@@ -6,8 +6,8 @@ import { Node } from "../models/structures/node";
 // or end of the path — no longer a special case, just an entry with nothing on that
 // side). isUturn is a same-section adjacency, replacing the old RSC.isUturn flag.
 function boundaryEntry(boundaryIndex: number, fromPass: RoadSectionPass | null, toPass: RoadSectionPass | null): DisplayEntry {
-  const node: Node | null = fromPass ? fromPass.toNode : toPass ? toPass.fromNode : null;
-  const isUturn = !!(fromPass && toPass && fromPass.section === toPass.section);
+  const node: Node | null = fromPass?.toNode ?? (toPass ? toPass.fromNode : null);
+  const isUturn = !!(fromPass && fromPass.section === toPass?.section);
   return {
     kind: 'boundary',
     boundaryIndex,
@@ -29,6 +29,7 @@ export function buildDisplayEntries(passes: readonly RoadSectionPass[]): Display
 
     entries.push({
       kind: 'traversal',
+      passIndex: i,
       direction: pass.direction,
       stations: pass.stops.map(s => ({ stationId: s.station.id, name: s.station.name, stops: s.stops, passIndex: i })),
     });

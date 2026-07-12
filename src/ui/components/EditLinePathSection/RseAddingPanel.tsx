@@ -24,6 +24,18 @@ interface RseAddingPanelProps {
   onCancel: () => void;
 }
 
+// Rail column, matching PathItemsList's timeline: markers sit over a continuous
+// vertical line, so it reads as node → segment → node rather than a stack of cards.
+const RAIL_WIDTH = 'w-5';
+const RAIL_LINE_LEFT = 'left-[9px]';
+
+const Row: React.FC<{ marker?: React.ReactNode; children: React.ReactNode; className?: string }> = ({ marker, children, className }) => (
+  <div className={`relative z-10 flex items-center gap-1.5 ${className ?? ''}`}>
+    <div className={`flex ${RAIL_WIDTH} shrink-0 justify-center text-xs leading-none`}>{marker}</div>
+    <div className="min-w-0 flex-1">{children}</div>
+  </div>
+);
+
 type NodeOption = { nodeId: NodeId; nodeName: string };
 
 type PendingRse = {
@@ -117,6 +129,19 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
       return known ? [known] : options;
     };
 
+    // If this road's far endpoint (the one not picked as entry) is the chain's
+    // required end, the near endpoint is the only entry that actually closes the
+    // chain — resolve straight to it instead of making the user pick from a
+    // dropdown when the answer is already determined by where the chain must land.
+    const applyKnownEnd = (options: NodeOption[]): NodeOption[] => {
+      if (!requiredEndNodeId) return options;
+      const matches = options.filter(o => {
+        const otherEnd = destRoad.startNodeId === o.nodeId ? destRoad.endNodeId : destRoad.startNodeId;
+        return otherEnd === requiredEndNodeId;
+      });
+      return matches.length === 1 ? matches : options;
+    };
+
     // Appends the new entry and, if its node came out immediately resolved, narrows
     // any still-ambiguous earlier entries it constrains (see narrowBackward).
     const pushEntry = (entry: Omit<PendingRse, 'originalNodeOptions' | 'nodeAutoResolved'>) => {
@@ -130,7 +155,7 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
     if (list.length === 0 && !sourceRoadId) {
       // Starting a brand-new path: nothing to cross from yet, so just pick which end
       // of the clicked road to start at — no shared-junction requirement.
-      const nodeOptions = applyKnownStart(uniqueNodeOptions([destRoad.startNodeId, destRoad.endNodeId]));
+      const nodeOptions = applyKnownEnd(applyKnownStart(uniqueNodeOptions([destRoad.startNodeId, destRoad.endNodeId])));
       pushEntry({
         destRoadId,
         destRoadName: destRoad.name,
@@ -146,7 +171,7 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
 
     if (currentRoadId === destRoadId) {
       // U-turn on same road
-      const nodeOptions = applyKnownStart(uniqueNodeOptions([destRoad.startNodeId, destRoad.endNodeId]));
+      const nodeOptions = applyKnownEnd(applyKnownStart(uniqueNodeOptions([destRoad.startNodeId, destRoad.endNodeId])));
       pushEntry({
         destRoadId,
         destRoadName: destRoad.name,
@@ -178,7 +203,7 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
       return;
     }
 
-    const nodeOptions = applyKnownStart(sharedNodes);
+    const nodeOptions = applyKnownEnd(applyKnownStart(sharedNodes));
 
     pushEntry({
       destRoadId,
@@ -275,59 +300,70 @@ const RseAddingPanel: React.FC<RseAddingPanelProps> = ({
         </div>
       )}
 
-      {/* Rendered as an alternating chain — node, section, node, section, …, node —
-          instead of one card per road, so it's visible that "node" and "section"
-          are separate waypoints in a single sequence rather than a paired unit. */}
-      {pendingList.map((entry, i) => {
-        const nodeLabel = entry.isStart ? 'Starting end' : entry.isUturn ? 'Endpoint node' : 'Junction node';
-        const sectionIdx = parseInt(entry.selectedSectionIdx, 10);
-        const section = entry.sections[sectionIdx];
-
-        return (
-          <React.Fragment key={i}>
-            <div className="flex items-center gap-1.5 rounded border border-neutral-300 bg-white px-2 py-1.5">
-              <span className="text-sm">{entry.isStart ? '●' : entry.isUturn ? '↩' : '↪'}</span>
-              {entry.nodeOptions.length > 1 ? (
-                <select
-                  className="flex-1 rounded border border-neutral-300 px-2 py-1 text-[11px]"
-                  value={entry.selectedNodeId}
-                  onChange={e => updateEntry(i, { selectedNodeId: e.target.value })}
-                >
-                  <option value="">— {nodeLabel.toLowerCase()} —</option>
-                  {entry.nodeOptions.map(opt => (
-                    <option key={opt.nodeId} value={opt.nodeId}>{opt.nodeName}</option>
-                  ))}
-                </select>
-              ) : (
-                <span className="flex-1 text-xs font-medium">
-                  {entry.nodeOptions[0]?.nodeName ?? nodeLabel}
-                </span>
-              )}
-              <Button size="sm" onClick={() => removeEntry(i)}>X</Button>
-            </div>
-
-            <div className="ml-3 border-l-2 border-neutral-300 py-1 pl-3">
-              <div className="text-[11px] font-semibold">{entry.destRoadName ?? entry.destRoadId}</div>
-              {entry.sections.length === 0 ? (
-                <p className="text-[11px] text-red-700">Road has no sections.</p>
-              ) : entry.selectedSectionIdx === '' ? (
-                <p className="text-[11px] text-red-700">Click the section on the canvas.</p>
-              ) : (
-                <p className="text-[11px] text-neutral-600">{section?.name ?? `Section ${(section?.index ?? 0) + 1}`}</p>
-              )}
-            </div>
-          </React.Fragment>
-        );
-      })}
-
       {pendingList.length > 0 && (
-        <div className={`flex items-center gap-1.5 rounded border border-dashed px-2 py-1.5 ${reachedRequiredEnd ? 'border-neutral-300 text-neutral-400' : 'border-red-300 text-red-400'}`}>
-          <span className="text-sm">●</span>
-          {impliedNextNode ? (
-            <span className="flex-1 text-xs font-medium">{impliedNextNode.name ?? impliedNextNode.id}</span>
-          ) : (
-            <span className="flex-1 text-[11px] italic">Click another road to continue…</span>
-          )}
+        <div className="relative mb-2">
+          <div className={`pointer-events-none absolute top-1 bottom-1 ${RAIL_LINE_LEFT} border-l-2 border-neutral-300`} />
+
+          {/* Rendered as an alternating chain — node, segment, node, segment, …, node —
+              with the X on the segment row (it removes the road between two nodes,
+              not the node itself), instead of one card per road. */}
+          {pendingList.map((entry, i) => {
+            const nodeLabel = entry.isStart ? 'Starting end' : entry.isUturn ? 'Endpoint node' : 'Junction node';
+            const sectionIdx = parseInt(entry.selectedSectionIdx, 10);
+            const section = entry.sections[sectionIdx];
+
+            return (
+              <React.Fragment key={i}>
+                <Row marker={<span className="h-3 w-3 rounded-full border-2 border-neutral-400 bg-white" />} className="my-0.5">
+                  <div className="flex items-center gap-1.5 rounded border border-neutral-300 bg-white px-2 py-1.5">
+                    <span className="text-sm">{entry.isStart ? '●' : entry.isUturn ? '↩' : '↪'}</span>
+                    {entry.nodeOptions.length > 1 ? (
+                      <select
+                        className="flex-1 rounded border border-neutral-300 px-2 py-1 text-[11px]"
+                        value={entry.selectedNodeId}
+                        onChange={e => updateEntry(i, { selectedNodeId: e.target.value })}
+                      >
+                        <option value="">— {nodeLabel.toLowerCase()} —</option>
+                        {entry.nodeOptions.map(opt => (
+                          <option key={opt.nodeId} value={opt.nodeId}>{opt.nodeName}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="flex-1 text-xs font-medium">
+                        {entry.nodeOptions[0]?.nodeName ?? nodeLabel}
+                      </span>
+                    )}
+                  </div>
+                </Row>
+
+                <Row marker={<span className="text-neutral-400">|</span>}>
+                  <div className="flex items-center gap-1.5 py-1">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[11px] font-semibold">{entry.destRoadName ?? entry.destRoadId}</div>
+                      {entry.sections.length === 0 ? (
+                        <p className="text-[11px] text-red-700">Road has no sections.</p>
+                      ) : entry.selectedSectionIdx === '' ? (
+                        <p className="text-[11px] text-red-700">Click the section on the canvas.</p>
+                      ) : (
+                        <p className="text-[11px] text-neutral-600">{section?.name ?? `Section ${(section?.index ?? 0) + 1}`}</p>
+                      )}
+                    </div>
+                    <Button size="sm" onClick={() => removeEntry(i)}>X</Button>
+                  </div>
+                </Row>
+              </React.Fragment>
+            );
+          })}
+
+          <Row marker={<span className="h-3 w-3 rounded-full border-2 border-neutral-400 bg-white" />} className="my-0.5">
+            <div className={`flex items-center gap-1.5 rounded border border-dashed px-2 py-1.5 ${reachedRequiredEnd ? 'border-neutral-300 text-neutral-400' : 'border-red-300 text-red-400'}`}>
+              {impliedNextNode ? (
+                <span className="flex-1 text-xs font-medium">{impliedNextNode.name ?? impliedNextNode.id}</span>
+              ) : (
+                <span className="flex-1 text-[11px] italic">Click another road to continue…</span>
+              )}
+            </div>
+          </Row>
         </div>
       )}
 

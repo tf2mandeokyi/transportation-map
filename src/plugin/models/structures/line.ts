@@ -90,14 +90,6 @@ export class Line extends TransportationMapObject<LineId> {
     this._paths = validateLinePaths(this);
   }
 
-  // "Removing" a real stop just demotes it back to an (unchecked) pass-through
-  // candidate — every station in a pass's section always has an entry, real or not.
-  removeStopAt(passIndex: number, stationId: StationId): void {
-    const stop = this.paths[passIndex]?.stops.find(s => s.station.id === stationId);
-    if (stop) stop.stops = false;
-    this._paths = validateLinePaths(this);
-  }
-
   setStopFlag(passIndex: number, stationId: StationId, stops: boolean): void {
     const stop = this.paths[passIndex]?.stops.find(s => s.station.id === stationId);
     if (stop) stop.stops = stops;

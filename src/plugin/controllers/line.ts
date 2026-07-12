@@ -32,7 +32,6 @@ export class LineController extends BaseController {
       case 'insert-passes':   return this.handleInsertPasses(lineId, patch.boundaryIndex, patch.passes);
       case 'remove-pass':     return this.handleRemovePass(lineId, patch.passIndex);
       case 'rotate-path':     return this.handleRotateLinePath(lineId, patch.steps);
-      case 'remove-station':  return this.handleRemoveStationFromLine(lineId, patch.passIndex, patch.stationId);
       case 'toggle-stops':    return this.handleToggleStops(lineId, patch.passIndex, patch.stationId, patch.stops);
     }
   }
@@ -68,15 +67,6 @@ export class LineController extends BaseController {
     const line = this.model.state.getLine(lineId);
     if (!line) return;
     line.removePassAt(passIndex);
-    await this.render();
-    await this.save();
-    postMessageToUI({ type: 'station-removed-from-line' });
-  }
-
-  private async handleRemoveStationFromLine(lineId: LineId, passIndex: number, stationId: StationId): Promise<void> {
-    const line = this.model.state.getLine(lineId);
-    if (!line) { console.warn(`Line ${lineId} not found`); return; }
-    line.removeStopAt(passIndex, stationId);
     await this.render();
     await this.save();
     postMessageToUI({ type: 'station-removed-from-line' });

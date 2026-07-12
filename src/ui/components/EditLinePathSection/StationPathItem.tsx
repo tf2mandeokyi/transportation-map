@@ -1,16 +1,14 @@
 import React from 'react';
-import Button from '../common/Button';
 
 export interface StationPathItemProps {
   name: string;
   stops: boolean;
-  onRemove?: () => void;
   onSelect?: () => void;
   onToggleStops?: (stops: boolean) => void;
 }
 
 const StationPathItem: React.FC<StationPathItemProps> = ({
-  name, stops, onRemove, onSelect, onToggleStops,
+  name, stops, onSelect, onToggleStops,
 }) => (
   <div className="flex items-center gap-2 rounded border border-neutral-200 bg-white px-2 hover:bg-neutral-100">
     {onToggleStops && (
@@ -27,9 +25,6 @@ const StationPathItem: React.FC<StationPathItemProps> = ({
     >
       {name}
     </span>
-    {onRemove && stops && (
-      <Button size="sm" onClick={onRemove}>X</Button>
-    )}
   </div>
 );
 

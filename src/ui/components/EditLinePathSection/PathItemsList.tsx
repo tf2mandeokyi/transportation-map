@@ -7,7 +7,6 @@ import StationPathItem from './StationPathItem';
 interface PathItemsListProps {
   displayEntries: DisplayEntry[];
   inactive: boolean;
-  onRemoveStop: (passIndex: number, stationId: StationId) => void;
   onRemovePass: (passIndex: number) => void;
   onSelectStation: (stationId: StationId) => void;
   onToggleStops: (passIndex: number, stationId: StationId, stops: boolean) => void;
@@ -35,7 +34,7 @@ const RoadInsertButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
 
 const PathItemsList: React.FC<PathItemsListProps> = ({
   displayEntries, inactive,
-  onRemoveStop, onRemovePass, onSelectStation, onToggleStops, onInsertRoad,
+  onRemovePass, onSelectStation, onToggleStops, onInsertRoad,
   lineColor,
 }) => {
   const railColor = lineColor ?? FALLBACK_RAIL_COLOR;
@@ -47,11 +46,6 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
       const fromLabel = fromRoadName && (fromSectionLabel ? `${fromRoadName} · ${fromSectionLabel}` : fromRoadName);
       const toLabel = toRoadName && (toSectionLabel ? `${toRoadName} · ${toSectionLabel}` : toRoadName);
       const parts = [fromLabel, <strong key="node">{nodeName ?? nodeId ?? 'Start'}</strong>, toLabel].filter(p => p !== undefined && p !== null && p !== '');
-      // A pass exists to remove only if this boundary has something entering it —
-      // the trailing boundary (after the last pass) has nothing left to remove.
-      // toSectionLabel always has a fallback string when a pass exists (unlike
-      // toRoadName, which can be null for a legitimately unnamed road).
-      const removablePassIndex = toSectionLabel !== null ? boundaryIndex : null;
 
       elements.push(
         <Row key={`boundary-${ei}`} className="my-0.5">
@@ -60,9 +54,14 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
               {isUturn && <span className="text-[#e07800]">U-turn </span>}
               {parts.map((p, i) => <React.Fragment key={i}>{i > 0 && <span className="text-neutral-400"> → </span>}{p}</React.Fragment>)}
             </span>
-            {inactive && <RoadInsertButton onClick={() => onInsertRoad(boundaryIndex, nodeId)} />}
-            {inactive && removablePassIndex !== null && (
-              <Button size="sm" onClick={() => onRemovePass(removablePassIndex)}>X</Button>
+            {inactive && (
+              // At the very front of a non-empty path (boundaryIndex 0), there's no
+              // fromPass to already anchor the new chain's start — nodeId is instead
+              // where the chain must end up, to reconnect with the existing first pass.
+              <RoadInsertButton onClick={() => boundaryIndex === 0
+                ? onInsertRoad(boundaryIndex, null, nodeId)
+                : onInsertRoad(boundaryIndex, nodeId)}
+              />
             )}
           </div>
         </Row>
@@ -82,19 +81,30 @@ const PathItemsList: React.FC<PathItemsListProps> = ({
       // Traversal: render each station in the order the plugin computed. Every
       // station self-describes its own address (passIndex + stationId) and whether
       // it's a real stop or a pass-through candidate — no cursor-matching needed.
-      for (const s of entry.stations) {
-        elements.push(
-          <Row key={`stop-${s.passIndex}-${s.stationId}`} marker={<span className="h-3 w-3 rounded-full border-2 bg-white" style={{ borderColor: railColor }} />}>
-            <StationPathItem
-              name={s.name}
-              stops={s.stops}
-              onRemove={() => onRemoveStop(s.passIndex, s.stationId)}
-              onSelect={() => onSelectStation(s.stationId)}
-              onToggleStops={stops => onToggleStops(s.passIndex, s.stationId, stops)}
-            />
-          </Row>
-        );
-      }
+      // The road section itself (not any single station) gets one remove button.
+      // The station rows sit in their own column (so every row is the same width,
+      // regardless of which one the button lines up with) and the button sits in a
+      // second column next to it, centered by the group's own flex layout — no need
+      // to pick out a "center" row.
+      elements.push(
+        <div key={`section-${entry.passIndex}`} className="flex items-center gap-1.5">
+          <div className="min-w-0 flex-1">
+            {entry.stations.map(s => (
+              <Row key={`stop-${s.passIndex}-${s.stationId}`} marker={<span className="h-3 w-3 rounded-full border-2 bg-white" style={{ borderColor: railColor }} />}>
+                <StationPathItem
+                  name={s.name}
+                  stops={s.stops}
+                  onSelect={() => onSelectStation(s.stationId)}
+                  onToggleStops={stops => onToggleStops(s.passIndex, s.stationId, stops)}
+                />
+              </Row>
+            ))}
+          </div>
+          {inactive && (
+            <Button size="sm" onClick={() => onRemovePass(entry.passIndex)}>X</Button>
+          )}
+        </div>
+      );
     }
   });
 

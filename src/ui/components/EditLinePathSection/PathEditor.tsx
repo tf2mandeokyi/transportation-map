@@ -141,12 +141,6 @@ const PathEditor: React.FC<{ onDirtyChange: (dirty: boolean) => void }> = ({ onD
 
   // ─── Remove / rotate ───────────────────────────────────────────────────────
 
-  const handleRemoveStop = (passIndex: number, stationId: StationId) => {
-    if (!currentEditingLineId) return;
-    commitStopToggles();
-    postMessageToPlugin({ type: 'patch-line', lineId: currentEditingLineId, patch: { op: 'remove-station', passIndex, stationId } });
-  };
-
   // Only updates local state — staged like any other editor field, committed via
   // commitStopToggles (explicit Apply, or before another patch that would refetch)
   // so toggling a checkbox doesn't trigger a canvas re-render on every click.
@@ -199,7 +193,6 @@ const PathEditor: React.FC<{ onDirtyChange: (dirty: boolean) => void }> = ({ onD
           displayEntries={displayEntries}
           inactive={inactive}
           lineColor={currentLineColor}
-          onRemoveStop={handleRemoveStop}
           onRemovePass={handleRemovePass}
           onSelectStation={(stationId) => postMessageToPlugin({ type: 'select-station', stationId })}
           onToggleStops={handleToggleStops}
