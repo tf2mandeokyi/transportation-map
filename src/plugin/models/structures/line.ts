@@ -6,6 +6,7 @@ import { validateLinePaths } from '../../utils/line-validator';
 import { TransportationMapObject } from "./types";
 import { Owned, own } from "@/common/utils/ownership";
 import { RoadSection } from "./road-section";
+import type { Station } from "./station";
 
 export type { SerializedRoadSectionPass } from './line-path';
 
@@ -93,6 +94,14 @@ export class Line extends TransportationMapObject<LineId> {
   setStopFlag(passIndex: number, stationId: StationId, stops: boolean): void {
     const stop = this.paths[passIndex]?.stops.find(s => s.station.id === stationId);
     if (stop) stop.stops = stops;
+  }
+
+  // Every station this line currently touches (real stops and pass-through candidates
+  // alike) — used to know which stations need re-rendering after a path edit.
+  getStations(): Station[] {
+    const set = new Set<Station>();
+    for (const pass of this.paths) for (const stop of pass.stops) set.add(stop.station);
+    return [...set];
   }
 
   // Counts the number of directed runs a line makes on a section — trivial now,

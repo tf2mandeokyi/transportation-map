@@ -1,6 +1,6 @@
 import { Line } from "../../models/structures/line";
 import { Station } from "../../models/structures/station";
-import { MapState, RoadSection } from "../../models/structures";
+import { RoadSection } from "../../models/structures";
 import { renderStation, renderStationLine } from "../../figmls";
 import { computeStationTangentAngle } from "./position";
 import { getLinesForStation } from "./layout";
@@ -137,10 +137,20 @@ export class StationRenderer {
     this.lineConnectionPoints.clear();
   }
 
+  // Used ahead of a single-station re-render so only that station's stale entries are
+  // dropped, leaving every other station's connection points (which lines still rely on)
+  // intact.
+  public clearConnectionPointsFor(station: Station): void {
+    const prefix = `${station.id}-`;
+    for (const key of this.lineConnectionPoints.keys()) {
+      if (key.startsWith(prefix)) this.lineConnectionPoints.delete(key);
+    }
+  }
+
   // Re-appending each station frame moves it to the top of the page's z-order,
   // above the road infrastructure and line segments brought to front just before this runs.
-  public async bringStationsToFront(state: Readonly<MapState>): Promise<void> {
-    for (const station of state.getStations()) {
+  public async bringStationsToFront(stations: Iterable<Station>): Promise<void> {
+    for (const station of stations) {
       if (!station.figmaNodeId) continue;
       try {
         const frame = await figma.getNodeByIdAsync(station.figmaNodeId);

@@ -1,4 +1,4 @@
-import { Line, MapState, PassStop, RoadSectionPass } from "../../models/structures";
+import { Line, PassStop, RoadSectionPass } from "../../models/structures";
 import { StationRenderer } from "../station";
 import { hexToRgb } from "@/common/utils/color";
 import { buildSegmentPieces, SegmentPiece } from "./path-builder";
@@ -103,8 +103,8 @@ export class LineRenderer {
 
   // Re-appending each line group moves it to the top of its parent's z-order,
   // above the road infrastructure brought to front just before this runs.
-  public async bringSegmentsToFront(state: Readonly<MapState>): Promise<void> {
-    for (const line of state.getLines()) {
+  public async bringSegmentsToFront(lines: Iterable<Line>): Promise<void> {
+    for (const line of lines) {
       if (!line.figmaGroupId) continue;
       try {
         const lineGroup = await figma.getNodeByIdAsync(line.figmaGroupId);
