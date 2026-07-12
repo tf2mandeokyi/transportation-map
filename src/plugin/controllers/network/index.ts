@@ -23,8 +23,8 @@ export class NetworkController extends BaseController {
   private readonly nodeControl: NodeControlManager;
   private readonly roadPlacing = new RoadPlacingState();
   private isRendering = false;
-  private renderDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private isAddingRseMode = false;
+  private pendingNodeMove: { nodeId: NodeId; startCenter: { x: number; y: number }; targetPos: { x: number; y: number }; keepNodeControl?: boolean } | null = null;
 
   constructor(model: Model, view: View, listener: NodeChangeListener, sessionManager: PluginSessionManager) {
     super(model, view, listener, sessionManager);
@@ -185,6 +185,8 @@ export class NetworkController extends BaseController {
     // own render is in flight so that doesn't get misread as the user deselecting.
     if (this.view.isRendering) return;
 
+    await this.flushPendingNodeMove();
+
     const selection = figma.currentPage.selection;
     const first = selection[0];
 
@@ -306,10 +308,7 @@ export class NetworkController extends BaseController {
   }
 
   public cleanup(): void {
-    if (this.renderDebounceTimer !== null) {
-      clearTimeout(this.renderDebounceTimer);
-      this.renderDebounceTimer = null;
-    }
+    this.pendingNodeMove = null;
     this.roadControl.cleanup();
     this.nodeControl.cleanup();
   }
@@ -335,31 +334,45 @@ export class NetworkController extends BaseController {
     return { nodes, roads };
   }
 
+  // Buffers drag updates instead of committing them to the model live: each
+  // intermediate PROPERTY_CHANGE during a drag just updates the pending target
+  // position, and the actual node.moveByDelta (plus render/save) only happens
+  // once the selection moves away from the node — the canvas equivalent of
+  // committing on blur rather than on every keystroke.
   private async onNodePositionChanged(nodeId: NodeId, newPos: { x: number; y: number }, options?: { keepNodeControl?: boolean }): Promise<void> {
     const node = this.model.state.getNode(nodeId);
     if (!node) return;
-    const currentCenter = node.getCenter();
-    const delta = { x: newPos.x - currentCenter.x, y: newPos.y - currentCenter.y };
+
+    if (!this.pendingNodeMove || this.pendingNodeMove.nodeId !== nodeId) {
+      this.pendingNodeMove = { nodeId, startCenter: node.getCenter(), targetPos: newPos, keepNodeControl: options?.keepNodeControl };
+    } else {
+      this.pendingNodeMove.targetPos = newPos;
+      if (options?.keepNodeControl) this.pendingNodeMove.keepNodeControl = true;
+    }
+  }
+
+  private async flushPendingNodeMove(): Promise<void> {
+    const pending = this.pendingNodeMove;
+    this.pendingNodeMove = null;
+    if (!pending) return;
+
+    const node = this.model.state.getNode(pending.nodeId);
+    if (!node) return;
+
+    const delta = { x: pending.targetPos.x - pending.startCenter.x, y: pending.targetPos.y - pending.startCenter.y };
     if (Math.abs(delta.x) < 0.5 && Math.abs(delta.y) < 0.5) return;
+
     node.moveByDelta(delta);
     await this.roadControl.remove();
-    if (!options?.keepNodeControl) await this.nodeControl.remove();
+    if (!pending.keepNodeControl) await this.nodeControl.remove();
 
-    if (this.renderDebounceTimer !== null) clearTimeout(this.renderDebounceTimer);
-    this.renderDebounceTimer = setTimeout(async () => {
-      this.renderDebounceTimer = null;
-      this.isRendering = true;
-      try { await this.render(); await this.save(); } finally { this.isRendering = false; }
-      this.syncNetworkToUI();
-      postMessageToUI({ type: 'network-element-focused', element: this.buildNodeElement(nodeId) });
-    }, 500);
+    this.isRendering = true;
+    try { await this.render(); await this.save(); } finally { this.isRendering = false; }
+    this.syncNetworkToUI();
+    postMessageToUI({ type: 'network-element-focused', element: this.buildNodeElement(pending.nodeId) });
   }
 
   private async clearNetworkFocus(): Promise<void> {
-    if (this.renderDebounceTimer !== null) {
-      clearTimeout(this.renderDebounceTimer);
-      this.renderDebounceTimer = null;
-    }
     const wasEditingRoad = this.roadControl.activeRoadId !== null;
     const wasEditingNode = this.nodeControl.activeNodeId !== null;
     await this.roadControl.remove();
