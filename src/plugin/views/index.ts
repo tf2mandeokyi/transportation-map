@@ -14,12 +14,17 @@ export class View {
     this.lineSegmentRenderer = new LineRenderer(this.stationRenderer);
   }
 
-  public async render(state: Readonly<MapState>): Promise<void> {
+  // Station positions are computed from the road model (Road.computeBezier), not read
+  // back from the road's Figma nodes, so road geometry never needs to be torn down and
+  // rebuilt just because a station or line was edited — { roads: false } skips that.
+  public async render(state: Readonly<MapState>, { roads = true }: { roads?: boolean } = {}): Promise<void> {
     this.isRendering = true;
     try {
       // 1. Draw road sections (bezier curves) — rendered first so they sit at the back
-      await RoadRenderer.renderAll(state)
-        .catch(ErrorChain.thrower('Error rendering road network'));
+      if (roads) {
+        await RoadRenderer.renderAll(state)
+          .catch(ErrorChain.thrower('Error rendering road network'));
+      }
 
       // 2. Clear connection points, then render stations on top of the road sections
       this.stationRenderer.clearConnectionPoints();
@@ -37,7 +42,7 @@ export class View {
       // 4. Bring every plugin-rendered layer to the front of the page's z-order, in
       //    bottom-to-top order, so all plugin objects sit above any non-plugin content
       //    and the internal stacking is: roads < junctions < node markers < line segments < stations.
-      RoadRenderer.bringInfraToFront();
+      if (roads) RoadRenderer.bringInfraToFront();
       await this.lineSegmentRenderer.bringSegmentsToFront(state);
       await this.stationRenderer.bringStationsToFront(state);
     } finally {

@@ -181,7 +181,7 @@ export class StationController extends BaseController {
       return line ? [{ line, passIndex, rank, stops: stopFlag }] : [];
     });
     station.updateStopRanks(resolvedStops);
-    await this.render();
+    await this.render({ roads: false });
     await this.save();
     await this.handleGetStationInfo(stationId);
   }
@@ -197,7 +197,7 @@ export class StationController extends BaseController {
     station.textRotation = textRotation;
     station.flipped = flipped;
 
-    await this.render();
+    await this.render({ roads: false });
     await this.save();
     await this.handleGetStationInfo(stationId);
   }

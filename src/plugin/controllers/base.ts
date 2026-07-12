@@ -22,9 +22,9 @@ export abstract class BaseController {
     this.connectionController = connectionController;
   }
 
-  protected async render(): Promise<void> {
+  protected async render(scope: { roads?: boolean } = {}): Promise<void> {
     this.model.validateAllLinePaths();
-    await this.view.render(this.model.state);
+    await this.view.render(this.model.state, scope);
   }
 
   protected async save(): Promise<void> {

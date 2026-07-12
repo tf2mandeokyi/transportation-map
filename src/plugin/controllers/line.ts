@@ -41,7 +41,7 @@ export class LineController extends BaseController {
     if (!line) return;
     line.name = name;
     line.color = color;
-    await this.render();
+    await this.render({ roads: false });
     await this.save();
     postMessageToUI({ type: 'line-added', id: lineId, name: line.name, color: line.color });
   }
@@ -50,7 +50,7 @@ export class LineController extends BaseController {
     const line = this.model.state.getLine(lineId);
     if (!line) { console.error("Line not found:", lineId); return; }
     line.replacePaths(paths);
-    await this.render();
+    await this.render({ roads: false });
     await this.save();
   }
 
@@ -59,7 +59,7 @@ export class LineController extends BaseController {
     if (!line) { console.error("Line not found:", lineId); return; }
     const passes = passesData.map(p => RoadSectionPass.fromData(this.model.state, p));
     line.insertPassesAt(boundaryIndex, passes);
-    await this.render();
+    await this.render({ roads: false });
     await this.save();
   }
 
@@ -67,7 +67,7 @@ export class LineController extends BaseController {
     const line = this.model.state.getLine(lineId);
     if (!line) return;
     line.removePassAt(passIndex);
-    await this.render();
+    await this.render({ roads: false });
     await this.save();
     postMessageToUI({ type: 'station-removed-from-line' });
   }
@@ -76,7 +76,7 @@ export class LineController extends BaseController {
     const line = this.model.state.getLine(lineId);
     if (!line) return;
     line.setStopFlag(passIndex, stationId, stops);
-    await this.render();
+    await this.render({ roads: false });
     await this.save();
     postMessageToUI({ type: 'station-removed-from-line' });
   }
@@ -87,7 +87,7 @@ export class LineController extends BaseController {
     if (line.paths.length === 0) { console.warn("Cannot rotate empty path"); return; }
 
     line.rotatePasses(steps);
-    await this.render();
+    await this.render({ roads: false });
     await this.save();
   }
 
