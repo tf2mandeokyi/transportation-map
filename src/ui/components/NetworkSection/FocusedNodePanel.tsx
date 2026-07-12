@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { LineAtNodeData, NetworkFocusedElement } from '@/common/messages';
-import { NodeId, RoadSectionId } from '@/common/types';
+import { RoadSectionId } from '@/common/types';
 import { postMessageToPlugin } from '../../figma';
 import { useNetworkContext } from '../../contexts/NetworkContext';
 import Button from '../common/Button';
@@ -13,9 +13,37 @@ import { useLinesContext } from '../../contexts/LinesContext';
 
 type ArmItem = { line: LineAtNodeData; role: 'exit' | 'enter'; rank: number };
 
+// Registry of pending rank-list reorders (one entry per dirty arm list), keyed so a
+// panel-level Apply/Cancel bar can commit or discard all of them at once — as a single
+// patch-node message/render/undo-step, not one per list. update-pass-ranks changes aren't
+// tied to a section, so merging is just concatenation.
+type RankChanges = Array<{ lineId: LineAtNodeData['lineId']; passIndex: number; end: 'from' | 'to'; rank: number }>;
+type RankEntry = { getChanges: () => RankChanges; cancel: () => void };
+
 const FocusedNodePanel: React.FC<{ element: Extract<NetworkFocusedElement, { kind: 'node' }> }> = ({ element }) => {
   const [editName, setEditName] = useState(element.name ?? '');
   const { roads, nodeLinesData: lines } = useNetworkContext();
+
+  const [rankRegistry, setRankRegistry] = useState<Record<string, RankEntry>>({});
+  const registerRank = useCallback((key: string, entry: RankEntry | null) => {
+    setRankRegistry(prev => {
+      if (entry === null) {
+        if (!(key in prev)) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      return { ...prev, [key]: entry };
+    });
+  }, []);
+  const dirtyRankKeys = Object.keys(rankRegistry);
+  const handleApplyAllRanks = () => {
+    const entries = Object.values(rankRegistry);
+    if (entries.length === 0) return;
+    const changes = entries.flatMap(e => e.getChanges());
+    postMessageToPlugin({ type: 'patch-node', nodeId: element.nodeId, patch: { op: 'update-pass-ranks', changes } });
+  };
+  const handleCancelAllRanks = () => Object.values(rankRegistry).forEach(e => e.cancel());
 
   const commitName = () => {
     const trimmed = editName.trim() || undefined;
@@ -94,40 +122,60 @@ const FocusedNodePanel: React.FC<{ element: Extract<NetworkFocusedElement, { kin
               <NodeArmList
                 key={key}
                 label={`${getSectionLabel(sectionId)} (drag to reorder)`}
-                nodeId={element.nodeId}
+                sectionKey={key}
                 items={items}
+                registerRank={registerRank}
               />
             );
           })}
         </React.Fragment>
       ))}
+      {dirtyRankKeys.length > 0 && (
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <Button size="sm" variant="primary" onClick={handleApplyAllRanks}>Apply Ranks</Button>
+          <ConfirmButton size="sm" label="Cancel" onConfirm={handleCancelAllRanks} prompt="Discard rank changes?" confirmLabel="Discard" keepLabel="Keep editing" />
+        </div>
+      )}
     </div>
   );
 };
 
 interface NodeArmListProps {
   label: string;
-  nodeId: NodeId;
+  sectionKey: string;
   items: ArmItem[];
+  registerRank: (key: string, entry: RankEntry | null) => void;
 }
 
 const armKey = (item: ArmItem) => `${item.line.lineId}-${item.role === 'exit' ? item.line.exitingPassIndex : item.line.enteringPassIndex}-${item.role}`;
 
-const NodeArmList: React.FC<NodeArmListProps> = ({ label, nodeId, items }) => {
+const NodeArmList: React.FC<NodeArmListProps> = ({ label, sectionKey, items, registerRank }) => {
   const { order, setOrder, isDirty, cancel } = useStagedOrder(items, armKey);
   const { lines: lineList } = useLinesContext();
 
-  const handleApply = () => {
-    const changes: Array<{ lineId: LineAtNodeData['lineId']; passIndex: number; end: 'from' | 'to'; rank: number }> = [];
-    order.forEach((it, i) => {
-      if (it.role === 'exit' && it.line.exitingPassIndex !== null) {
-        changes.push({ lineId: it.line.lineId, passIndex: it.line.exitingPassIndex, end: 'to', rank: i });
-      } else if (it.role === 'enter' && it.line.enteringPassIndex !== null) {
-        changes.push({ lineId: it.line.lineId, passIndex: it.line.enteringPassIndex, end: 'from', rank: i });
-      }
+  const orderKey = order.map(armKey).join('|');
+  useEffect(() => {
+    if (!isDirty) {
+      registerRank(sectionKey, null);
+      return;
+    }
+    registerRank(sectionKey, {
+      getChanges: () => {
+        const changes: RankChanges = [];
+        order.forEach((it, i) => {
+          if (it.role === 'exit' && it.line.exitingPassIndex !== null) {
+            changes.push({ lineId: it.line.lineId, passIndex: it.line.exitingPassIndex, end: 'to', rank: i });
+          } else if (it.role === 'enter' && it.line.enteringPassIndex !== null) {
+            changes.push({ lineId: it.line.lineId, passIndex: it.line.enteringPassIndex, end: 'from', rank: i });
+          }
+        });
+        return changes;
+      },
+      cancel,
     });
-    postMessageToPlugin({ type: 'patch-node', nodeId, patch: { op: 'update-pass-ranks', changes } });
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sectionKey, isDirty, orderKey]);
+  useEffect(() => () => registerRank(sectionKey, null), [sectionKey, registerRank]);
 
   return (
     <div className="mt-2">
@@ -150,12 +198,6 @@ const NodeArmList: React.FC<NodeArmListProps> = ({ label, nodeId, items }) => {
           onCommit={setOrder}
         />
       </div>
-      {isDirty && (
-        <div className="mt-1 grid grid-cols-2 gap-2">
-          <Button size="sm" variant="primary" onClick={handleApply}>Apply</Button>
-          <ConfirmButton size="sm" label="Cancel" onConfirm={cancel} prompt="Discard reorder?" confirmLabel="Discard" keepLabel="Keep" />
-        </div>
-      )}
     </div>
   );
 };

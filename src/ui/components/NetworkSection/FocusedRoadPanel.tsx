@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { LineAtRoadSectionData, NetworkFocusedElement, NodeData, RoadSectionData } from '@/common/messages';
-import { RoadId, RoadSectionId } from '@/common/types';
+import { LineId, RoadSectionId } from '@/common/types';
 import { postMessageToPlugin } from '../../figma';
 import { useNetworkContext } from '../../contexts/NetworkContext';
 import Button from '../common/Button';
@@ -20,6 +20,12 @@ type SectionDraft = { id: RoadSectionId | null; tempKey: string; name: string };
 const toDrafts = (sections: RoadSectionData[]): SectionDraft[] =>
   sections.map(s => ({ id: s.id, tempKey: sectionIdKey(s.id), name: s.name ?? '' }));
 
+// Registry of pending rank-list reorders (one entry per dirty side/section list), keyed
+// so a panel-level Apply/Cancel bar can commit or discard all of them at once — as a
+// single patch-road message/render/undo-step, not one per list.
+type RankChanges = { lineId: LineId; passIndex: number; end: 'from' | 'to'; rank: number }[];
+type RankEntry = { sectionId: RoadSectionId; side: 0 | 1; getChanges: () => RankChanges; cancel: () => void };
+
 const FocusedRoadPanel: React.FC<{
   element: Extract<NetworkFocusedElement, { kind: 'road' }>;
   nodes: NodeData[];
@@ -29,6 +35,33 @@ const FocusedRoadPanel: React.FC<{
   const [editName, setEditName] = useState(element.name ?? '');
   const [sectionDrafts, setSectionDrafts] = useState<SectionDraft[]>(() => toDrafts(element.sections));
   const nextTempIdRef = useRef(0);
+
+  const [rankRegistry, setRankRegistry] = useState<Record<string, RankEntry>>({});
+  const registerRank = useCallback((key: string, entry: RankEntry | null) => {
+    setRankRegistry(prev => {
+      if (entry === null) {
+        if (!(key in prev)) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      return { ...prev, [key]: entry };
+    });
+  }, []);
+  const dirtyRankKeys = Object.keys(rankRegistry);
+  const handleApplyAllRanks = () => {
+    const entries = Object.values(rankRegistry);
+    if (entries.length === 0) return;
+    postMessageToPlugin({
+      type: 'patch-road',
+      roadId: element.roadId,
+      patch: {
+        op: 'update-ranks-batch',
+        sections: entries.map(e => ({ sectionId: e.sectionId, side: e.side, changes: e.getChanges() })),
+      },
+    });
+  };
+  const handleCancelAllRanks = () => Object.values(rankRegistry).forEach(e => e.cancel());
 
   const startNode = nodes.find(n => n.id === element.startNodeId);
   const endNode   = nodes.find(n => n.id === element.endNodeId);
@@ -135,12 +168,18 @@ const FocusedRoadPanel: React.FC<{
           {element.sections.map(section => (
             <SectionRankLists
               key={sectionIdKey(section.id)}
-              roadId={element.roadId}
               sectionId={section.id}
               sectionLabel={section.name ?? `Section ${section.index}`}
               lines={lines.filter(l => sectionIdKey(l.sectionId) === sectionIdKey(section.id))}
+              registerRank={registerRank}
             />
           ))}
+          {dirtyRankKeys.length > 0 && (
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <Button variant="primary" onClick={handleApplyAllRanks}>Apply Ranks</Button>
+              <ConfirmButton label="Cancel" onConfirm={handleCancelAllRanks} prompt="Discard rank changes?" confirmLabel="Discard" keepLabel="Keep editing" />
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -148,13 +187,13 @@ const FocusedRoadPanel: React.FC<{
 };
 
 interface SectionRankListsProps {
-  roadId: RoadId;
   sectionId: RoadSectionId;
   sectionLabel: string;
   lines: LineAtRoadSectionData[];
+  registerRank: (key: string, entry: RankEntry | null) => void;
 }
 
-const SectionRankLists: React.FC<SectionRankListsProps> = ({ roadId, sectionId, sectionLabel, lines }) => {
+const SectionRankLists: React.FC<SectionRankListsProps> = ({ sectionId, sectionLabel, lines, registerRank }) => {
   const sides = ([0, 1] as const).map(side => ({
     side,
     items: lines.filter(l => l.side === side).sort((a, b) => a.rank - b.rank),
@@ -167,7 +206,7 @@ const SectionRankLists: React.FC<SectionRankListsProps> = ({ roadId, sectionId, 
       <label className="text-neutral-600">{sectionLabel} (drag to reorder)</label>
       <div className="mt-1 grid grid-cols-2 gap-2">
         {sides.map(({ side, items }) => (
-          <SideRankList key={side} roadId={roadId} sectionId={sectionId} side={side} items={items} />
+          <SideRankList key={side} sectionId={sectionId} side={side} items={items} registerRank={registerRank} />
         ))}
       </div>
     </div>
@@ -176,14 +215,31 @@ const SectionRankLists: React.FC<SectionRankListsProps> = ({ roadId, sectionId, 
 
 const sideItemKey = (item: LineAtRoadSectionData) => `${item.lineId}-${item.passIndex}-${item.end}`;
 
-const SideRankList: React.FC<{ roadId: RoadId; sectionId: RoadSectionId; side: 0 | 1; items: LineAtRoadSectionData[] }> = ({ roadId, sectionId, side, items }) => {
+const SideRankList: React.FC<{
+  sectionId: RoadSectionId;
+  side: 0 | 1;
+  items: LineAtRoadSectionData[];
+  registerRank: (key: string, entry: RankEntry | null) => void;
+}> = ({ sectionId, side, items, registerRank }) => {
   const { order, setOrder, isDirty, cancel } = useStagedOrder(items, sideItemKey);
   const { lines: lineList } = useLinesContext();
 
-  const handleApply = () => {
-    const changes = order.map((it, i) => ({ lineId: it.lineId, passIndex: it.passIndex, end: it.end, rank: i }));
-    postMessageToPlugin({ type: 'patch-road', roadId, patch: { op: 'update-section-ranks', sectionId, side, changes } });
-  };
+  const registryKey = `${sectionIdKey(sectionId)}:${side}`;
+  const orderKey = order.map(sideItemKey).join('|');
+  useEffect(() => {
+    if (!isDirty) {
+      registerRank(registryKey, null);
+      return;
+    }
+    registerRank(registryKey, {
+      sectionId,
+      side,
+      getChanges: () => order.map((it, i) => ({ lineId: it.lineId, passIndex: it.passIndex, end: it.end, rank: i })),
+      cancel,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registryKey, isDirty, orderKey]);
+  useEffect(() => () => registerRank(registryKey, null), [registryKey, registerRank]);
 
   return (
     <div>
@@ -198,12 +254,6 @@ const SideRankList: React.FC<{ roadId: RoadId; sectionId: RoadSectionId; side: 0
         showRank
         onCommit={setOrder}
       />
-      {isDirty && (
-        <div className="mt-1 grid grid-cols-2 gap-1.5">
-          <Button size="xs" variant="primary" onClick={handleApply}>Apply</Button>
-          <ConfirmButton size="xs" label="Cancel" onConfirm={cancel} prompt="Discard reorder?" confirmLabel="Discard" keepLabel="Keep" />
-        </div>
-      )}
     </div>
   );
 };

@@ -46,7 +46,11 @@ export type RoadPatch =
   // id is missing from this list is removed. Keeps a single Focused Road Panel Apply
   // click to a single undo/redo step instead of one per changed field.
   | { op: 'apply'; name: string | undefined; sections: Array<{ id: SectionId | null; name?: string }> }
-  | { op: 'update-section-ranks'; sectionId: RoadSectionId; side: 0 | 1; changes: Array<{ lineId: LineId; passIndex: number; end: 'from' | 'to'; rank: number }> };
+  | { op: 'update-section-ranks'; sectionId: RoadSectionId; side: 0 | 1; changes: Array<{ lineId: LineId; passIndex: number; end: 'from' | 'to'; rank: number }> }
+  // Same as update-section-ranks but across multiple side/section lists at once — a
+  // single Apply Ranks click covers every dirty list on the panel, so this keeps that
+  // one click to a single render/save/undo step instead of one per list.
+  | { op: 'update-ranks-batch'; sections: Array<{ sectionId: RoadSectionId; side: 0 | 1; changes: Array<{ lineId: LineId; passIndex: number; end: 'from' | 'to'; rank: number }> }> };
 
 export type UIToPluginNetworkMessage =
   | { type: 'remove-node'; nodeId: NodeId }

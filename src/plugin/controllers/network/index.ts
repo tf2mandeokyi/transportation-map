@@ -1,4 +1,4 @@
-import { NodeId, RoadId, RoadSectionId, SectionId } from "@/common/types";
+import { LineId, NodeId, RoadId, RoadSectionId, SectionId } from "@/common/types";
 import { LineAtNodeData, LineAtRoadSectionData, NetworkFocusedElement, NodeData, NodePatch, RoadData, RoadPatch, RoadSectionData } from "@/common/messages";
 import { PluginSessionManager } from "../../sessions/manager";
 import { postMessageToUI } from "../../figma";
@@ -75,6 +75,20 @@ export class NetworkController extends BaseController {
     this.syncNetworkToUI();
   }
 
+  private applySectionRankChanges(
+    section: ReturnType<Road['getSectionHarsh']>,
+    changes: Array<{ lineId: LineId; passIndex: number; end: 'from' | 'to'; rank: number }>,
+  ): void {
+    for (const change of changes) {
+      const line = this.model.state.getLine(change.lineId);
+      const pass = line?.paths[change.passIndex];
+      if (pass && pass.section === section) {
+        if (change.end === 'from') pass.fromRank = change.rank;
+        else pass.toRank = change.rank;
+      }
+    }
+  }
+
   public async handlePatchRoad(roadId: RoadId, patch: RoadPatch): Promise<void> {
     const road = this.model.state.getRoad(roadId);
     switch (patch.op) {
@@ -100,15 +114,16 @@ export class NetworkController extends BaseController {
       }
       case 'update-section-ranks': {
         const section = road?.hasSection(patch.sectionId[1]) ? road.getSectionHarsh(patch.sectionId[1]) : undefined;
-        if (section) {
-          for (const change of patch.changes) {
-            const line = this.model.state.getLine(change.lineId);
-            const pass = line?.paths[change.passIndex];
-            if (pass && pass.section === section) {
-              if (change.end === 'from') pass.fromRank = change.rank;
-              else pass.toRank = change.rank;
-            }
-          }
+        if (section) this.applySectionRankChanges(section, patch.changes);
+        await this.render();
+        this.reselectRoad(roadId);
+        if (road) await this.emitRoadLinesData(road);
+        break;
+      }
+      case 'update-ranks-batch': {
+        for (const { sectionId, changes } of patch.sections) {
+          const section = road?.hasSection(sectionId[1]) ? road.getSectionHarsh(sectionId[1]) : undefined;
+          if (section) this.applySectionRankChanges(section, changes);
         }
         await this.render();
         this.reselectRoad(roadId);
