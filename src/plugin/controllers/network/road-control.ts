@@ -126,7 +126,9 @@ export class RoadControlManager {
 
   cleanup(): void {
     for (const id of this.lockedRoadNodeIds) {
-      const roadNode = figma.currentPage.children.find(n => n.id === id);
+      // Road visual nodes now live inside the shared Roads frame, not directly on the
+      // page, so a recursive findOne is needed instead of a direct-children lookup.
+      const roadNode = figma.currentPage.findOne(n => n.id === id);
       if (roadNode && !roadNode.removed) (roadNode as SceneNode).locked = false;
     }
     this.lockedRoadNodeIds = [];
@@ -140,8 +142,10 @@ export class RoadControlManager {
     this.dirty = false;
   }
 
+  // Recursive findAll, not a direct-children filter — road visual nodes live inside the
+  // shared Roads frame, not directly on the page.
   private findRoadVisualNodes(roadId: RoadId): SceneNode[] {
-    return figma.currentPage.children.filter(n =>
+    return figma.currentPage.findAll(n =>
       n.getPluginData(FIGMA_KEY_ROAD_ID) === roadId && n.getPluginData(FIGMA_KEY_IS_ROAD_CONTROL) !== 'true'
     );
   }

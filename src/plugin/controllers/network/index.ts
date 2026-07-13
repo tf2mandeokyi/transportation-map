@@ -69,7 +69,9 @@ export class NetworkController extends BaseController {
         // at all, just that one frame's `.name` updated in place.
         node?.updateName(patch.name);
         if (node) {
-          const target = figma.currentPage.children.find(c => c.getPluginData(FIGMA_KEY_NODE_ID) === nodeId);
+          // Recursive findOne — the junction/marker frame lives inside the shared
+          // Junctions frame, not directly on the page.
+          const target = figma.currentPage.findOne(c => c.getPluginData(FIGMA_KEY_NODE_ID) === nodeId);
           if (target) {
             target.name = target.getPluginData(FIGMA_KEY_IS_NODE_MARKER) === 'true'
               ? `Node: ${node.name ?? node.id}`
@@ -530,7 +532,9 @@ export class NetworkController extends BaseController {
   // road/node control overlay, via the normal selectionchange flow) comes back
   // instead of staying empty.
   private reselectRoad(roadId: RoadId): void {
-    const target = figma.currentPage.children.find(c =>
+    // Recursive findOne — road visual nodes live inside the shared Roads frame, not
+    // directly on the page.
+    const target = figma.currentPage.findOne(c =>
       c.getPluginData(FIGMA_KEY_ROAD_ID) === roadId && c.getPluginData(FIGMA_KEY_IS_ROAD_CONTROL) !== 'true'
     );
     if (target) figma.currentPage.selection = [target as SceneNode];

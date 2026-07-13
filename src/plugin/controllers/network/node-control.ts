@@ -1,7 +1,7 @@
 import { NodeId } from "@/common/types";
 import { Model } from "../../models";
 import { renderRadiusHandle } from "../../figmls";
-import { FIGMA_KEY_NODE_ID } from "../../views/road";
+import { FIGMA_KEY_NODE_ID, getJunctionsFrame } from "../../views/road";
 import { absoluteOrigin } from "../../utils/math";
 
 export const FIGMA_KEY_IS_NODE_CONTROL = 'isNodeControl';
@@ -57,11 +57,15 @@ export class NodeControlManager {
     // that marker/junction for the duration of editing so it can't be dragged too —
     // with it locked, clicks fall straight through to the handle underneath, leaving
     // exactly one interactive element (the handle) for both moving and resizing.
-    const anchor = figma.currentPage.children.find(n =>
+    // The marker/junction now lives inside the shared Junctions frame, so the handle
+    // has to be inserted into that same frame (just behind it) rather than the page —
+    // both sit at the frame's zero-offset origin, so no coordinate adjustment is needed.
+    const junctionsFrame = getJunctionsFrame();
+    const anchor = junctionsFrame.findOne(n =>
       n.id !== handle.id && n.getPluginData(FIGMA_KEY_NODE_ID) === nodeId
     );
     if (anchor) {
-      figma.currentPage.insertChild(figma.currentPage.children.indexOf(anchor), handle);
+      junctionsFrame.insertChild(junctionsFrame.children.indexOf(anchor), handle);
       anchor.locked = true;
       this.lockedAnchorId = anchor.id;
     } else {
@@ -90,7 +94,7 @@ export class NodeControlManager {
       .forEach(n => { if (!n.removed) n.remove(); });
     this.handleId = null;
     if (this.lockedAnchorId) {
-      const anchor = figma.currentPage.children.find(n => n.id === this.lockedAnchorId);
+      const anchor = figma.currentPage.findOne(n => n.id === this.lockedAnchorId);
       if (anchor && !anchor.removed) anchor.locked = false;
     }
     this.lockedAnchorId = null;
