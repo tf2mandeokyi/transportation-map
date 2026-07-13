@@ -34,18 +34,19 @@ export class View {
           .catch(ErrorChain.thrower(`Error rendering station ${station.name}`))
       ));
 
-      // 3. Render line segments using stored connection points
+      // 3. Render line segments (into the shared Lines frame) using stored connection points
+      const linesFrame = this.lineSegmentRenderer.getOrCreateLinesFrame();
       await Promise.all([...state.getLines()].map(line =>
-        this.lineSegmentRenderer.renderLine(line)
+        this.lineSegmentRenderer.renderLine(line, linesFrame)
           .catch(ErrorChain.thrower(`Error rendering line ${line.name}`))
       ));
 
       // 4. Bring every plugin-rendered layer to the front of the page's z-order, in
       //    bottom-to-top order, so all plugin objects sit above any non-plugin content
-      //    and the internal stacking is: roads < junctions < node markers < line segments < stations.
+      //    and the internal stacking is: roads < junctions/markers < line segments < stations.
       if (roads) RoadRenderer.bringInfraToFront();
-      await this.lineSegmentRenderer.bringSegmentsToFront(state.getLines());
-      await this.stationRenderer.bringStationsToFront(state.getStations());
+      this.lineSegmentRenderer.bringLinesFrameToFront();
+      this.stationRenderer.bringStationsToFront();
     } finally {
       this.isRendering = false;
     }
@@ -63,10 +64,10 @@ export class View {
   //    edit with no road involved), and every station in the final touched set pulls in
   //    the lines it stops on, since a station's connection points (which line rendering
   //    reads back from `stationRenderer`) only depend on that station's own frame.
-  // Z-order fixups (bringToFront) are cheap re-appends, not geometry rebuilds, so those
-  // still run over the full road/junction/marker set — and, when road geometry changed,
-  // the full line/station sets too, since freshly (re)created road nodes land at the very
-  // top of the page and would otherwise sit above lines/stations that were left untouched.
+  // Every render category (roads, junctions/markers, lines, stations) lives inside its own
+  // shared frame, so a z-order fixup is always the same single frame-level appendChild
+  // regardless of how much of that category was actually touched — no need to distinguish
+  // a full rebuild from a scoped one for front-ordering purposes.
   public async renderPartial(
     state: Readonly<MapState>,
     { stations = [], lines = [], roads = [], nodes = [], removedRoadIds = [], removedNodeIds = [] }:
@@ -102,14 +103,15 @@ export class View {
           .catch(ErrorChain.thrower(`Error rendering station ${station.name}`))
       ));
 
+      const linesFrame = this.lineSegmentRenderer.getOrCreateLinesFrame();
       await Promise.all([...touchedLines.values()].map(line =>
-        this.lineSegmentRenderer.renderLine(line)
+        this.lineSegmentRenderer.renderLine(line, linesFrame)
           .catch(ErrorChain.thrower(`Error rendering line ${line.name}`))
       ));
 
       if (networkChanged) RoadRenderer.bringInfraToFront();
-      await this.lineSegmentRenderer.bringSegmentsToFront(networkChanged ? state.getLines() : touchedLines.values());
-      await this.stationRenderer.bringStationsToFront(networkChanged ? state.getStations() : touchedStations.values());
+      this.lineSegmentRenderer.bringLinesFrameToFront();
+      this.stationRenderer.bringStationsToFront();
     } finally {
       this.isRendering = false;
     }

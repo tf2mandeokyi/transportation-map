@@ -27,7 +27,7 @@ function computeJunctionCenter(node: Node): Vector {
 }
 
 // Returns true if a junction frame was appended (so the caller can skip the node marker).
-export async function buildAndAppendJunction(node: Node): Promise<boolean> {
+export async function buildAndAppendJunction(node: Node, junctionsFrame: FrameNode): Promise<boolean> {
   const polygon = buildNodePolygon(node);
   if (!polygon) return false;
 
@@ -49,7 +49,9 @@ export async function buildAndAppendJunction(node: Node): Promise<boolean> {
   frame.setPluginData(FIGMA_KEY_JUNCTION_OFFSET_X, String(center.x - bounds.x));
   frame.setPluginData(FIGMA_KEY_JUNCTION_OFFSET_Y, String(center.y - bounds.y));
 
-  figma.currentPage.appendChild(frame);
+  // junctionsFrame sits at page origin (0,0) with no transform, so reparenting into it
+  // needs no coordinate adjustment — frame.x/y stay valid as-is.
+  junctionsFrame.appendChild(frame);
   frame.appendChild(polygon);
   // The path data uses absolute page coords; after reparenting reset to frame-local origin.
   polygon.x = 0;

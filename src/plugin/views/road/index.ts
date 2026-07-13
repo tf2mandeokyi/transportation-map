@@ -9,4 +9,4 @@ export {
   FIGMA_KEY_JUNCTION_OFFSET_X,
   FIGMA_KEY_JUNCTION_OFFSET_Y,
 } from './constants';
-export { RoadRenderer } from './renderer';
+export { RoadRenderer, getRoadsFrame, getJunctionsFrame } from './renderer';

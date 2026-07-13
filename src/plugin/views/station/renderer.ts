@@ -7,6 +7,7 @@ import { getLinesForStation } from "./layout";
 import { LINE_SPACING } from "../../utils/constants";
 import { RenderResult } from "@/figml-parser/result";
 import { applyTransform } from "../../utils/math";
+import { getOrCreateLayerFrame, bringLayerFrameToFront, STATIONS_FRAME_NAME } from "../layer-frame";
 
 async function renderStationWithTemplate(
   parentFrame: FrameNode,
@@ -91,7 +92,9 @@ export class StationRenderer {
       frame.layoutMode = 'HORIZONTAL';
       frame.layoutSizingHorizontal = 'HUG';
       frame.layoutSizingVertical = 'HUG';
-      figma.currentPage.appendChild(frame);
+      // locked: false — station frames are directly draggable/selectable by the user.
+      const stationsFrame = getOrCreateLayerFrame(STATIONS_FRAME_NAME, { locked: false });
+      stationsFrame.appendChild(frame);
       station.figmaNodeId = frame.id;
     }
 
@@ -147,17 +150,10 @@ export class StationRenderer {
     }
   }
 
-  // Re-appending each station frame moves it to the top of the page's z-order,
-  // above the road infrastructure and line segments brought to front just before this runs.
-  public async bringStationsToFront(stations: Iterable<Station>): Promise<void> {
-    for (const station of stations) {
-      if (!station.figmaNodeId) continue;
-      try {
-        const frame = await figma.getNodeByIdAsync(station.figmaNodeId);
-        if (frame && !frame.removed && frame.parent && 'appendChild' in frame.parent) {
-          frame.parent.appendChild(frame as SceneNode);
-        }
-      } catch {}
-    }
+  // Every station frame lives inside one shared Stations frame, so bringing all stations
+  // to the top of the page's z-order — above the road infrastructure and line segments
+  // brought to front just before this runs — is one appendChild of that frame.
+  public bringStationsToFront(): void {
+    bringLayerFrameToFront(STATIONS_FRAME_NAME, { locked: false });
   }
 }

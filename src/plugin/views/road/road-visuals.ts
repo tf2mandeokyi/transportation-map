@@ -44,7 +44,7 @@ export function buildRoadVisuals(road: Road): SceneNode[] {
   });
 }
 
-export function renderRoad(road: Road): void {
+export function renderRoad(road: Road, roadsFrame: FrameNode): void {
   const nodes = buildRoadVisuals(road);
-  for (const node of nodes) figma.currentPage.appendChild(node);
+  for (const node of nodes) roadsFrame.appendChild(node);
 }

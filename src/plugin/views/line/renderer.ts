@@ -3,6 +3,7 @@ import { StationRenderer } from "../station";
 import { hexToRgb } from "@/common/utils/color";
 import { buildSegmentPieces, SegmentPiece } from "./path-builder";
 import { createDashedLine, bezierPathToSegments } from "./segment-nodes";
+import { getOrCreateLayerFrame, bringLayerFrameToFront, LINES_FRAME_NAME } from "../layer-frame";
 
 type IndexedStop = { stop: PassStop; pass: RoadSectionPass; passIndex: number };
 
@@ -36,7 +37,11 @@ export class LineRenderer {
     this.stationRenderer = stationRenderer;
   }
 
-  public async renderLine(line: Line): Promise<void> {
+  public getOrCreateLinesFrame(): FrameNode {
+    return getOrCreateLayerFrame(LINES_FRAME_NAME);
+  }
+
+  public async renderLine(line: Line, linesFrame: FrameNode): Promise<void> {
     await cleanupOldLineGroup(line);
 
     const color = hexToRgb(line.color);
@@ -67,9 +72,10 @@ export class LineRenderer {
     }
 
     if (segmentNodes.length > 0) {
-      const lineGroup = figma.group(segmentNodes, figma.currentPage);
+      const lineGroup = figma.group(segmentNodes, linesFrame);
       lineGroup.name   = `Line: ${line.name}`;
       lineGroup.locked = true;
+      linesFrame.appendChild(lineGroup); // top of the frame's own z-order
       line.figmaGroupId = lineGroup.id;
     }
   }
@@ -101,18 +107,7 @@ export class LineRenderer {
     );
   }
 
-  // Re-appending each line group moves it to the top of its parent's z-order,
-  // above the road infrastructure brought to front just before this runs.
-  public async bringSegmentsToFront(lines: Iterable<Line>): Promise<void> {
-    for (const line of lines) {
-      if (!line.figmaGroupId) continue;
-      try {
-        const lineGroup = await figma.getNodeByIdAsync(line.figmaGroupId);
-        if (lineGroup && !lineGroup.removed) {
-          const parent = lineGroup.parent;
-          if (parent && 'appendChild' in parent) parent.appendChild(lineGroup as SceneNode);
-        }
-      } catch {}
-    }
+  public bringLinesFrameToFront(): void {
+    bringLayerFrameToFront(LINES_FRAME_NAME);
   }
 }

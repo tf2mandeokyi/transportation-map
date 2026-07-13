@@ -2,27 +2,30 @@ import { NodeId, RoadId } from "@/common/types";
 import { MapState, Node, Road } from "../../models/structures";
 import { renderRoad } from "./road-visuals";
 import { buildAndAppendJunction, buildNodeMarker } from "./node-visuals";
-import { FIGMA_KEY_NODE_ID, FIGMA_KEY_IS_NODE_MARKER, FIGMA_KEY_ROAD_ID, FIGMA_KEY_IS_ROAD_CONTROL } from "./constants";
+import { FIGMA_KEY_NODE_ID, FIGMA_KEY_ROAD_ID, FIGMA_KEY_IS_ROAD_CONTROL } from "./constants";
+import { getOrCreateLayerFrame, bringLayerFrameToFront, ROADS_FRAME_NAME, JUNCTIONS_FRAME_NAME } from "../layer-frame";
 
 // Legacy group name kept so old renders from previous sessions can be cleaned up.
 const ROAD_NETWORK_GROUP_NAME = '_road-network';
 
-// Re-appending a child moves it to the very top of the page's z-order, above
-// everything else (including non-plugin content). Calling this in bottom-to-top
-// order for each layer therefore both fixes the relative order *and* guarantees
-// all plugin layers end up above any non-plugin objects on the page.
-function bringToFront(children: readonly SceneNode[], predicate: (c: SceneNode) => boolean): void {
-  for (const child of children) {
-    if (!child.removed && predicate(child)) figma.currentPage.appendChild(child);
-  }
+// locked: false — road/junction/marker children are the actual click/drag targets for
+// road and node editing, so the container can't be locked without blocking that.
+export function getRoadsFrame(): FrameNode {
+  return getOrCreateLayerFrame(ROADS_FRAME_NAME, { locked: false });
+}
+
+export function getJunctionsFrame(): FrameNode {
+  return getOrCreateLayerFrame(JUNCTIONS_FRAME_NAME, { locked: false });
 }
 
 export class RoadRenderer {
   public static async renderAll(state: Readonly<MapState>): Promise<void> {
-    await RoadRenderer.clearPrevious();
-    for (const road of state.getRoads()) renderRoad(road);
-    const nodesWithJunction = await RoadRenderer.renderJunctions(state);
-    await RoadRenderer.renderNodeMarkers(state, nodesWithJunction);
+    RoadRenderer.clearPrevious();
+    const roadsFrame = getRoadsFrame();
+    for (const road of state.getRoads()) renderRoad(road, roadsFrame);
+    const junctionsFrame = getJunctionsFrame();
+    const nodesWithJunction = await RoadRenderer.renderJunctions(state, junctionsFrame);
+    await RoadRenderer.renderNodeMarkers(state, nodesWithJunction, junctionsFrame);
   }
 
   // Rebuilds only the given roads and the junctions/markers at the given nodes, leaving
@@ -46,62 +49,58 @@ export class RoadRenderer {
     RoadRenderer.clearRoads(roadIds);
     RoadRenderer.clearNodes(nodeIds);
 
-    for (const road of roads) renderRoad(road);
+    const roadsFrame = getRoadsFrame();
+    for (const road of roads) renderRoad(road, roadsFrame);
 
+    const junctionsFrame = getJunctionsFrame();
     const nodesWithJunction = new Set<string>();
     for (const node of nodes) {
-      if (await buildAndAppendJunction(node)) nodesWithJunction.add(node.id);
+      if (await buildAndAppendJunction(node, junctionsFrame)) nodesWithJunction.add(node.id);
     }
     for (const node of nodes) {
       if (nodesWithJunction.has(node.id)) continue;
       const marker = await buildNodeMarker(node);
-      if (marker) figma.currentPage.appendChild(marker);
+      if (marker) junctionsFrame.appendChild(marker);
     }
   }
 
-  private static async renderJunctions(state: Readonly<MapState>): Promise<Set<string>> {
+  private static async renderJunctions(state: Readonly<MapState>, junctionsFrame: FrameNode): Promise<Set<string>> {
     const nodesWithJunction = new Set<string>();
     for (const node of state.getNodes()) {
-      if (await buildAndAppendJunction(node)) nodesWithJunction.add(node.id);
+      if (await buildAndAppendJunction(node, junctionsFrame)) nodesWithJunction.add(node.id);
     }
     return nodesWithJunction;
   }
 
-  private static async renderNodeMarkers(state: Readonly<MapState>, nodesWithJunction: Set<string>): Promise<void> {
+  private static async renderNodeMarkers(state: Readonly<MapState>, nodesWithJunction: Set<string>, junctionsFrame: FrameNode): Promise<void> {
     for (const node of state.getNodes()) {
       if (nodesWithJunction.has(node.id)) continue;
       const marker = await buildNodeMarker(node);
-      if (marker) {
-        figma.currentPage.appendChild(marker);
-        console.log(`[renderAll] appended marker for node ${node.id} at (${marker.x}, ${marker.y})`);
-      }
+      if (marker) junctionsFrame.appendChild(marker);
     }
   }
 
-  // Brings road infrastructure (roads, junctions, node markers) to the front of the
-  // page z-order, in that relative order. Call before LineRenderer/StationRenderer's
-  // own front-ordering so the final stacking (bottom to top) is:
-  //   roads < junctions < node markers < line segments < stations
-  // and all of it ends up above any non-plugin content on the page.
+  // Brings road infrastructure (roads, junctions/markers) to the front of the page
+  // z-order, in that relative order. Call before LineRenderer/StationRenderer's own
+  // front-ordering so the final stacking (bottom to top) is:
+  //   roads < junctions/markers < line segments < stations
+  // and all of it ends up above any non-plugin content on the page. Junctions and node
+  // markers share one frame — insertion order (junctions built before markers, both on
+  // every full render and for any given renderPartial call) keeps markers visually above
+  // junctions within that frame without needing a separate front-ordering pass.
   public static bringInfraToFront(): void {
-    const children = [...figma.currentPage.children];
-    bringToFront(children, c =>
-      c.getPluginData(FIGMA_KEY_ROAD_ID) !== '' &&
-      c.getPluginData(FIGMA_KEY_IS_ROAD_CONTROL) !== 'true'
-    );
-    bringToFront(children, c =>
-      c.type === 'FRAME' &&
-      c.getPluginData(FIGMA_KEY_NODE_ID) !== '' &&
-      c.getPluginData(FIGMA_KEY_IS_NODE_MARKER) !== 'true'
-    );
-    bringToFront(children, c => c.getPluginData(FIGMA_KEY_IS_NODE_MARKER) === 'true');
+    bringLayerFrameToFront(ROADS_FRAME_NAME, { locked: false });
+    bringLayerFrameToFront(JUNCTIONS_FRAME_NAME, { locked: false });
   }
 
-  private static async clearPrevious(): Promise<void> {
+  // Full teardown ahead of a full rebuild — scans the whole page (not just the Roads/
+  // Junctions frames) so it also catches loose road/node nodes left over from documents
+  // saved before those frames existed, migrating them cleanly on the next renderAll.
+  private static clearPrevious(): void {
     figma.currentPage.findAll(n => n.name === ROAD_NETWORK_GROUP_NAME).forEach(n => {
       if (!n.removed) n.remove();
     });
-    const toRemove = figma.currentPage.children.filter(n =>
+    const toRemove = figma.currentPage.findAll(n =>
       n.getPluginData(FIGMA_KEY_NODE_ID) !== '' ||
       (n.getPluginData(FIGMA_KEY_ROAD_ID) !== '' && n.getPluginData(FIGMA_KEY_IS_ROAD_CONTROL) !== 'true')
     );
@@ -114,7 +113,8 @@ export class RoadRenderer {
   // the scoped counterpart of clearPrevious's road half.
   private static clearRoads(roadIds: ReadonlySet<string>): void {
     if (roadIds.size === 0) return;
-    const toRemove = figma.currentPage.children.filter(n => {
+    const roadsFrame = getRoadsFrame();
+    const toRemove = roadsFrame.findAll(n => {
       const roadId = n.getPluginData(FIGMA_KEY_ROAD_ID);
       return roadId !== '' && roadIds.has(roadId) && n.getPluginData(FIGMA_KEY_IS_ROAD_CONTROL) !== 'true';
     });
@@ -127,7 +127,8 @@ export class RoadRenderer {
   // counterpart of clearPrevious's node half.
   private static clearNodes(nodeIds: ReadonlySet<string>): void {
     if (nodeIds.size === 0) return;
-    const toRemove = figma.currentPage.children.filter(n => {
+    const junctionsFrame = getJunctionsFrame();
+    const toRemove = junctionsFrame.findAll(n => {
       const nodeId = n.getPluginData(FIGMA_KEY_NODE_ID);
       return nodeId !== '' && nodeIds.has(nodeId);
     });
